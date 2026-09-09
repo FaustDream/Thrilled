@@ -37,6 +37,7 @@
         <symbol id="dh-icon-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M4 16V4h12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
         <symbol id="dh-icon-upload" viewBox="0 0 24 24"><path d="M12 16V4M5 10l7-7 7 7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 18v2h16v-2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
         <symbol id="dh-icon-download" viewBox="0 0 24 24"><path d="M12 4v12M5 11l7 7 7-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 18v2h16v-2" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+        <symbol id="dh-icon-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1" fill="currentColor"/><circle cx="15" cy="6" r="1" fill="currentColor"/><circle cx="9" cy="12" r="1" fill="currentColor"/><circle cx="15" cy="12" r="1" fill="currentColor"/><circle cx="9" cy="18" r="1" fill="currentColor"/><circle cx="15" cy="18" r="1" fill="currentColor"/></symbol>
         <symbol id="dh-icon-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" stroke-width="2" fill="none"/><path d="m3 16 5-5 4 4 3-3 6 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
         <symbol id="dh-icon-bookmark" viewBox="0 0 24 24"><path d="M4 5v16l8-4 8 4V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2Z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></symbol>
         <symbol id="dh-icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 16v-4M12 8h.01" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></symbol>
@@ -132,16 +133,10 @@
                             <svg class="dh-icon dh-icon--chevron-down dh-icon--sm" role="img"><use href="#dh-icon-chevron-down"></use></svg>
                         </div>
                     </div>
-                    <input type="text" class="search-input doc-cmd-input" id="searchInput" placeholder="Search..." autocomplete="off" aria-label="搜索框" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggestionsList" aria-activedescendant="">
+                    <input type="text" class="search-input doc-cmd-input" id="searchInput" placeholder="Search..." autocomplete="off" aria-label="搜索框">
                     <button class="search-button" id="searchButton" aria-label="搜索">
                         <svg class="dh-icon dh-icon--search dh-icon--md" aria-hidden="true"><use href="#dh-icon-search"></use></svg>
                     </button>
-                </div>
-                <!-- 搜索建议面板 -->
-                <div class="search-suggestions" id="searchSuggestions" hidden>
-                    <div class="suggestions-header" id="suggestionsHeader"></div>
-                    <div class="suggestions-list" id="suggestionsList" role="listbox" aria-label="搜索建议"></div>
-                    <div class="suggestions-footer" id="suggestionsFooter"></div>
                 </div>
             </div>
 
@@ -188,6 +183,10 @@
                             <div class="s-row-left"><span class="s-row-label">分类记忆</span><span class="s-row-desc">记住上次浏览的分类页</span></div>
                             <label class="s-toggle"><input type="checkbox" id="sToggleCategoryMemory"><span class="s-toggle-thumb"></span></label>
                         </div>
+
+                        <h3 class="s-section-title">搜索引擎顺序 <span class="s-badge">拖拽排序</span></h3>
+                        <p class="s-section-desc">拖动调整搜索引擎在地址栏下拉与数字键切换中的顺序。</p>
+                        <div class="s-engine-order" id="engineOrderList"></div>
 
                         <h3 class="s-section-title">链接打开方式</h3>
                         <div class="s-row">
@@ -309,10 +308,24 @@
                                 </div>
                                 <span class="s-shortcut-key"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>D</kbd></span>
                             </div>
+                            <div class="s-shortcut-item">
+                                <div class="s-shortcut-info">
+                                    <span class="s-shortcut-name">全选当前分类</span>
+                                    <span class="s-shortcut-desc">选中当前分类全部磁贴，进入批量选择</span>
+                                </div>
+                                <span class="s-shortcut-key"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd></span>
+                            </div>
+                            <div class="s-shortcut-item">
+                                <div class="s-shortcut-info">
+                                    <span class="s-shortcut-name">批量移动到分类</span>
+                                    <span class="s-shortcut-desc">将选中的磁贴移动到目标分类</span>
+                                </div>
+                                <span class="s-shortcut-key"><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>M</kbd></span>
+                            </div>
                         </div>
 
                         <h3 class="s-section-title">批量选择修饰键</h3>
-                        <p class="s-section-desc">按住修饰键并点击磁贴可多选，然后批量删除。切换修饰键后当前选中状态会清除。</p>
+                        <p class="s-section-desc">按住修饰键并点击磁贴可多选，然后在底部批量栏删除或移动到其他分类。切换修饰键后当前选中状态会清除。也可用 Ctrl+Shift+A 全选当前分类，Ctrl+Shift+M 批量移动，弹窗内可用 ↑/↓ 选择分类、Enter 确认。</p>
                         <div class="s-row">
                             <div class="s-row-left"><span class="s-row-label">修饰键组合</span></div>
                             <div class="s-row-right">

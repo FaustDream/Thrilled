@@ -11,7 +11,7 @@ import { SHORTCUT_SIZE_OPTIONS } from '../../shared/constants';
 import { initTheme, getColorScheme } from './theme-manager';
 import { initStorage, dataService } from './storage';
 import { state } from './state';
-import { tileManager, renderTiles, attachTileDrag, toggleEditMode } from './tiles';
+import { tileManager, renderTiles, attachTileDrag, toggleEditMode, selectAllInCurrentPage, batchMoveSelected } from './tiles';
 import { renderCatRow, handleWheelScroll, attachCategoryDrag } from './category-ui';
 import { initSearch } from './search';
 import { bindEngineSelector, initEngineUI } from './navigation';
@@ -107,6 +107,23 @@ export async function boot(): Promise<void> {
 
   // Phase 4：全局快捷键
   document.addEventListener('keydown', (e) => {
+    const target = e.target as HTMLElement;
+    // 输入态不拦截，避免与文本编辑快捷键冲突（如 Ctrl+A 全选文字）
+    const isTyping =
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target.isContentEditable;
+
+    if (!isTyping && e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      selectAllInCurrentPage();
+      return;
+    }
+    if (!isTyping && e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'm') {
+      e.preventDefault();
+      batchMoveSelected();
+      return;
+    }
     if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'e') {
       e.preventDefault();
       void exportAllData();

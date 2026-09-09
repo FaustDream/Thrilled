@@ -243,7 +243,7 @@
     background: var(--color-bg-elevated);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    min-width: 180px;
+    min-width: 200px;
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     box-shadow: var(--shadow-lg);
@@ -264,10 +264,26 @@
     font-size: var(--font-size-sm);
     color: var(--color-text-secondary);
     cursor: pointer;
-    transition: all var(--transition-fast);
+    transition: background var(--transition-fast), color var(--transition-fast);
+    user-select: none;
 }
 .engine-option:hover { background: var(--color-accent-bg-12); color: var(--color-accent); }
 .engine-option.active { color: var(--color-accent); background: var(--color-accent-bg-08); }
+.engine-option.dragging { opacity: 0.5; background: var(--color-accent-bg-12); }
+/* 拖拽插入指示：插到该项上方 / 追加到末尾（不改变布局，用 inset 线提示） */
+.engine-option.reorder-indicator { box-shadow: inset 0 3px 0 0 var(--color-accent); }
+.engine-option.reorder-indicator--after { box-shadow: inset 0 -3px 0 0 var(--color-accent); }
+/* 拖拽把手：鼠标悬停时提示可排序 */
+.engine-option .dh-engine-grip {
+    margin-left: auto;
+    color: var(--color-text-tertiary);
+    cursor: grab;
+    opacity: 0.6;
+    transition: opacity var(--transition-fast);
+}
+.engine-option:hover .dh-engine-grip { opacity: 1; color: var(--color-text-secondary); }
+.engine-option .dh-engine-grip:active { cursor: grabbing; }
+.engine-option:not(.engine-option:hover) .dh-engine-grip { opacity: 0.35; }
 
 .search-input {
     flex: 1;

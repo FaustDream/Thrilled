@@ -49,11 +49,27 @@
     border: 1px solid var(--color-border-active);
     border-radius: 20px;
     padding: 20px;
-    width: min(90vw, 420px);
+    width: min(90vw, 480px);
     max-height: 85vh;
-    overflow-y: auto;
+    /* overflow-x 固定隐藏，确保内容横向越界（如 hover 位移）不会触发底部横向滚动条，
+       避免滚动条出现/消失导致内容区宽度抖动；仅保留纵向滚动 */
+    overflow: hidden auto;
+    /* 细滚动条：出现时仅占 ~6px，降低视觉突兀感 */
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
     box-shadow: var(--shadow-lg);
     animation: uiScaleIn 0.2s ease;
+}
+.ui-dialog::-webkit-scrollbar { width: 6px; }
+.ui-dialog::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+}
+.ui-dialog::-webkit-scrollbar-track { background: transparent; }
+/* 非确认弹窗常驻预留滚动条槽位：纵向滚动条出现/消失时内容宽度恒定，杜绝抖动；
+   确认弹窗为居中布局，预留槽位会造成内容不对称，故排除 */
+.ui-dialog:not(.ui-dialog--confirm) {
+    scrollbar-gutter: stable;
 }
 
 .ui-dialog-title {
@@ -123,6 +139,8 @@
     color: var(--color-text-secondary);
     font-size: 14px;
     line-height: 1.5;
+    /* 允许弹窗内容区在 flex 容器内收缩，防止内部子元素把弹窗撑宽 */
+    min-width: 0;
 }
 
 .ui-dialog-footer {

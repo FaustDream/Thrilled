@@ -44,6 +44,8 @@ export const LS_KEYS = {
   THEME: 'theme',
   /** 首次配置本地目录的引导标记 */
   SYNC_DIR_PROMPTED: 'sync_dir_prompted',
+  /** 搜索引擎显示顺序（EngineId 数组 JSON） */
+  ENGINE_ORDER: 'engine_order',
   /** 用户选择的父目录路径（用于显示） */
   PARENT_DIR_PATH: 'parent_dir_path',
   /** 初始化设置完成标记（首次安装路径选择完成后设置） */

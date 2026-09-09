@@ -9,7 +9,7 @@
  */
 
 import { debug } from '../../lib/logger';
-import { ENGINES } from '../../shared/types';
+import { getOrderedEngines } from './navigation';
 import { state } from './state';
 import { toggleEditMode } from './tiles';
 import { openSettings } from './settings-panel';
@@ -98,8 +98,8 @@ function getCommands(): CommandItem[] {
     },
   ];
 
-  // 搜索引擎切换命令
-  for (const eng of ENGINES) {
+  // 搜索引擎切换命令（按持久化顺序展示，与地址栏下拉/数字键一致）
+  for (const eng of getOrderedEngines()) {
     commands.push({
       type: 'command',
       id: `cmd-engine-${eng.id}`,

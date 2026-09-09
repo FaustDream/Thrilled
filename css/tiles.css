@@ -230,12 +230,22 @@
     opacity: 0.65;
     z-index: 99;
     cursor: grabbing;
-    /* 不使用 transform: scale()，避免与 fixed 定位叠加导致视觉错位与越级缩放 */
+    /* 不使用 transform: scale()，避免与 fixed 定位叠加导致视觉错位与越级缩放。
+       仅用 transform 做指针跟随，且只过渡 transform：极短时长产生自然的惯性跟随，
+       又不引入明显延迟；will-change 提前建合成层，减少每帧重排。 */
     box-shadow: var(--shadow-lg);
     border-color: var(--color-accent);
     background: var(--color-tile-drag-bg);
     overflow: hidden;
-    transition: none;
+    will-change: transform;
+    transition: transform 0.055s linear;
+}
+
+/* 拖拽进行中：关闭所有磁贴的 backdrop-blur 重绘（该滤镜在 transform 变化时每帧重排，
+   是拖拽卡顿的主要来源），改用更轻量的纯 transform 过渡 */
+.tiles-container.tile-drag-active .tile {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 /* 长按等待态：仅用阴影呼吸提示，不缩放，杜绝尺寸反馈坍缩 */
@@ -552,25 +562,56 @@
     flex-direction: column;
     gap: 6px;
     max-height: 320px;
+    /* 明确占满弹窗内容宽，并允许在 flex 容器内收缩，
+       否则 column flex 会按最宽子项内容撑开自身，导致横向溢出 */
+    width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
     overflow-y: auto;
+    /* 根治宽度抖动：滚动条槽位常驻预留，分类多少、滚动条出现与否，
+       内容宽度恒定不变（Windows 经典滚动条约占 17px，不预留会来回挤压） */
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
 }
+.move-target-list::-webkit-scrollbar { width: 6px; }
+.move-target-list::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: var(--radius-full);
+}
+.move-target-list::-webkit-scrollbar-track { background: transparent; }
 .move-target-item {
     display: flex;
     align-items: center;
     gap: 10px;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     padding: 10px 14px;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     background: var(--color-surface);
     cursor: pointer;
     text-align: left;
-    transition: all var(--transition-fast);
+    /* 显式列举过渡属性，禁止 all：布局属性（宽度/内边距等）永不参与动画，
+       从机制上杜绝选中/悬停动画改变内容区宽度 */
+    transition: background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+    /* 防止内部文本/图标把按钮撑开，截断超长分类名 */
+    overflow: hidden;
 }
 .move-target-item:hover {
     border-color: var(--color-accent);
     background: var(--color-accent-bg-12);
-    transform: translateX(4px);
+    /* 用 inset 阴影做选中提示（绘制在元素内部，零外溢），
+       避免位移/缩放类动画造成横向溢出与滚动条 */
+    box-shadow: inset 3px 0 0 var(--color-accent);
+}
+/* 键盘焦点环向内绘制，配合圆角且完全无外溢（覆盖全局 :focus-visible 的外扩 offset） */
+.move-target-item:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: -2px;
 }
 .move-target-icon {
     display: flex;
@@ -591,6 +632,8 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    /* 配合 ellipsis 必须设置 min-width: 0，否则 flex item 不会收缩到容器内 */
+    min-width: 0;
 }
 .move-target-arrow {
     display: flex;
@@ -619,7 +662,10 @@
     font-size: var(--font-size-sm);
     font-weight: 600;
     cursor: pointer;
-    transition: all var(--transition-fast);
+    /* 同上：仅过渡颜色类属性，布局属性不参与动画 */
+    transition: background-color var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast);
 }
 .move-target-new:hover {
     background: var(--color-accent-bg-16);

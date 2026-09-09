@@ -112,7 +112,7 @@ function showBatchBar(): void {
   const disabledAttr = count === 0 ? ' disabled aria-disabled="true"' : '';
   bar.innerHTML = `
     <span class="batch-action-count">已选择 ${count} 个</span>
-    <button class="batch-action-btn batch-action-move" type="button"${disabledAttr}>
+    <button class="batch-action-btn batch-action-move" type="button" title="移动到分类（Ctrl+Shift+M）"${disabledAttr}>
       <svg class="dh-icon dh-icon--move-folder dh-icon--sm" role="img"><use href="#dh-icon-move-folder"></use></svg>移动到分类
     </button>
     <button class="batch-action-btn batch-action-delete" type="button"${disabledAttr}>删除选中</button>
@@ -164,6 +164,29 @@ async function confirmBatchDelete(): Promise<void> {
   showUndoToast('delete', String(deleted.length));
 }
 
+/* ================= 键盘辅助：全选 / 批量移动 ================= */
+
+/** 全选当前分类的全部磁贴（进入批量选择模式，供批量移动/删除） */
+export function selectAllInCurrentPage(): void {
+  if (state.currentTiles.length === 0) return;
+  state.batchSelectMode = true;
+  state.selectedTileIds.clear();
+  for (const t of state.currentTiles) state.selectedTileIds.add(t.id as Tile['id']);
+  showBatchBar();
+  syncTileSelectedState();
+  showToast(`已全选 ${state.selectedTileIds.size} 个快捷方式`, 'info');
+}
+
+/** 批量移动：将当前选中的磁贴移动到目标分类（无选中时给出提示） */
+export function batchMoveSelected(): void {
+  const ids = [...state.selectedTileIds];
+  if (ids.length === 0) {
+    showToast('请先选中要移动的快捷方式（Ctrl+Shift+A 全选，或 Ctrl+Shift+点击多选）', 'warning');
+    return;
+  }
+  void promptSelectCategory(ids as Tile['id'][], 'move');
+}
+
 /* ================= 移动/复制分类选择弹窗 ================= */
 
 /** 分类选择弹窗模式 */
@@ -210,7 +233,8 @@ async function promptSelectCategory(tileIds: Tile['id'][], mode: CategorySelectM
   );
 
   // 绑定已有分类选项
-  document.querySelectorAll<HTMLElement>('.move-target-item').forEach((el) => {
+  const itemEls = Array.from(document.querySelectorAll<HTMLElement>('.move-target-item'));
+  itemEls.forEach((el) => {
     const idx = Number(el.dataset.pageIndex);
     el.addEventListener('click', () => {
       destroy();
@@ -221,6 +245,20 @@ async function promptSelectCategory(tileIds: Tile['id'][], mode: CategorySelectM
       }
     });
   });
+
+  // 键盘导航：↑/↓ 在分类间移动焦点，Enter/Space 由按钮原生触发确认
+  if (itemEls.length > 0) {
+    const list = document.querySelector<HTMLElement>('.move-target-list');
+    let activeIndex = 0;
+    itemEls[activeIndex]?.focus();
+    list?.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      e.preventDefault();
+      if (e.key === 'ArrowDown') activeIndex = (activeIndex + 1) % itemEls.length;
+      else activeIndex = (activeIndex - 1 + itemEls.length) % itemEls.length;
+      itemEls[activeIndex]?.focus();
+    });
+  }
 
   // 绑定「新建分类」：仅移动模式支持（复制到新分类无意义）
   document.querySelector<HTMLElement>('.move-target-new')?.addEventListener('click', () => {

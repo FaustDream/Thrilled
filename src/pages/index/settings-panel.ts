@@ -17,6 +17,9 @@ import { showConfirm } from './dialogs';
 import { resetAllData } from './reset';
 import { clearSelection } from './tiles';
 import { updateSearchFlags } from './search';
+import { getOrderedEngines, saveEngineOrder } from './navigation';
+import { icon } from './icons';
+import { attachReorder } from './reorder';
 
 const MODULE = 'settings-panel';
 
@@ -177,6 +180,44 @@ function applyShortcutColumns(cols: ShortcutColumns): void {
 }
 
 /** 初始化设置面板 */
+
+/**
+ * 渲染设置面板的「引擎顺序」可拖拽列表（与地址栏下拉共用顺序）
+ * 列表内容在 initSettingsPanel 时创建一次，自增序号会随拖拽后的顺序刷新。
+ */
+function renderEngineOrderList(): void {
+  const el = document.getElementById('engineOrderList');
+  if (el === null) return;
+  const list = el;
+
+  function rebuild(): void {
+    list.replaceChildren();
+    for (const [index, eng] of getOrderedEngines().entries()) {
+      const item = document.createElement('div');
+      item.className = 's-engine-order-item';
+      item.draggable = true;
+      item.dataset.id = eng.id;
+      item.innerHTML = `
+        ${icon(eng.iconName ?? eng.id, 'dh-icon--md')}
+        <span class="s-engine-order-name">${eng.name}</span>
+        <span class="s-engine-order-num">${index + 1}</span>
+        <svg class="dh-engine-grip" role="img" aria-hidden="true"><use href="#dh-icon-grip"></use></svg>`;
+      list.appendChild(item);
+    }
+  }
+
+  // 拖拽排序（指针几何定位，内部幂等绑定一次，支持插入到最底部）
+  attachReorder({
+    container: list,
+    itemSelector: '.s-engine-order-item',
+    getOrder: () => getOrderedEngines().map((x) => x.id),
+    onCommit: saveEngineOrder,
+    onRebuild: rebuild,
+  });
+
+  rebuild();
+}
+
 export function initSettingsPanel(): void {
   const overlay = document.getElementById('settingsOverlay');
   const gearBtn = document.getElementById('settingsGearBtn');
@@ -292,4 +333,7 @@ export function initSettingsPanel(): void {
       clearSelection();
     });
   });
+
+  // 引擎顺序拖拽列表（与地址栏下拉共用顺序）
+  renderEngineOrderList();
 }
