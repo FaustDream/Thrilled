@@ -163,3 +163,163 @@ export const ENGINES: readonly SearchEngine[] = [
 export function getEngineById(id: EngineId): SearchEngine | null {
   return ENGINES.find((e) => e.id === id) ?? null;
 }
+
+/* ==========================================================================
+ * v4 内容模型（冻结于 docs/v4/02-UI规格.md §13）
+ * 卡片 = 对某个小组件定义的一次引用：位置与尺寸属于布局，config 属于内容。
+ * ========================================================================== */
+
+/** 小组件类型（= WIDGET_DEFS 的键） */
+export type WidgetKind =
+  | 'news'
+  | 'clock'
+  | 'cal'
+  | 'weather'
+  | 'todo'
+  | 'ann'
+  | 'countday'
+  | 'countdown'
+  | 'fav'
+  | 'quote'
+  | 'music'
+  | 'trans'
+  | 'calc'
+  | 'woodfish'
+  | 'ai'
+  | 'icon'
+  | 'folder'
+  | 'group';
+
+/** 卡片尺寸档位（单位数，1 单位 = 60px，仅六档） */
+export interface SlotSize {
+  w: number;
+  h: number;
+}
+
+/** 可编辑字段类型：文本 / 数字 / 逗号分隔列表 / 开关 / 选项 */
+export type WidgetFieldType = 'text' | 'num' | 'list' | 'bool' | 'sel';
+
+export interface WidgetField {
+  /** config 键 */
+  k: string;
+  /** 显示名 */
+  l: string;
+  t: WidgetFieldType;
+  /** sel 的选项 */
+  o?: string[];
+  /** 占位提示 */
+  ph?: string;
+}
+
+/** 小组件定义（唯一来源，定义默认值属于这里） */
+export interface WidgetDefinition {
+  t: WidgetKind;
+  /** 显示名 */
+  n: string;
+  /** 字形（占位素材，真 Logo 后续替换） */
+  g: string;
+  /** 品牌色 */
+  c: string;
+  /** 一句话说明（添加面板副标题） */
+  s: string;
+  /** 添加时的默认单位尺寸 */
+  units: SlotSize;
+  /** 可编辑字段（编辑弹窗据此渲染） */
+  fields: WidgetField[];
+  /** 默认配置 */
+  def: Record<string, unknown>;
+}
+
+/** 卡片实例：引用某个小组件定义 + 自己的覆盖配置 */
+export interface GridItem {
+  id: string;
+  /** 网格单位坐标（1 单位 = 60px） */
+  c: number;
+  r: number;
+  w: number;
+  h: number;
+  /** 引用的小组件类型 */
+  t: WidgetKind;
+  /** 只存本实例的覆盖值；读取时按「定义默认值 ⊕ 实例覆盖值」合成 */
+  config: Record<string, unknown>;
+}
+
+/** 一套模式的页面集合（每页是一组卡片） */
+export type ModePages = GridItem[][];
+
+/** 布局导出 / 导入文档（设置 → 数据与备份） */
+export interface LayoutDoc {
+  v: number;
+  app: string;
+  exportedAt: string;
+  standard: ModePages;
+  privacy: ModePages;
+}
+
+/** v4 搜索引擎定义（内置 12 个见 BUILTIN_ENGINES；可隐藏、可排序、可自定义） */
+export interface EngineDef {
+  id: string;
+  name: string;
+  /** 品牌色 */
+  color: string;
+  /** 字形（占位素材） */
+  glyph: string;
+  /** 拉丁字形（字号按 0.74 缩小） */
+  latin?: boolean;
+  /** 搜索地址（query 前拼） */
+  base: string;
+  /** 已隐藏（不出现在下拉 / 数字键 / 右键二级菜单） */
+  hidden?: boolean;
+}
+
+/** v4 内置搜索引擎全集（12 个 = 启用上限，见 docs/v4/04 §5.1） */
+export const BUILTIN_ENGINES: readonly EngineDef[] = [
+  { id: 'baidu', name: '百度', color: '#2932E1', glyph: '百', base: 'https://www.baidu.com/s?wd=' },
+  { id: 'bing', name: '必应', color: '#008373', glyph: '必', base: 'https://www.bing.com/search?q=' },
+  { id: 'google', name: '谷歌', color: '#4285F4', glyph: 'G', latin: true, base: 'https://www.google.com/search?q=' },
+  { id: 'sogou', name: '搜狗', color: '#FD5720', glyph: '搜', base: 'https://www.sogou.com/web?query=' },
+  { id: 'so360', name: '360 搜索', color: '#0EB55A', glyph: '360', latin: true, base: 'https://www.so.com/s?q=' },
+  { id: 'shenma', name: '神马搜索', color: '#FF6A00', glyph: '神', base: 'https://so.m.sm.cn/s?q=' },
+  { id: 'quark', name: '夸克搜索', color: '#2F6BFF', glyph: '夸', base: 'https://quark.sm.cn/s?q=' },
+  { id: 'toutiao', name: '今日头条', color: '#F04142', glyph: '头', base: 'https://so.toutiao.com/search?keyword=' },
+  { id: 'zhihu', name: '知乎', color: '#0084FF', glyph: '知', base: 'https://www.zhihu.com/search?type=content&q=' },
+  { id: 'weibo', name: '微博', color: '#E6162D', glyph: '微', base: 'https://s.weibo.com/weibo?q=' },
+  { id: 'duckduckgo', name: 'DuckDuckGo', color: '#DE5833', glyph: 'D', latin: true, base: 'https://duckduckgo.com/?q=' },
+  { id: 'brave', name: 'Brave', color: '#FB542B', glyph: 'B', latin: true, base: 'https://search.brave.com/search?q=' },
+] as const;
+
+/** 透明度与玻璃质感的六个可调区域（对应 --ga-* / --blur-*） */
+export type GlassKey = 'card' | 'tile' | 'dock' | 'search' | 'panel' | 'menu';
+export type GlassSettings = Record<GlassKey, number>;
+
+/** 模式（标准 / 隐私各自独立页面集，极简只留搜索 + 时钟 + Dock） */
+export type ViewMode = 'minimal' | 'standard' | 'privacy';
+
+/** v4 界面设置（本地保存，云同步见 01 §5） */
+export interface AppSettings {
+  mode: ViewMode;
+  labels: boolean;
+  hideTop: boolean;
+  hideSearch: boolean;
+  mascot: boolean;
+  engineId: string;
+  openMode: 'link' | 'tab' | 'search';
+  autoFocus: boolean;
+  searchKeep: boolean;
+  hideBtn: boolean;
+  searchHistory: boolean;
+  nick: string;
+  searchWidth: number;
+  searchRadius: number;
+  dockCount: number;
+  dockIcon: 'rect' | 'circle';
+  clockColor: string;
+  showTime: boolean;
+  showDate: boolean;
+  showQuote: boolean;
+  glass: GlassSettings;
+  /** 全局透明度 0.2–1 */
+  gAlpha: number;
+  skinId: string;
+  wallpaper: number;
+}

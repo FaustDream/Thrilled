@@ -10,7 +10,7 @@
 
 import { isSafeDomain } from '../shared/guards';
 import { FAVICON_FETCH_TIMEOUT_MS, FAVICON_MAX_BYTES } from '../shared/constants';
-import { warn } from '../lib/logger';
+import { warn } from '../core/logger';
 
 const MODULE = 'favicon-resolver';
 
@@ -149,7 +149,8 @@ async function extractIconUrls(domain: string): Promise<string[] | null> {
       let sizeBonus = 0;
       if (sizes !== null) {
         const sm = /(\d+)\s*x\s*\d+/i.exec(sizes);
-        if (sm !== null) sizeBonus = Math.min(parseInt(sm[1]!, 10), 512) / 100;
+        const sizeStr = sm?.[1];
+        if (sizeStr !== undefined) sizeBonus = Math.min(parseInt(sizeStr, 10), 512) / 100;
       }
       candidates.push({ href, priority: pri + sizeBonus });
     }
