@@ -39,13 +39,14 @@ describe('引擎与皮肤归一化', () => {
   it('引擎缺字段丢弃', () => {
     expect(normalizeEngines([BUILTIN_ENGINES[0], { id: 'x' }, 'bad'])).toHaveLength(1)
   })
-  it('皮肤全部坏数据时回退内置四套', () => {
-    expect(normalizeSkins([{ bad: 1 }]).map((s) => s.id)).toEqual(['classic', 'glass', 'dark', 'purple'])
+  it('皮肤全部坏数据时回退内置六套', () => {
+    expect(normalizeSkins([{ bad: 1 }]).map((s) => s.id)).toEqual(['classic', 'glass', 'dark', 'purple', 'dawn', 'teal'])
   })
   it('内置皮肤归一化无损', () => {
     const out = normalizeSkins(BUILTIN_SKINS)
-    expect(out).toHaveLength(4)
+    expect(out).toHaveLength(6)
     expect(out[0]?.tokens['--card-bg']).toBe('#ffffff')
+    expect(out.map((s) => s.id)).toEqual(['classic', 'glass', 'dark', 'purple', 'dawn', 'teal'])
   })
 })
 

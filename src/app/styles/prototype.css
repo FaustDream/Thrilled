@@ -1,10 +1,14 @@
 ﻿
 /* ============ 1. 基础令牌（皮肤令牌由 JS 的 SKINS 注入 #stage） ============ */
 :root{
-  --cell:60px; --inset:25px; --radius-lg:16px; --radius-md:12px;
+  --cell:60px; --inset:25px; --radius-lg:18px; --radius-md:14px; --radius-xl:26px;
   --fs-xs:11px; --fs-sm:12px; --fs-md:13px; --fs-lg:14px;
   --z-pop:30; --z-float:40; --z-modal:50; --z-dropdown:55; --z-drawer:60; --z-toast:99;
-  --ease:cubic-bezier(.22,.61,.36,1);
+  --ease:cubic-bezier(.22,.61,.36,1); --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --shadow-card:0 1px 0 rgba(255,255,255,.28) inset,0 10px 28px -8px rgba(6,12,24,.30);
+  --shadow-card-hover:0 1px 0 rgba(255,255,255,.34) inset,0 22px 44px -12px rgba(6,12,24,.40);
+  --shadow-pop:0 24px 64px -12px rgba(4,10,22,.42),0 4px 14px -6px rgba(4,10,22,.24);
+  --ring:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent);
   --wp-blur:0px; --wp-mask:0; --dock-icon:66px; --mask-color:#060a10;
   --g-alpha:1; --panel-sub:#6b7280;
   /* 玻璃质感（分功能）：--ga-* 背景 alpha、--blur-* 背景模糊，由 applySkin 按 state.glass 写入 */
@@ -22,7 +26,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   background:transparent;color:var(--panel-text)}
 /* 壁纸层：底色渐变 + 极细斜纹。斜纹是「玻璃质感」的参照物——没有可被模糊的细节，毛玻璃就看不出来 */
 #stage::before{content:'';position:absolute;inset:-40px;
-  background-image:var(--wallpaper),repeating-linear-gradient(135deg,rgba(122,136,160,.075) 0 1px,transparent 1px 8px);
+  background-image:var(--wallpaper),repeating-linear-gradient(135deg,rgba(122,136,160,.05) 0 1px,transparent 1px 6px);
   background-size:cover,auto;filter:blur(var(--wp-blur))}
 #stage::after{content:'';position:absolute;inset:0;background:var(--mask-color);opacity:var(--wp-mask);
   pointer-events:none;z-index:1}
@@ -502,3 +506,85 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .search-box.immersive{background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
 /* 线框样式仅极简模式生效（02 §11） */
 #stage[data-mode='standard'] .search-box.line,#stage[data-mode='privacy'] .search-box.line{border-radius:var(--search-radius);background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-search)));border:2px solid rgba(255,255,255,.72);backdrop-filter:blur(var(--blur-search))}
+
+/* ============ 16. v4.2 视觉升级：光影 / 动效 / 形状体系 ============ */
+
+/* —— 卡片：多层光影 + 细描边 + 上浮按压 —— */
+.item{border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-card);
+  outline:1px solid color-mix(in srgb,var(--card-text) 7%,transparent);outline-offset:-1px;
+  backdrop-filter:blur(var(--blur-card)) saturate(1.45);
+  transition:transform .22s var(--ease-spring),box-shadow .22s var(--ease)}
+.item:hover{transform:translateY(-4px);box-shadow:var(--shadow-card-hover);z-index:5}
+.item:active{transform:translateY(-1px) scale(.985);transition-duration:.1s}
+.item.dragging{opacity:.5;transition:none}
+/* 入场：渐次浮现（动画只在新挂载时播放一次） */
+@keyframes item-in{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.page .item{animation:item-in .5s var(--ease) backwards}
+/* 名称标签：更柔和的投影与悬停强化 */
+.item-label{opacity:.96;letter-spacing:.2px;transition:opacity .18s,transform .18s}
+.item:hover + .item-label{opacity:1;transform:translateY(-1px)}
+
+/* —— 卡片悬浮操作：玻璃小圆钮 —— */
+.ia{background:rgba(15,23,42,.55);backdrop-filter:blur(6px)}
+.ia:hover{background:rgba(15,23,42,.85);transform:scale(1.08)}
+
+/* —— 搜索框：聚焦光晕 + 按钮反馈 —— */
+.search-box{box-shadow:0 12px 34px -10px rgba(6,12,24,.28);transition:border-radius .18s,background .18s,width .18s,box-shadow .22s,border-color .22s}
+.search-box:focus-within{box-shadow:var(--ring),0 16px 40px -10px rgba(6,12,24,.34)}
+.search-box input{font-size:15px}
+.search-go-btn{transition:background .16s,transform .16s var(--ease-spring)}
+.search-go-btn:hover{background:color-mix(in srgb,var(--accent) 20%,transparent);transform:scale(1.06)}
+
+/* —— 浮层统一：更深层的分层阴影 —— */
+.search-panel,.engine-panel,.ctx,.ctx-sub,.mode-tip{box-shadow:var(--shadow-pop)}
+.search-panel,.engine-panel,.ctx,.ctx-sub{border-radius:14px}
+
+/* —— 右键菜单：条目微动效 —— */
+.ctx-item,.ctx-sub-item,.ep-row{transition:background .14s,padding-left .14s}
+.ctx-item:hover,.ep-row:hover{padding-left:18px}
+
+/* —— Dock：悬浮栏升级 —— */
+.dock-bar{border-radius:var(--radius-xl);padding:16px 12px;
+  box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 24px 56px -14px rgba(6,12,24,.42);
+  backdrop-filter:blur(var(--blur-dock)) saturate(1.5)}
+.dock-icon{transition:transform .26s var(--ease-spring),box-shadow .26s}
+.dock-item:hover .dock-icon{transform:scale(1.24) translateY(-2px);box-shadow:0 14px 30px -8px rgba(6,12,24,.4)}
+.dock-sep{opacity:.22}
+
+/* —— 模式胶囊 —— */
+.mode-pill{border-radius:14px;box-shadow:0 10px 28px -12px rgba(6,12,24,.36)}
+.pill-btn{border-radius:10px;transition:background .16s}
+.pill-btn.active{background:rgba(255,255,255,.95)}
+
+/* —— 页点：胶囊形变指示当前页 —— */
+.page-dot{width:6px;height:6px;border-radius:999px;transition:all .28s var(--ease)}
+.page-dot.on{width:22px;opacity:1}
+
+/* —— Toast：胶囊 + 弹性入场 —— */
+.toast{border-radius:999px;padding:11px 22px;box-shadow:0 14px 38px -10px rgba(4,10,22,.5)}
+@keyframes toast-in{from{opacity:0;transform:translate(-50%,10px) scale(.94)}to{opacity:1;transform:translate(-50%,0)}}
+.toast.show{animation:toast-in .26s var(--ease)}
+
+/* —— 弹窗：缩放入场 + 遮罩景深 —— */
+@keyframes modal-in{from{opacity:0;transform:scale(.95) translateY(10px)}to{opacity:1;transform:none}}
+.modal-mask.show .modal{animation:modal-in .26s var(--ease)}
+.modal{border-radius:22px;box-shadow:var(--shadow-pop)}
+.modal-mask{backdrop-filter:blur(3px)}
+
+/* —— 抽屉：圆角与滚动条 —— */
+.dw{border-radius:20px 0 0 20px;box-shadow:-24px 0 60px -18px rgba(4,10,22,.45)}
+.dw-body::-webkit-scrollbar,.engine-panel::-webkit-scrollbar,.modal::-webkit-scrollbar{width:6px}
+.dw-body::-webkit-scrollbar-thumb,.engine-panel::-webkit-scrollbar-thumb,.modal::-webkit-scrollbar-thumb{
+  background:color-mix(in srgb,var(--panel-sub) 32%,transparent);border-radius:999px}
+.dw-body::-webkit-scrollbar-track,.engine-panel::-webkit-scrollbar-track,.modal::-webkit-scrollbar-track{background:transparent}
+
+/* —— 按钮：微交互统一 —— */
+.btn{transition:filter .16s,transform .16s var(--ease-spring),box-shadow .16s}
+.btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+.btn:active{transform:translateY(0) scale(.97)}
+
+/* —— 玻璃质感统一加饱和度（更通透的毛玻璃） —— */
+.dw,.modal,.ctx,.ctx-sub,.search-panel,.engine-panel,.mode-tip,.dock-bar{backdrop-filter:blur(var(--blur-menu)) saturate(1.45)}
+.search-box{backdrop-filter:blur(var(--blur-search)) saturate(1.5)}
+.item{backdrop-filter:blur(var(--blur-card)) saturate(1.45)}

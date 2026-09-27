@@ -377,8 +377,8 @@ export const App = () => {
         {pages[modeKey].map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
             <div className="grid" ref={i === cur[modeKey] ? gridRef : undefined}>
-              {pg.map((it) => (
-                <GridCard key={it.id} item={it} now={now} nick={settings.nick} encourage={encourage} playing={playing} weather={weather}
+              {pg.map((it, idx) => (
+                <GridCard key={it.id} item={it} idx={idx} now={now} nick={settings.nick} encourage={encourage} playing={playing} weather={weather}
                   dragging={drag?.id === it.id ? drag : null}
                   onDragStart={(e) => {
                     if (e.button !== 0 || (e.target as HTMLElement).closest('.ia')) return
@@ -493,9 +493,9 @@ export const App = () => {
             </div>
             <div className="dock-sep" />
             <div className="dock-actions">
-              {([['add', '添加'], ['personal', '个性化'], ['square', '广场'], ['setting', '设置']] as const).map(([k, n]) => (
+              {([['add', '添加', '#3b82f6'], ['personal', '个性化', '#8b5cf6'], ['square', '广场', '#0ea5e9'], ['setting', '设置', '#64748b']] as const).map(([k, n, c]) => (
                 <div className="dock-item" key={k} data-act="dock-act" data-v={k}>
-                  <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`}>
+                  <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`} style={{ color: c }}>
                     {k === 'add' ? Icon.plus() : k === 'personal' ? Icon.sliders() : k === 'square' ? Icon.grid() : Icon.gear()}
                   </div>
                   <div className="dock-name">{n}</div>
@@ -515,8 +515,10 @@ export const App = () => {
 }
 
 /** 单张卡片：外框（点击开站 / 拖拽换位）+ 内容 + 名称标签 + 悬浮操作 */
-const GridCard = ({ item, now, nick, encourage, playing, weather, dragging, onDragStart }: {
+const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging, onDragStart }: {
   item: GridItem
+  /** 页内序号（入场动画渐次延迟用） */
+  idx: number
   now: Date
   nick: string
   encourage: string
@@ -529,7 +531,7 @@ const GridCard = ({ item, now, nick, encourage, playing, weather, dragging, onDr
   const draggingStyle = dragging !== null && dragging.moved
   const style = draggingStyle
     ? { left: dragging.x, top: dragging.y, zIndex: 20, transition: 'none' }
-    : undefined
+    : { animationDelay: `${Math.min(idx * 22, 440)}ms` }
   return (
     <>
       <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...style }}

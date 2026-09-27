@@ -314,7 +314,7 @@ const PersonalPanel = () => {
           </div>
         ))}
       </div>
-      <Hint>点击卡片即切换风格并带出配套壁纸；四套内置只是出厂初始值。</Hint>
+      <Hint>点击卡片即切换风格并带出配套壁纸；六套内置只是出厂初始值。</Hint>
 
       <Sec t="风格皮肤编辑器（可自定义）" />
       <div className="f-row"><label className="f-label">皮肤名称</label>
@@ -822,7 +822,7 @@ export const Modal = () => {
           <>
             <h2>欢迎来到 Thrilled</h2>
             <p className="sub">选择风格来搭配组件和图标，之后可随时在「个性化 - 主题与风格」中更换。</p>
-            <div className="th-grid">
+            <div className="th-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
               {skins.map((k) => (
                 <div key={k.id} className={`th-card${k.id === selSkin ? ' sel' : ''}`} onClick={() => setSelSkin(k.id)}>
                   <div className="th-prev" style={{ background: WALLS[k.wall]?.bg ?? WALLS[0]?.bg }}>

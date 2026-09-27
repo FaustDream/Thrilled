@@ -40,13 +40,42 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 }
 
 export const WALLS: readonly { n: string; c: string; bg: string }[] = [
-  { n: '默认壁纸', c: '极简', bg: 'radial-gradient(120% 90% at 78% 8%,rgba(255,178,120,.34),transparent 62%),radial-gradient(90% 80% at 14% 86%,rgba(96,140,255,.30),transparent 64%),linear-gradient(160deg,#1b2532,#0b1017 72%)' },
-  { n: '暮色', c: '风景', bg: 'linear-gradient(160deg,#3b2a4d,#1b1530 60%,#0c0a14)' },
-  { n: '海岸', c: '风景', bg: 'linear-gradient(170deg,#0f3b52,#0b2233 55%,#07131d)' },
-  { n: '晨雾', c: '极简', bg: 'linear-gradient(150deg,#dfe7ef,#b9c6d6 60%,#8f9fb3)' },
-  { n: '樱', c: '动漫', bg: 'linear-gradient(160deg,#ffd9e5,#ffc0cf 45%,#f39ab3)' },
-  { n: '夜紫', c: '更多', bg: 'linear-gradient(160deg,#2a1b46,#1a1030 55%,#0d0818)' },
-  { n: '云白', c: '极简', bg: 'radial-gradient(110% 90% at 78% 6%,rgba(255,214,170,.35),transparent 60%),radial-gradient(90% 80% at 12% 88%,rgba(140,180,255,.26),transparent 62%),linear-gradient(155deg,#fdfeff,#eef4fb 55%,#dbe6f5)' },
+  {
+    n: '曜夜', c: '极简',
+    bg: 'radial-gradient(90% 70% at 82% 6%,rgba(120,160,255,.28),transparent 58%),radial-gradient(70% 60% at 12% 88%,rgba(70,120,220,.22),transparent 60%),radial-gradient(46% 40% at 62% 62%,rgba(150,110,255,.14),transparent 66%),linear-gradient(158deg,#1a2433 0%,#101825 46%,#0a0f18 100%)',
+  },
+  {
+    n: '暮色', c: '风景',
+    bg: 'radial-gradient(80% 60% at 78% 12%,rgba(255,150,110,.30),transparent 58%),radial-gradient(60% 50% at 20% 78%,rgba(150,90,180,.20),transparent 62%),linear-gradient(162deg,#3d2a52 0%,#241a3c 44%,#100c1c 100%)',
+  },
+  {
+    n: '海岸', c: '风景',
+    bg: 'radial-gradient(86% 64% at 76% 8%,rgba(90,200,220,.24),transparent 58%),radial-gradient(64% 54% at 16% 84%,rgba(40,130,160,.20),transparent 60%),linear-gradient(168deg,#10394e 0%,#0b2537 46%,#06131d 100%)',
+  },
+  {
+    n: '晨雾', c: '极简',
+    bg: 'radial-gradient(88% 66% at 80% 10%,rgba(255,255,255,.50),transparent 60%),radial-gradient(70% 58% at 14% 86%,rgba(160,180,205,.28),transparent 62%),linear-gradient(152deg,#e6ecf4 0%,#c3cedd 52%,#98a8bc 100%)',
+  },
+  {
+    n: '樱', c: '动漫',
+    bg: 'radial-gradient(84% 62% at 78% 10%,rgba(255,235,240,.55),transparent 58%),radial-gradient(66% 54% at 16% 82%,rgba(255,150,175,.26),transparent 62%),linear-gradient(158deg,#ffdfe8 0%,#ffc4d3 48%,#f39cb4 100%)',
+  },
+  {
+    n: '夜紫', c: '更多',
+    bg: 'radial-gradient(80% 60% at 80% 8%,rgba(150,90,230,.26),transparent 58%),radial-gradient(62% 52% at 16% 84%,rgba(90,50,150,.24),transparent 60%),linear-gradient(160deg,#2c1c4a 0%,#1b1132 46%,#0d081a 100%)',
+  },
+  {
+    n: '云白', c: '极简',
+    bg: 'radial-gradient(84% 62% at 80% 6%,rgba(255,222,180,.42),transparent 58%),radial-gradient(66% 54% at 12% 86%,rgba(150,190,255,.30),transparent 60%),linear-gradient(155deg,#fdfeff 0%,#eff5fc 52%,#dde8f6 100%)',
+  },
+  {
+    n: '晨曦', c: '风景',
+    bg: 'radial-gradient(88% 64% at 78% 10%,rgba(255,190,130,.44),transparent 58%),radial-gradient(64% 52% at 18% 82%,rgba(255,140,150,.22),transparent 60%),radial-gradient(44% 38% at 52% 46%,rgba(180,160,255,.16),transparent 64%),linear-gradient(156deg,#fff3e6 0%,#ffe3cf 44%,#f6c6b8 100%)',
+  },
+  {
+    n: '黛青', c: '更多',
+    bg: 'radial-gradient(86% 62% at 78% 8%,rgba(70,220,190,.22),transparent 58%),radial-gradient(62% 52% at 16% 84%,rgba(40,140,130,.22),transparent 60%),radial-gradient(46% 40% at 58% 58%,rgba(60,110,200,.12),transparent 64%),linear-gradient(162deg,#12312c 0%,#0c201d 46%,#050f0e 100%)',
+  },
 ]
 
 export type DrawerKey = 'add' | 'square' | 'personal' | 'setting' | 'profile'
@@ -466,7 +495,8 @@ export const useApp = create<AppState>()((set, get) => ({
   clearHistory: () => set({ history: [], toast: '搜索历史已清空' }),
   showToast: (msg) => set({ toast: msg }),
   setDrawer: (k) => set({ drawer: k, ctx: null, enginePanel: false }),
-  setModal: (k) => set({ modal: k, ctx: null, enginePanel: false }),
+  /* 打开弹窗时收起抽屉：弹窗层级（50）低于抽屉（60），否则被盖住 */
+  setModal: (k) => set({ modal: k, ctx: null, enginePanel: false, drawer: k !== null ? null : get().drawer }),
   openCtx: (ctx) => set({ ctx, enginePanel: false }),
   setEnginePanel: (open) => set({ enginePanel: open }),
   setPlaying: (v) => set({ playing: v }),
