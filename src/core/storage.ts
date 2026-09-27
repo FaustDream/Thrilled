@@ -26,6 +26,8 @@ let ready = false;
 /** 数据变更回调（用于本地目录同步等） */
 type ChangeCallback = (key: string, value: unknown) => void;
 const changeListeners: Set<ChangeCallback> = new Set();
+/** 通知分发中标记（可重入保护） */
+let notifying = false;
 
 /** 注册数据变更监听器，返回取消注册函数 */
 export function onStorageChange(callback: ChangeCallback): () => void {
@@ -34,12 +36,23 @@ export function onStorageChange(callback: ChangeCallback): () => void {
 }
 
 function notifyChange(key: string, value: unknown): void {
-  for (const cb of changeListeners) {
-    try {
-      cb(key, value);
-    } catch {
-      // 监听器错误不影响主流程
+  // 可重入保护：监听器在通知过程中同步写存储时（缓存已即时更新），
+  // 把通知延后到当前分发结束，杜绝「监听 → 写入 → 监听」的同步递归
+  if (notifying) {
+    setTimeout(() => notifyChange(key, value), 0);
+    return;
+  }
+  notifying = true;
+  try {
+    for (const cb of changeListeners) {
+      try {
+        cb(key, value);
+      } catch {
+        // 监听器错误不影响主流程
+      }
     }
+  } finally {
+    notifying = false;
   }
 }
 

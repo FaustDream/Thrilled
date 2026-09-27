@@ -114,7 +114,8 @@ export async function getWeather(): Promise<WeatherData | null> {
     info(MODULE, '天气刷新完成', { text: weatherText(data.currentCode), temp: data.currentTemp });
     return data;
   } catch (e) {
-    warn(MODULE, '天气请求失败，使用缓存', { err: (e as Error).message });
+    const reason = e instanceof Error ? e.message : String(e);
+    warn(MODULE, `天气请求失败，使用缓存（${reason}）`);
     return cached;
   }
 }

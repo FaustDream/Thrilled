@@ -17,6 +17,7 @@
 // v4：UI 交互由 app 层注入
 import { debug, error, info, warn } from './logger';
 import {
+  DOC_KEY,
   FILECONFIG_DB_NAME,
   FILECONFIG_DB_STORE,
   FILECONFIG_HANDLE_KEY,
@@ -1201,8 +1202,10 @@ export function initFileConfig(): void {
   window.addEventListener('beforeunload', handleBeforeUnload);
 
   // 监听数据变更，防抖自动同步到文件
-  onStorageChange(() => {
-    scheduleFileSync();
+  // 只关心界面文档本身：本模块的状态标记（权限缓存等）也走 kv 存储，
+  // 若不过滤，「同步成功 → 写标记 → 再触发同步」会形成无限同步循环
+  onStorageChange((key) => {
+    if (key === DOC_KEY) scheduleFileSync();
   });
 
   // 页面可见性变化时检查权限状态（不直接 requestPermission——需要用户手势）
