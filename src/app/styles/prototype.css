@@ -496,3 +496,9 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .page-dot.on{opacity:1;transform:scale(1.25)}
 #stage[data-mode='minimal'] .page-dots{display:none}
 
+
+/* ============ 15. v4 重构补充（自定义壁纸 / 沉浸式搜索框） ============ */
+.wall-video{position:absolute;inset:-40px;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;z-index:0;pointer-events:none}
+.search-box.immersive{background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
+/* 线框样式仅极简模式生效（02 §11） */
+#stage[data-mode='standard'] .search-box.line,#stage[data-mode='privacy'] .search-box.line{border-radius:var(--search-radius);background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-search)));border:2px solid rgba(255,255,255,.72);backdrop-filter:blur(var(--blur-search))}

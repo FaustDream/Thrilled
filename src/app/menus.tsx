@@ -4,8 +4,8 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from './store'
-import { WIDGET_DEFS } from './widgets'
-import { SIZES, STAGE_W, STAGE_H } from './layout'
+import { WIDGET_DEFS } from '../shared/widget-defs'
+import { SIZES, STAGE_W, STAGE_H } from '../shared/grid'
 import { CheckIcon, Icon } from './icons'
 import { cfg } from './widgets'
 import type { WidgetKind } from '../shared/types'

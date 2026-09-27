@@ -1,11 +1,12 @@
 /**
  * 数据重置模块 — 将扩展恢复到出厂默认状态
  *
- * 清除所有 localStorage、IndexedDB 数据并刷新页面（不预置默认磁贴）。
+ * 清除 v4 界面文档、kv 标记与全部 IndexedDB 数据（壁纸 / favicon / 本地目录句柄）并刷新页面。
+ * 布局与设置由 app 层在启动时从出厂默认重新种入。
  *
  * 触发方式：
  * - 控制台：`__thrilledReset()`
- * - 快捷键：Ctrl+Shift+R（在 boot 中绑定，需确认）
+ * - 设置 → 数据与备份 → 清除本地数据（app 层已做二次确认）
  */
 
 import { info } from './logger';
@@ -13,20 +14,11 @@ import { FILECONFIG_DB_NAME } from '../shared/constants';
 import { closeFileConfigDB } from './file-config';
 import { closeWallpaperDB, WALLPAPER_DB_NAME } from './wallpaper';
 import { closeFaviconDB, FAVICON_DB_NAME } from './favicon';
-import { clearAppStorage } from './storage';
+import { clearAllStorage } from './storage';
 
 const MODULE = 'reset';
 
-/** ===== 主存储清除 ===== */
-
-async function clearAllStorage(): Promise<void> {
-  await clearAppStorage();
-  info(MODULE, 'IndexedDB 主存储已清空');
-}
-
-/** ===== IndexedDB 删除 ===== */
-
-/** 重试配置 */
+/** IndexedDB 删除重试配置 */
 const IDB_DELETE_MAX_RETRY = 3;
 const IDB_DELETE_RETRY_DELAY_MS = 300;
 
@@ -60,8 +52,7 @@ function deleteDatabase(dbName: string, retryCount = 0): Promise<void> {
   });
 }
 
-/** ===== 主入口 ===== */
-
+/** 主入口：清空全部本地数据并刷新页面 */
 export async function resetAllData(): Promise<void> {
   info(MODULE, '开始重置所有数据...');
 
@@ -70,8 +61,9 @@ export async function resetAllData(): Promise<void> {
   closeWallpaperDB();
   closeFaviconDB();
 
-  // Step 2: 清空主存储（localStorage + 主 IndexedDB store）
+  // Step 2: 清空主存储（chrome.storage / localStorage）
   await clearAllStorage();
+  info(MODULE, '主存储已清空');
 
   // Step 3: 删除所有 IndexedDB 数据库
   await deleteDatabase(FILECONFIG_DB_NAME);

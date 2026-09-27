@@ -21,10 +21,11 @@ import {
   FILECONFIG_DB_STORE,
   FILECONFIG_HANDLE_KEY,
   APP_SYNC_DIR_NAME,
-  LS_KEYS,
+  FC_KEYS,
   FILECONFIG_WRITE_DEBOUNCE_MS,
 } from '../shared/constants';
-import { collectAppSnapshot, localStorageService, onStorageChange, restoreAppSnapshot } from './storage';
+import { collectSnapshot, restoreSnapshot } from './export';
+import { kvGetRaw, kvRemove, kvSetRaw, loadDoc, onStorageChange, saveDoc } from './storage';
 
 /** 确认弹窗选项（对应原 dialogs.ConfirmOptions） */
 export interface ConfirmOptions {
@@ -131,9 +132,7 @@ interface CategoryLayout {
 }
 
 const DATA_LAYOUT: Readonly<Record<string, CategoryLayout>> = {
-  tiles: { dir: 'tiles', file: 'tiles.json', desc: '磁贴与分类' },
-  config: { dir: 'config', file: 'app.json', desc: '应用配置' },
-  user: { dir: 'user', file: 'data.json', desc: '用户扩展数据' },
+  doc: { dir: 'doc', file: 'thrilled-doc.json', desc: '界面文档' },
 };
 
 /** 测试文件名用于可写性验证 */
@@ -398,8 +397,13 @@ async function readAllCategoryFiles(): Promise<ReadResult> {
 }
 
 async function restoreAllData(data: Record<string, unknown>): Promise<void> {
-  restoreAppSnapshot(data);
-  info(MODULE, '数据已恢复到应用', { cats: Object.keys(data) });
+  const doc = restoreSnapshot(data['doc']);
+  if (doc !== null) {
+    saveDoc(doc);
+    info(MODULE, '界面文档已恢复到应用');
+  } else {
+    warn(MODULE, '同步目录中的界面文档无法解析，已忽略');
+  }
 }
 
 /* ================= 同步逻辑 ================= */
@@ -436,7 +440,8 @@ async function syncToFile(force = false): Promise<void> {
   let hadPermissionError = false;
   info(MODULE, `[同步] 开始${force ? '强制' : ''}同步...`);
   try {
-    const data = collectAppSnapshot();
+    const doc = loadDoc();
+    const data: Record<string, unknown> = doc === null ? {} : { doc: collectSnapshot(doc) };
     let ok = 0;
     for (const cat of Object.keys(DATA_LAYOUT)) {
       if (data[cat] === undefined) continue;
@@ -455,7 +460,7 @@ async function syncToFile(force = false): Promise<void> {
             // 权限/句柄确实失效了，标记为待授权并中断后续写入
             warn(MODULE, `写入失败(${errInfo.name})：${errInfo.message}，目录需要重新授权`);
             writePermissionPending = true;
-            localStorageService.remove(LS_KEYS.PERMISSION_CACHED);
+            kvRemove(FC_KEYS.PERMISSION_CACHED);
             failedCategories.push(layout.desc);
             break;
           }
@@ -487,7 +492,7 @@ async function syncToFile(force = false): Promise<void> {
     } else {
       info(MODULE, `[同步完成] ${ok}/${Object.keys(DATA_LAYOUT).length} 个分类已同步`);
       // 同步成功说明权限有效，更新缓存
-      localStorageService.setRaw(LS_KEYS.PERMISSION_CACHED, '1');
+      kvSetRaw(FC_KEYS.PERMISSION_CACHED, '1');
     }
     updateStatusUI();
   } catch (e) {
@@ -703,10 +708,10 @@ async function selectDirectoryInternal(forceNew = false): Promise<boolean> {
     writePermissionPending = false;
 
     // 保存配置
-    localStorageService.setRaw(LS_KEYS.PARENT_DIR_PATH, selectedHandle.name);
-    localStorageService.setRaw(LS_KEYS.SYNC_DIR_PROMPTED, '1');
-    localStorageService.setRaw(LS_KEYS.INIT_SETUP_COMPLETED, '1');
-    localStorageService.setRaw(LS_KEYS.PERMISSION_CACHED, '1');
+    kvSetRaw(FC_KEYS.PARENT_DIR_PATH, selectedHandle.name);
+    kvSetRaw(FC_KEYS.SYNC_DIR_PROMPTED, '1');
+    kvSetRaw(FC_KEYS.INIT_SETUP_COMPLETED, '1');
+    kvSetRaw(FC_KEYS.PERMISSION_CACHED, '1');
     await saveHandleToDB(selectedHandle);
 
     // 读取已有数据或写入初始数据
@@ -789,7 +794,7 @@ export async function requestDirectoryPermission(): Promise<boolean> {
   const granted = await verifyPermission(dirHandle, true, true);
   if (granted) {
     writePermissionPending = false;
-    localStorageService.setRaw(LS_KEYS.PERMISSION_CACHED, '1');
+    kvSetRaw(FC_KEYS.PERMISSION_CACHED, '1');
     ui.showToast('目录访问权限已恢复', 'success');
     // 关闭权限弹窗（如果是从弹窗触发的，弹窗自己的回调也会关闭；从设置按钮触发的则需要这里关闭）
     if (permissionDialogClose !== null) {
@@ -893,10 +898,10 @@ export async function resetDirectoryConfig(): Promise<void> {
   lastSyncTime = 0;
   lastSyncError = null;
   await clearHandleFromDB();
-  localStorageService.remove(LS_KEYS.PERMISSION_CACHED);
-  localStorageService.setRaw(LS_KEYS.INIT_SETUP_COMPLETED, '0');
-  localStorageService.setRaw(LS_KEYS.SYNC_DIR_PROMPTED, '0');
-  localStorageService.setRaw(LS_KEYS.PARENT_DIR_PATH, '');
+  kvRemove(FC_KEYS.PERMISSION_CACHED);
+  kvSetRaw(FC_KEYS.INIT_SETUP_COMPLETED, '0');
+  kvSetRaw(FC_KEYS.SYNC_DIR_PROMPTED, '0');
+  kvSetRaw(FC_KEYS.PARENT_DIR_PATH, '');
   updateStatusUI();
   ui.showToast('目录配置已重置，请重新选择数据目录', 'info');
 }
@@ -992,7 +997,7 @@ async function showInitialSetupDialog(): Promise<void> {
 }
 
 function shouldShowInitialSetup(): boolean {
-  const initDone = localStorageService.getRaw(LS_KEYS.INIT_SETUP_COMPLETED) === '1';
+  const initDone = kvGetRaw(FC_KEYS.INIT_SETUP_COMPLETED) === '1';
   const hasHandle = dirHandle !== null;
   const should = !initDone && !hasHandle;
   debug(MODULE, '检查是否需要初始设置', { initDone, hasHandle, should });
@@ -1024,18 +1029,18 @@ async function restoreHandleOnStartup(): Promise<void> {
   isReady = true;
 
   // 保存正确的目录名到localStorage（覆盖可能的旧值）
-  localStorageService.setRaw(LS_KEYS.PARENT_DIR_PATH, handle.name);
+  kvSetRaw(FC_KEYS.PARENT_DIR_PATH, handle.name);
 
   // 权限缓存命中：仍然先做一次轻量级 queryPermission 校验（不需要用户手势，很快）
   // 防止浏览器重启后权限已被回收但缓存标记仍为 '1' 的情况
   let hasValidPermission = false;
-  if (localStorageService.getRaw(LS_KEYS.PERMISSION_CACHED) === '1') {
+  if (kvGetRaw(FC_KEYS.PERMISSION_CACHED) === '1') {
     debug(MODULE, '[启动] 命中权限缓存，验证权限是否仍有效...');
     hasValidPermission = await verifyPermission(handle, true, false);
     if (!hasValidPermission) {
       // 缓存已失效，清除标记并继续走正常权限检查流程
       warn(MODULE, '[启动] 权限缓存已失效，需要重新授权');
-      localStorageService.remove(LS_KEYS.PERMISSION_CACHED);
+      kvRemove(FC_KEYS.PERMISSION_CACHED);
     }
   }
 
@@ -1047,10 +1052,10 @@ async function restoreHandleOnStartup(): Promise<void> {
     if (hasPermissionError) {
       // 读取时仍然遇到权限错误，说明句柄可能已失效
       warn(MODULE, '[启动] 读取数据时遇到权限错误，需要重新授权');
-      localStorageService.remove(LS_KEYS.PERMISSION_CACHED);
+      kvRemove(FC_KEYS.PERMISSION_CACHED);
       writePermissionPending = true;
-      localStorageService.setRaw(LS_KEYS.SYNC_DIR_PROMPTED, '1');
-      localStorageService.setRaw(LS_KEYS.INIT_SETUP_COMPLETED, '1');
+      kvSetRaw(FC_KEYS.SYNC_DIR_PROMPTED, '1');
+      kvSetRaw(FC_KEYS.INIT_SETUP_COMPLETED, '1');
       updateStatusUI();
       setTimeout(() => showPermissionRequestDialog(), 300);
       info(MODULE, '========== [启动] 需要重新授权 ==========', { dir: handle.name });
@@ -1065,8 +1070,8 @@ async function restoreHandleOnStartup(): Promise<void> {
       await syncToFile(true);
       info(MODULE, '[启动] 目录为空，已写入当前数据');
     }
-    localStorageService.setRaw(LS_KEYS.SYNC_DIR_PROMPTED, '1');
-    localStorageService.setRaw(LS_KEYS.INIT_SETUP_COMPLETED, '1');
+    kvSetRaw(FC_KEYS.SYNC_DIR_PROMPTED, '1');
+    kvSetRaw(FC_KEYS.INIT_SETUP_COMPLETED, '1');
     updateStatusUI();
     info(MODULE, '========== [启动] 配置恢复完成（权限缓存） ==========', { dir: handle.name });
     return;
@@ -1080,8 +1085,8 @@ async function restoreHandleOnStartup(): Promise<void> {
     // 读权限都没有，需要用户通过点击按钮来授权
     info(MODULE, '[启动] 无读权限，显示一键授权弹窗');
     writePermissionPending = true;
-    localStorageService.setRaw(LS_KEYS.SYNC_DIR_PROMPTED, '1');
-    localStorageService.setRaw(LS_KEYS.INIT_SETUP_COMPLETED, '1');
+    kvSetRaw(FC_KEYS.SYNC_DIR_PROMPTED, '1');
+    kvSetRaw(FC_KEYS.INIT_SETUP_COMPLETED, '1');
     updateStatusUI();
     // 延迟一下显示弹窗，等首屏渲染完成
     setTimeout(() => showPermissionRequestDialog(), 300);
@@ -1094,7 +1099,7 @@ async function restoreHandleOnStartup(): Promise<void> {
 
   if (canWrite) {
     // 权限恢复成功，写入缓存标记，下次启动可快速路径
-    localStorageService.setRaw(LS_KEYS.PERMISSION_CACHED, '1');
+    kvSetRaw(FC_KEYS.PERMISSION_CACHED, '1');
     info(MODULE, '[启动] 权限正常，读取数据...');
     const { data: existingData } = await readAllCategoryFiles();
     if (existingData !== null) {
@@ -1112,8 +1117,8 @@ async function restoreHandleOnStartup(): Promise<void> {
     setTimeout(() => showPermissionRequestDialog(), 300);
   }
 
-  localStorageService.setRaw(LS_KEYS.SYNC_DIR_PROMPTED, '1');
-  localStorageService.setRaw(LS_KEYS.INIT_SETUP_COMPLETED, '1');
+  kvSetRaw(FC_KEYS.SYNC_DIR_PROMPTED, '1');
+  kvSetRaw(FC_KEYS.INIT_SETUP_COMPLETED, '1');
   updateStatusUI();
   info(MODULE, '========== [启动] 配置恢复完成 ==========', {
     dir: handle.name,
@@ -1207,7 +1212,7 @@ export function initFileConfig(): void {
       void verifyPermission(dirHandle, true, false).then((granted) => {
         if (granted) {
           writePermissionPending = false;
-          localStorageService.setRaw(LS_KEYS.PERMISSION_CACHED, '1');
+          kvSetRaw(FC_KEYS.PERMISSION_CACHED, '1');
           updateStatusUI();
           void syncToFile(true);
           ui.showToast('目录访问权限已恢复', 'success');

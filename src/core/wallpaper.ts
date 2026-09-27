@@ -1,58 +1,21 @@
 /**
- * 背景管理（对齐原版 js/bgManager.js）
+ * 背景管理（v4）
  *
- * - 存储：IndexedDB `thrilled-wallpaper` 存储背景数据（图片/视频 dataURL），
- *         localStorage 仅存储设置项（blur/overlay），避免 localStorage 5MB 配额超限
- * - 上传入口：设置面板「背景」区块（uploadBg → #bgInput 隐藏输入）
- * - 图片压缩到 1920px 宽；视频/图片上限 5MB
- * - 应用：`#bgImage` src + `--bg-blur` CSS 变量 + `#bgOverlay` 遮罩
+ * 存储：IndexedDB `thrilled-wallpaper`（图片/视频 dataURL），文档中只存引用 id
+ *（AppSettings.wallpaperRef，云同步只带引用不带二进制，01 §5.1 / 03 C6）。
+ * 图片压缩到 1920px 宽；视频/图片上限 5MB。应用（写入 CSS 变量）由 app 层负责。
  */
 
-// v4：UI 交互由 app 层注入
 import { error, info, warn } from './logger';
-import { clamp } from './utils';
-import {
-  RAW_KEYS,
-  WALLPAPER_DEFAULT_SETTINGS,
-  WALLPAPER_JPEG_QUALITY,
-  WALLPAPER_MAX_WIDTH,
-} from '../shared/constants';
-import type { WallpaperSettings } from '../shared/types';
-import { localStorageService } from './storage';
-
-/** Toast 类型 */
-export type WallpaperToastType = 'success' | 'error' | 'warning' | 'info';
-
-/** 背景模块 UI 回调（由 app 层注入） */
-export interface WallpaperUI {
-  /** 自动消失通知 */
-  toast: (message: string, type: WallpaperToastType) => void;
-}
-
-let ui: WallpaperUI = { toast: () => {} };
-
-/** 注入 UI 回调（app 层提供 toast 实现） */
-export function setWallpaperUI(next: WallpaperUI): void {
-  ui = next;
-}
+import { WALLPAPER_ALLOWED_TYPES, WALLPAPER_JPEG_QUALITY, WALLPAPER_MAX_BYTES, WALLPAPER_MAX_WIDTH } from '../shared/constants';
 
 const MODULE = 'wallpaper';
-/** 上传大小上限 5MB */
-const MAX_SIZE = 5 * 1024 * 1024;
-/** 允许的文件类型 */
-const ALLOWED_TYPES: readonly string[] = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-  'video/mp4', 'video/webm',
-];
-
-/** IndexedDB 配置 */
 export const WALLPAPER_DB_NAME = 'thrilled-wallpaper';
 const WALLPAPER_DB_VERSION = 1;
 const WALLPAPER_STORE = 'wallpaper';
-const WALLPAPER_DATA_KEY = 'bg_data';
 
-/** 背景数据 */
-interface BgData {
+/** 背景数据（IndexedDB 值） */
+export interface BgData {
   type: 'image' | 'video';
   data: string;
 }
@@ -86,7 +49,7 @@ function openWallpaperDB(): Promise<IDBDatabase | null> {
 
 function idbGet<T>(key: string): Promise<T | null> {
   return openWallpaperDB().then((db) => {
-    if (db === null) return Promise.resolve(null);
+    if (db === null) return null;
     return new Promise((resolve) => {
       try {
         const tx = db.transaction(WALLPAPER_STORE, 'readonly');
@@ -102,7 +65,7 @@ function idbGet<T>(key: string): Promise<T | null> {
 
 function idbSet(key: string, value: unknown): Promise<boolean> {
   return openWallpaperDB().then((db) => {
-    if (db === null) return Promise.resolve(false);
+    if (db === null) return false;
     return new Promise((resolve) => {
       try {
         const tx = db.transaction(WALLPAPER_STORE, 'readwrite');
@@ -145,237 +108,94 @@ export function closeWallpaperDB(): void {
   }
 }
 
-/* ================= 设置项（仍存 localStorage，因为数据量小） ================= */
+/* ================= 保存 / 读取 ================= */
 
-/** 读取壁纸设置（默认 blur 0 / overlay 30） */
-export function getWallpaperSettings(): WallpaperSettings {
-  const parsed = localStorageService.get<Partial<WallpaperSettings> | null>(RAW_KEYS.WALLPAPER_SETTINGS, null);
-  return {
-    blur: clamp(parsed?.blur ?? WALLPAPER_DEFAULT_SETTINGS.blur, 0, 100),
-    overlay: clamp(parsed?.overlay ?? WALLPAPER_DEFAULT_SETTINGS.overlay, 0, 100),
-  };
+/** 引用 id 统一前缀（文档 wallpaperRef 存这个） */
+export const WALLPAPER_REF_PREFIX = 'idb:';
+
+/** 保存背景数据，返回引用 id（失败返回 null） */
+export async function saveWallpaper(bgData: BgData): Promise<string | null> {
+  const ref = `${WALLPAPER_REF_PREFIX}${Date.now().toString(36)}`;
+  const ok = await idbSet(ref, bgData);
+  if (ok) info(MODULE, `壁纸已保存`, { ref, type: bgData.type });
+  return ok ? ref : null;
 }
 
-/** 应用模糊/遮罩到 CSS */
-function applyBlurSettings(): void {
-  const settings = getWallpaperSettings();
-  const root = document.documentElement;
-  root.style.setProperty('--bg-blur', `${settings.blur}px`);
-  const bgImage = document.getElementById('bgImage');
-  if (bgImage !== null) {
-    bgImage.style.filter = 'blur(var(--bg-blur))';
-  }
-  const bgOverlay = document.getElementById('bgOverlay');
-  if (bgOverlay !== null) {
-    bgOverlay.style.opacity = String(settings.overlay / 100);
-  }
+/** 按引用读取背景数据 */
+export async function getWallpaper(ref: string): Promise<BgData | null> {
+  if (!ref.startsWith(WALLPAPER_REF_PREFIX)) return null;
+  const data = await idbGet<BgData>(ref.slice(WALLPAPER_REF_PREFIX.length));
+  if (data === null || (data.type !== 'image' && data.type !== 'video')) return null;
+  return data;
 }
 
-/* ================= 背景应用 ================= */
-
-/** 应用背景（图片/视频） */
-export function applyBg(bgData: BgData | null): void {
-  const bgImage = document.getElementById('bgImage') as HTMLImageElement | null;
-  const bgVideo = document.getElementById('bgVideo') as HTMLVideoElement | null;
-  if (bgData === null || bgData.type === 'image') {
-    if (bgVideo !== null) {
-      bgVideo.pause();
-      bgVideo.removeAttribute('src');
-      bgVideo.load();
-      bgVideo.style.display = 'none';
-    }
-    if (bgImage !== null) {
-      if (bgData !== null) {
-        bgImage.src = bgData.data;
-        bgImage.style.display = '';
-      } else {
-        bgImage.removeAttribute('src');
-        bgImage.style.display = 'none';
-      }
-    }
-  } else {
-    if (bgImage !== null) bgImage.style.display = 'none';
-    if (bgVideo !== null) {
-      bgVideo.src = bgData.data;
-      bgVideo.style.display = '';
-      void bgVideo.play().catch(() => {});
-    }
-  }
-  applyBlurSettings();
-}
-
-/* ================= 保存/读取背景数据 ================= */
-
-/** 保存背景数据到 IndexedDB（同时同步到主存储缓存以支持文件同步快照） */
-async function saveBg(bgData: BgData): Promise<boolean> {
-  const ok = await idbSet(WALLPAPER_DATA_KEY, bgData);
-  if (ok) {
-    // 同步到主存储缓存，使 collectAppSnapshot 能获取到壁纸数据用于文件同步
-    localStorageService.set(RAW_KEYS.WALLPAPER_BG, bgData);
-  }
-  return ok;
-}
-
-/** 读取背景数据：优先 IndexedDB，回退到主存储缓存/旧版 localStorage（自动迁移） */
-async function loadBg(): Promise<BgData | null> {
-  // 1. 优先从壁纸专用 IndexedDB 读取
-  const fromIdb = await idbGet<BgData>(WALLPAPER_DATA_KEY);
-  if (fromIdb !== null && (fromIdb.type === 'image' || fromIdb.type === 'video')) {
-    // 同步到主存储缓存，确保文件同步快照能获取到
-    localStorageService.set(RAW_KEYS.WALLPAPER_BG, fromIdb);
-    return fromIdb;
-  }
-  // 2. 回退：从主存储缓存（localStorageService → IndexedDB）读取
-  const fromCache = localStorageService.get<BgData | null>(RAW_KEYS.WALLPAPER_BG, null);
-  if (fromCache !== null && (fromCache.type === 'image' || fromCache.type === 'video')) {
-    // 自动迁移到壁纸专用 IndexedDB
-    const migrated = await idbSet(WALLPAPER_DATA_KEY, fromCache);
-    if (migrated) {
-      info(MODULE, '壁纸数据已迁移到专用 IndexedDB');
-    }
-    return fromCache;
-  }
-  return null;
+/** 删除背景数据（换壁纸 / 重置时调用；旧文件不清理会占空间） */
+export async function deleteWallpaper(ref: string): Promise<void> {
+  if (!ref.startsWith(WALLPAPER_REF_PREFIX)) return;
+  await idbRemove(ref.slice(WALLPAPER_REF_PREFIX.length));
 }
 
 /* ================= 上传处理 ================= */
 
-/** 上传背景文件 */
-export function uploadBg(file: File): void {
-  if (file.size > MAX_SIZE) {
-    warn(MODULE, `文件过大（最大 5MB）`, { size: file.size });
-    ui.toast('文件过大，最大支持 5MB', 'error');
-    return;
-  }
-  if (!ALLOWED_TYPES.includes(file.type)) {
-    warn(MODULE, `不支持的文件格式: ${file.type}`);
-    ui.toast('不支持的文件格式', 'error');
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    const rawData = typeof reader.result === 'string' ? reader.result : '';
-    if (rawData === '') return;
-    const isVideo = file.type.startsWith('video/');
-    if (isVideo) {
-      const bgData: BgData = { type: 'video', data: rawData };
-      void saveBg(bgData).then((ok) => {
-        if (ok) {
-          applyBg(bgData);
-          ui.toast('视频壁纸已应用', 'success');
-        } else {
-          ui.toast('壁纸保存失败，可能是存储空间不足', 'error');
-        }
-      });
-    } else {
-      compressImage(rawData, (compressed) => {
-        const bgData: BgData = { type: 'image', data: compressed };
-        void saveBg(bgData).then((ok) => {
-          if (ok) {
-            applyBg(bgData);
-            ui.toast('壁纸已应用', 'success');
-          } else {
-            ui.toast('壁纸保存失败，可能是存储空间不足', 'error');
-          }
-        });
-      });
-    }
-  };
-  reader.onerror = () => {
-    error(MODULE, '文件读取失败');
-    ui.toast('文件读取失败', 'error');
-  };
-  reader.readAsDataURL(file);
-}
-
-/** 重置背景 */
-export function resetBg(): void {
-  void idbRemove(WALLPAPER_DATA_KEY);
-  localStorageService.remove(RAW_KEYS.WALLPAPER_BG);
-  localStorageService.remove(RAW_KEYS.WALLPAPER_SETTINGS);
-  applyBg(null);
-  applyBlurSettings();
-  ui.toast('背景已重置', 'success');
-}
-
-/** 更新模糊度/遮罩 */
-export function setBgParams(partial: Partial<WallpaperSettings>): void {
-  const next = { ...getWallpaperSettings(), ...partial };
-  localStorageService.set(RAW_KEYS.WALLPAPER_SETTINGS, next);
-  applyBlurSettings();
+/** 校验并读取上传文件为 dataURL */
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(new Error('文件读取失败'));
+    reader.readAsDataURL(file);
+  });
 }
 
 /** 图片压缩（宽 > 1920 等比缩放，JPEG） */
-export function compressImage(rawDataUrl: string, done: (compressed: string) => void): void {
-  const img = new Image();
-  img.onload = () => {
-    let { width, height } = img;
-    if (width > WALLPAPER_MAX_WIDTH) {
-      height = Math.round((height * WALLPAPER_MAX_WIDTH) / width);
-      width = WALLPAPER_MAX_WIDTH;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    if (ctx === null) {
-      done(rawDataUrl);
-      return;
-    }
-    ctx.drawImage(img, 0, 0, width, height);
-    try {
-      done(canvas.toDataURL('image/jpeg', WALLPAPER_JPEG_QUALITY));
-    } catch {
-      done(rawDataUrl);
-    }
-  };
-  img.onerror = () => done(rawDataUrl);
-  img.src = rawDataUrl;
-}
-
-/* ================= 初始化 ================= */
-
-/** 初始化背景：恢复保存 + 绑定设置面板背景区块 */
-export function initWallpaper(): void {
-  // 恢复已保存背景（异步从 IndexedDB/旧 localStorage 读取）
-  void loadBg().then((bgData) => {
-    if (bgData !== null) {
-      applyBg(bgData);
-    } else {
-      applyBg(null);
-      applyBlurSettings();
-    }
-  });
-  // 先同步应用默认模糊/遮罩设置，避免等待 IndexedDB 时闪烁
-  applyBlurSettings();
-
-  // 绑定隐藏文件输入
-  const bgInput = document.getElementById('bgInput') as HTMLInputElement | null;
-  bgInput?.addEventListener('change', () => {
-    const file = bgInput.files?.[0];
-    if (file !== undefined) uploadBg(file);
-    bgInput.value = '';
-  });
-
-  // 绑定设置面板背景按钮
-  document.querySelectorAll('[data-setting-action="uploadBg"]').forEach((btn) => {
-    btn.addEventListener('click', () => bgInput?.click());
-  });
-  document.querySelectorAll('[data-setting-action="resetBg"]').forEach((btn) => {
-    btn.addEventListener('click', resetBg);
-  });
-
-  // 绑定滑块
-  const blurSlider = document.getElementById('sBgBlurSlider') as HTMLInputElement | null;
-  const overlaySlider = document.getElementById('sBgOverlaySlider') as HTMLInputElement | null;
-  blurSlider?.addEventListener('input', () => {
-    setBgParams({ blur: Number(blurSlider.value) });
-    const val = document.getElementById('sBgBlurValue');
-    if (val !== null) val.textContent = `${blurSlider.value}px`;
-  });
-  overlaySlider?.addEventListener('input', () => {
-    setBgParams({ overlay: Number(overlaySlider.value) });
-    const val = document.getElementById('sBgOverlayValue');
-    if (val !== null) val.textContent = `${overlaySlider.value}%`;
+export function compressImage(rawDataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > WALLPAPER_MAX_WIDTH) {
+        height = Math.round((height * WALLPAPER_MAX_WIDTH) / width);
+        width = WALLPAPER_MAX_WIDTH;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (ctx === null) {
+        resolve(rawDataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      try {
+        resolve(canvas.toDataURL('image/jpeg', WALLPAPER_JPEG_QUALITY));
+      } catch {
+        resolve(rawDataUrl);
+      }
+    };
+    img.onerror = () => resolve(rawDataUrl);
+    img.src = rawDataUrl;
   });
 }
+
+/**
+ * 上传壁纸文件：校验类型与体积 → 保存 IndexedDB
+ * @returns 引用 id；校验失败或保存失败返回 null（错误原因经 reject message 区分）
+ */
+export async function uploadWallpaper(file: File): Promise<string | null> {
+  if (file.size > WALLPAPER_MAX_BYTES) {
+    throw new Error('文件过大，最大支持 5MB');
+  }
+  if (!WALLPAPER_ALLOWED_TYPES.includes(file.type)) {
+    throw new Error('不支持的文件格式');
+  }
+  const raw = await readFileAsDataUrl(file);
+  if (raw === '') throw new Error('文件读取失败');
+  const isVideo = file.type.startsWith('video/');
+  const data = isVideo ? raw : await compressImage(raw);
+  const ref = await saveWallpaper({ type: isVideo ? 'video' : 'image', data });
+  if (ref === null) throw new Error('壁纸保存失败，可能是存储空间不足');
+  return ref;
+}
+
+/** 诊断日志（保留 v3 的错误上下文习惯） */
+export const logWallpaperError = (err: unknown): void => error(MODULE, '壁纸处理失败', err);

@@ -3,6 +3,28 @@
 > 本地文档，不提交到 git。
 > 按版本号区分；发布新版本时，上一版本的修复记录即为该新版本的修复汇总。
 
+## v4.1（2026-09-27）——按 v4 原型与设计文档完成功能重构
+
+- 新增：**本地持久化（D10）**——设置 / 布局 / 引擎 / 皮肤 / 搜索历史 / 账号整存整取到 chrome.storage.local（开发预览回退 localStorage），core/storage 重写为「内存缓存 + 写透」，store 订阅相关切片防抖落盘；刷新后布局 / 皮肤 / 欢迎标记均保留
+- 新增：**v3 数据一次性迁移**——core/migrate 读旧 IndexedDB（ThrilledAppData）：磁贴 → 网址图标（findSlot 落位）、引擎顺序与当前引擎映射到 v4 内置表、搜索历史 / 昵称 / 自动聚焦等设置；带 MIGRATED_KEY 标记幂等
+- 新增：**风格皮肤编辑器（D12）**——个性化抽屉内置 12 项取色 + 名称修改 + 新建 / 还原内置 / 删除；皮肤升级为用户数据资产（SkinPack 规范形状：id / name / builtin / base / wall / tokens），随文档持久化
+- 新增：**广场三页签（D12）**——大厅（搜索 / 分类 / 模板卡 / 翻页）、分享（公开 / 私密 / 标题描述）、我的（作品 / 收藏 / 应用记录，登录门控）；云端服务待 thrilled-server 接入，当前为种子模板示意
+- 新增：**备份 / 恢复 / 重置确认弹窗**——备份（记录上次备份时间）、恢复（保留模式状态开关）、一键重置（图标布局 / 皮肤 / 壁纸三选）；「清除本地数据」接 core/reset 全量清理并刷新；满足「重置必须二次确认」约束
+- 新增：**壁纸体系**——本地上传（图片压缩 1920px / 上限 5MB）+ 外链上传（fetch → dataURL）+ 视频壁纸（mp4 / webm 全屏层）；二进制存 IndexedDB，文档只存引用 id（wallpaperRef）
+- 新增：**天气真实数据（D11）**——天气卡接 Open-Meteo 实况（30min 缓存、坐标偏移 1° 内有效、定位超时降级北京），失败回退占位数据
+- 新增：**收藏夹导入（D11）**——设置 → 数据与备份入口；chrome.bookmarks 树 → http(s) 书签去重 → 网址图标批量落位（满页自动翻页）
+- 新增：**快捷键**——Ctrl+Shift+E 导出布局 JSON、Ctrl+Shift+R 打开一键重置确认
+- 重构：**数据模型收敛（D13）**——删除 v3 磁贴模型（Tile / TilePage / TabPageSettings）与 11 引擎注册表（ENGINES / EngineId）；core/search-engines / greeting / countdown 删除；shared 新增 defaults（出厂设置 + 内置皮肤）/ grid（栅格算法下沉）/ widget-defs（定义表从 app 下沉到 shared 供 core 校验）
+- 重构：**link-opener 按 v4 语义重写**——打开方式三态（当前窗口 / 新标签页 / 搜索结果当前窗口）作用于搜索与站点链接；品牌表补全站点 URL，Dock / 网址导航 / 图标卡片点击真实打开（图标卡优先 config.url → 站点注册表）
+- 修复：**滚轮横向翻页缺失**——按原型补齐（450ms 冷却、位移阈值 12px）
+- 修复：**欢迎弹窗每次会话重复弹出**——改为持久化标记（welcomed 入文档），仅首次访问展示
+- 修复：**拖拽结束后误触发卡片打开**——pointerup 后短暂抑制 item-open
+- 修复：**引擎行上移/下移按钮**改为原型一致的拖拽排序（HTML5 DnD 提交完整顺序）
+- 修复：**线框搜索框样式**限定极简模式生效（02 §11）；遮罩 / 字体颜色 / 时间颜色 / 沉浸式搜索框设置项补全并生效
+- 修复：**仓库配置**——.gitignore 误忽略 tests/ 与 scripts/（测试与构建脚本入库）、docs/memory 放行；pnpm-workspace.yaml 补 packages 字段（此前 pnpm run 直接报错）
+- 验证：pnpm typecheck 0 错误、lint 通过、单测 28 例通过（layout 12 + guards 11 + bookmarks 5）；pnpm build 成功（app 341KB / background 140KB）；浏览器实测：首访欢迎弹窗 4 风格卡、应用风格持久化、五面板内容完整（壁纸网格 / 12 引擎拖拽行 / 广场卡片）、翻页与极简模式正常、天气卡显示实况 35°C 晴
+
+
 ## v4.0 终评修复（2026-09-27）
 
 - 修复：**01 §5.1 云备份 schema 与冻结内容模型不一致**——v1（`mode` + 扁平 `items` + `page`/`kind`/`slot`）照实现会被服务端校验全部拒绝；重写为 v2：`standard` / `privacy` 页面集（数组套数组）+ 卡片实例 `{ id, c, r, w, h, t, config }`（config 只存覆盖值），与 `exportLayout` 实际输出、02 §13 完全一致

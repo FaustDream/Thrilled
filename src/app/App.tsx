@@ -1,67 +1,141 @@
 /**
  * 新标签页装配（v4）
  * 结构：Stage（1920×945 设计稿整体缩放）→ 搜索行 / 翻页网格 / Dock / 模式胶囊 / 头像 / 页点 + 浮层（菜单·抽屉·弹窗·Toast）
- * 交互：文档级 data-act 事件委托（与原型一致），拖拽换位用指针事件 + 网格吸附。
+ * 交互：文档级 data-act 事件委托（与原型一致），拖拽换位用指针事件 + 网格吸附，滚轮 / 方向键翻页。
+ * 平台行为：打开链接走 core/link-opener（打开方式设置），壁纸走 core/wallpaper（IndexedDB）。
  */
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useApp, SKINS, WALLS, type CtxState, type DrawerKey } from './store'
-import { COLS, DOCK_APPS, PAGE_W, ROWS, STAGE_H, STAGE_W, CELL, INSET, itemBox, labelBox } from './layout'
-import { WidgetView, TileGlyph, cfg, num, str } from './widgets'
+import { useApp, WALLS, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
+import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_H, STAGE_W } from '../shared/grid'
+import { DOCK_APPS } from './layout'
+import { WidgetView, TileGlyph, cfg, str } from './widgets'
+import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
 import { Drawer, Modal } from './panels'
 import { Icon } from './icons'
-import type { GridItem, WidgetKind } from '../shared/types'
+import { openLink, buildSearchUrl } from '../core/link-opener'
+import { buildLayoutDoc, downloadJson } from '../core/export'
+import { getWallpaper, type BgData } from '../core/wallpaper'
+import { GLASS_ALPHA_FACTOR, GLASS_BLUR_PX, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN_DELTA, WALLPAPER_BLUR_COVER_THRESHOLD, WALLPAPER_BLUR_PX } from '../shared/constants'
+import type { WeatherData } from '../core/weather'
+import type { GridItem } from '../shared/types'
+
+/** 模式说明句（04 §5.1 源码原文） */
+const MODE_TIPS: Record<string, string> = {
+  minimal: '简单可靠的网络访问',
+  standard: '灵活的拖拽&极致的响应交互',
+  privacy: '链接都将从隐私窗口打开',
+}
 
 const allItems = (pages: { standard: GridItem[][]; privacy: GridItem[][] }): GridItem[] =>
   [...pages.standard, ...pages.privacy].flat()
 
-/** 搜索：把输入框内容交给当前引擎（打开方式遵循设置；真实扩展里由 core/link-opener 接管） */
+/** 解析要打开的 URL：显式 url → 站点注册表 → null（提示补充） */
+const resolveSiteUrl = (item: GridItem): string | null => {
+  const c = cfg(item)
+  const explicit = str(c['url'])
+  if (/^https?:\/\//.test(explicit)) return explicit
+  return siteUrlOf(str(c['label'], str(c['name'])))
+}
+
+/** 打开链接（打开方式遵循设置） */
+const openByMode = (st: ReturnType<typeof useApp.getState>, url: string, kind: 'search' | 'link'): void => {
+  void openLink(url, st.settings.openMode, kind)
+}
+
+/** 搜索：把输入框内容交给当前引擎 */
 const runSearch = (): void => {
   const st = useApp.getState()
   const el = document.getElementById('searchInput') as HTMLInputElement | null
   const term = el?.value.trim() ?? ''
   if (!term) { st.showToast('请输入搜索内容'); return }
+  const engine = st.engines.find((e) => e.id === st.settings.engineId) ?? st.engines[0]
   st.addHistory(term)
-  openUrl(st, term, 'search')
+  openByMode(st, buildSearchUrl(engine?.base ?? '', term), 'search')
   if (!st.settings.searchKeep && el) el.value = ''
 }
+
+/** 拖拽刚结束的这一次 click 不触发卡片打开 */
+let suppressItemClick = false
 
 export const App = () => {
   const settings = useApp((s) => s.settings)
   const pages = useApp((s) => s.pages)
   const cur = useApp((s) => s.cur)
   const engines = useApp((s) => s.engines)
+  const skins = useApp((s) => s.skins)
   const toastMsg = useApp((s) => s.toast)
   const enginePanel = useApp((s) => s.enginePanel)
   const history = useApp((s) => s.history)
   const encourage = useApp((s) => s.encourage)
   const playing = useApp((s) => s.playing)
+  const weather = useApp((s) => s.weather)
   const [now, setNow] = useState(() => new Date())
   const [historyOpen, setHistoryOpen] = useState(false)
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; c: number; r: number; moved: boolean } | null>(null)
+  const [customWall, setCustomWall] = useState<BgData | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
+  const wheelAt = useRef(0)
 
   const modeKey = settings.mode === 'privacy' ? 'privacy' : 'standard'
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
 
+  /* ---------- 启动：持久化恢复 + 天气 + 首访欢迎 ---------- */
+  useEffect(() => {
+    void (async () => {
+      await hydrate()
+      void useApp.getState().loadWeather()
+      const st = useApp.getState()
+      if (!st.welcomed) {
+        markWelcomed()
+        st.setModal('theme')
+      }
+    })()
+  }, [])
+
   /* ---------- 主题令牌 → CSS 变量（皮肤 / 透明度 / 玻璃质感 / 壁纸 / 搜索框） ---------- */
   useEffect(() => {
     const rt = document.documentElement.style
-    const skin = SKINS.find((k) => k.id === settings.skinId) ?? SKINS[0]
-    if (skin) Object.entries(skin.t).forEach(([k, v]) => rt.setProperty(k, v))
+    const tokens = skinTokensOf(skins, settings.skinId)
+    Object.entries(tokens).forEach(([k, v]) => rt.setProperty(k, v))
     Object.entries(settings.glass).forEach(([k, v]) => {
-      rt.setProperty(`--ga-${k}`, String(1 - 0.55 * v))
-      rt.setProperty(`--blur-${k}`, `${(26 * v).toFixed(1)}px`)
+      rt.setProperty(`--ga-${k}`, String(1 - GLASS_ALPHA_FACTOR * v))
+      rt.setProperty(`--blur-${k}`, `${(GLASS_BLUR_PX * v).toFixed(1)}px`)
     })
     rt.setProperty('--g-alpha', String(settings.gAlpha))
-    rt.setProperty('--wallpaper', WALLS[settings.wallpaper]?.bg ?? WALLS[0]?.bg ?? '')
+    rt.setProperty('--wp-mask', String(settings.cover))
+    rt.setProperty('--wp-blur', settings.cover > WALLPAPER_BLUR_COVER_THRESHOLD ? `${WALLPAPER_BLUR_PX}px` : '0px')
+    // 字体颜色：设置里给了覆盖色则覆盖名称标签令牌
+    rt.setProperty('--label-color', settings.fontColor !== '' ? settings.fontColor : (tokens['--label-color'] ?? '#ffffff'))
     rt.setProperty('--search-width', `${settings.searchWidth}px`)
     rt.setProperty('--search-radius', `${settings.searchRadius}px`)
     rt.setProperty('--clock-color', settings.clockColor)
-  }, [settings])
+    document.body.style.background = tokens['--mask-color'] ?? '#10151b'
+  }, [skins, settings])
+
+  /* ---------- 壁纸：自定义引用（IndexedDB）优先，否则内置渐变 ---------- */
+  useEffect(() => {
+    let alive = true
+    if (settings.wallpaperRef === null) {
+      setCustomWall(null)
+      return
+    }
+    void getWallpaper(settings.wallpaperRef).then((bg) => {
+      if (alive) setCustomWall(bg)
+    })
+    return () => { alive = false }
+  }, [settings.wallpaperRef])
+  useEffect(() => {
+    const rt = document.documentElement.style
+    if (customWall !== null && customWall.type === 'image') {
+      rt.setProperty('--wallpaper', `url("${customWall.data}")`)
+    } else if (customWall === null) {
+      rt.setProperty('--wallpaper', WALLS[settings.wallpaper]?.bg ?? WALLS[0]?.bg ?? '')
+    }
+  }, [customWall, settings.wallpaper])
 
   /* ---------- 时钟 & 整体缩放 ---------- */
   useEffect(() => {
@@ -86,13 +160,6 @@ export const App = () => {
   useEffect(() => {
     if (settings.autoFocus) inputRef.current?.focus()
   }, [settings.autoFocus])
-  /* 首次访问：欢迎弹窗选风格（与原型一致，会话内只弹一次） */
-  useEffect(() => {
-    if (!sessionStorage.getItem('thrilled-welcome')) {
-      sessionStorage.setItem('thrilled-welcome', '1')
-      useApp.getState().setModal('theme')
-    }
-  }, [])
 
   /* ---------- 动作分发（data-act 事件委托，与原型同一套语义） ---------- */
   useEffect(() => {
@@ -105,19 +172,19 @@ export const App = () => {
       switch (name) {
         case 'hot-tab': if (id) st.updateConfig(id, { source: v }); break
         case 'hot-refresh': st.showToast('已换一批热点'); break
-        case 'hot-open': openUrl(st, v, 'search'); break
+        case 'hot-open': st.showToast(`打开链接：${v}`); break
         case 'music-list': st.showToast(`播放列表：${item ? str(cfg(item)['station'], '熊猫Dj') : '熊猫Dj'}`); break
         case 'music-prev': st.showToast('上一首'); break
         case 'music-next': st.showToast('下一首'); break
         case 'music-toggle': st.setPlaying(!st.playing); break
         case 'quote-refresh': st.rollEncourage(); break
-        case 'fish-hit': if (item) st.updateConfig(item.id, { count: num(cfg(item)['count'], 0) + 1 }); break
+        case 'fish-hit': if (item) st.updateConfig(item.id, { count: Number(cfg(item)['count'] ?? 0) + 1 }); break
         case 'engine-open':
           setHistoryOpen(false)
           st.setEnginePanel(!st.enginePanel)
           break
         case 'engine-manage': st.setEnginePanel(false); st.setDrawer('setting'); st.showToast('已打开设置 · 搜索引擎'); break
-        case 'eng-set': st.setEngine(v); st.showToast(`该搜索引擎正在使用中`); break
+        case 'eng-set': st.setEngine(v); st.showToast('该搜索引擎正在使用中'); break
         case 'eng-hide': st.toggleEngineHidden(v); break
         case 'search-go': runSearch(); setHistoryOpen(false); break
         case 'sp-pick': if (inputRef.current) inputRef.current.value = v; runSearch(); setHistoryOpen(false); break
@@ -125,7 +192,12 @@ export const App = () => {
         case 'set-mode': st.setMode(v as 'minimal' | 'standard' | 'privacy'); break
         case 'go-page': st.goPage(Number(v)); break
         case 'open-drawer': st.setDrawer((v || 'profile') as DrawerKey); break
-        case 'dock-app': openUrl(st, v, 'other'); break
+        case 'dock-app': {
+          const url = siteUrlOf(v)
+          if (url !== null) openByMode(st, url, 'link')
+          else st.showToast(`${v}：暂无站点地址`)
+          break
+        }
         case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', square: 'square', setting: 'setting' } as const)[v] ?? 'setting'); break
         case 'open-modal': st.setModal(v as 'theme'); break
         case 'ctx-tog': {
@@ -137,7 +209,7 @@ export const App = () => {
         case 'msg': st.showToast('暂无消息'); break
         case 'item-edit': st.openCtx(null); st.setModal('editItem'); break
         case 'item-del': st.remove(id); break
-        case 'item-swap': st.swapKind(id, v as WidgetKind); break
+        case 'item-swap': st.swapKind(id, v as GridItem['t']); break
         case 'item-size': {
           const [w, h] = v.split('x').map(Number)
           st.resize(id, w ?? 0, h ?? 0)
@@ -145,10 +217,26 @@ export const App = () => {
           break
         }
         case 'item-folder': st.showToast('添加到文件夹：请输入文件夹名称'); break
+        /* 卡片点击：图标卡开站，其余提示（拖拽后的 click 已被 suppressItemClick 拦下） */
+        case 'item-open': {
+          if (suppressItemClick) { suppressItemClick = false; break }
+          if (item === null) break
+          if (item.t === 'icon') {
+            const url = resolveSiteUrl(item)
+            if (url !== null) { openByMode(st, url, 'link'); break }
+            st.showToast('未配置网址，可在编辑里补充链接')
+            break
+          }
+          st.showToast(`打开：${str(cfg(item)['label'], str(cfg(item)['name'], '卡片'))}`)
+          break
+        }
         case 'open-link': {
-          const label = item ? str(cfg(item)['label'], str(cfg(item)['name'], '链接')) : '链接'
           st.openCtx(null)
-          openUrl(st, label, 'tiles')
+          if (item !== null) {
+            const url = resolveSiteUrl(item)
+            if (url !== null) openByMode(st, url, 'link')
+            else st.showToast('未配置网址，可在编辑里补充链接')
+          }
           break
         }
         default: break
@@ -187,6 +275,19 @@ export const App = () => {
         st.openCtx(null); st.setModal(null); st.setDrawer(null); st.setEnginePanel(false); setHistoryOpen(false)
         return
       }
+      /* Ctrl+Shift+E 导出布局 / Ctrl+Shift+R 一键重置（重置走确认弹窗，满足二次确认约束） */
+      if (e.ctrlKey && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
+        e.preventDefault()
+        const doc = st.exportLayout()
+        downloadJson('thrilled-layout.json', buildLayoutDoc(doc.standard, doc.privacy))
+        st.showToast('已导出 thrilled-layout.json')
+        return
+      }
+      if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
+        e.preventDefault()
+        st.setModal('reset')
+        return
+      }
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key >= '1' && e.key <= '9') {
@@ -198,13 +299,26 @@ export const App = () => {
       if (e.key === 'ArrowLeft') st.goPage(st.cur[modeKey] - 1)
       if (e.key === 'ArrowRight') st.goPage(st.cur[modeKey] + 1)
     }
+    /* 滚轮横向翻页（带冷却，原型同参数） */
+    const wheel = (e: WheelEvent) => {
+      if ((e.target as HTMLElement).closest?.('#pager') === null) return
+      const t = Date.now()
+      if (t - wheelAt.current < WHEEL_PAGE_COOLDOWN_MS) return
+      const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+      if (Math.abs(d) < WHEEL_MIN_DELTA) return
+      wheelAt.current = t
+      const st = useApp.getState()
+      st.goPage(st.cur[st.settings.mode === 'privacy' ? 'privacy' : 'standard'] + (d > 0 ? 1 : -1))
+    }
     document.addEventListener('click', click)
     document.addEventListener('contextmenu', cm)
     document.addEventListener('keydown', key)
+    document.addEventListener('wheel', wheel, { passive: true })
     return () => {
       document.removeEventListener('click', click)
       document.removeEventListener('contextmenu', cm)
       document.removeEventListener('keydown', key)
+      document.removeEventListener('wheel', wheel)
     }
   }, [modeKey])
 
@@ -230,9 +344,11 @@ export const App = () => {
     }
     const up = () => {
       setDrag((d) => {
-        if (d && d.moved) {
+        if (d !== null && d.moved) {
+          suppressItemClick = true
           const ok = useApp.getState().move(d.id, d.c, d.r)
           if (!ok) useApp.getState().showToast('该位置已被占用')
+          setTimeout(() => { suppressItemClick = false }, 80)
         }
         return null
       })
@@ -251,13 +367,18 @@ export const App = () => {
       data-showtime={settings.showTime ? '1' : '0'} data-showdate={settings.showDate ? '1' : '0'}
       data-showquote={settings.showQuote ? '1' : '0'}>
 
+      {/* 自定义视频壁纸层 */}
+      {customWall !== null && customWall.type === 'video' && (
+        <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline />
+      )}
+
       {/* 翻页画布 */}
       <div id="pager" style={{ transform: `translateX(-${cur[modeKey] * PAGE_W}px)` }}>
         {pages[modeKey].map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
             <div className="grid" ref={i === cur[modeKey] ? gridRef : undefined}>
               {pg.map((it) => (
-                <GridCard key={it.id} item={it} now={now} nick={settings.nick} encourage={encourage} playing={playing}
+                <GridCard key={it.id} item={it} now={now} nick={settings.nick} encourage={encourage} playing={playing} weather={weather}
                   dragging={drag?.id === it.id ? drag : null}
                   onDragStart={(e) => {
                     if (e.button !== 0 || (e.target as HTMLElement).closest('.ia')) return
@@ -287,7 +408,8 @@ export const App = () => {
 
       {/* 搜索行 */}
       <div className="search-row">
-        <div className="search-box" id="searchBox" style={{ width: settings.searchWidth, borderRadius: settings.searchRadius }}>
+        <div className={`search-box${settings.immersive ? ' immersive' : ''}${settings.simpleSearch ? ' line' : ''}`} id="searchBox"
+          style={{ width: settings.searchWidth, borderRadius: settings.searchRadius }}>
           <span className="engine-ico" id="engineIco" data-act="engine-open"
             style={{ background: engine?.color, fontSize: engine?.latin ? 10 : 11 }}>{engine?.glyph}</span>
           <input id="searchInput" ref={inputRef} placeholder={`${engine?.name ?? ''} 搜索`} autoComplete="off" spellCheck={false}
@@ -315,7 +437,7 @@ export const App = () => {
             <div key={e.id} className={`ep-row${e.id === settings.engineId ? ' on' : ''}`} data-act="eng-set" data-v={e.id}>
               <span className="ep-ico" style={{ background: e.color, fontSize: e.latin ? 9 : 11 }}>{e.glyph}</span>
               <span className="ep-n">{e.name}</span>
-              {e.id === settings.engineId ? <span className="ep-cur">{Icon.search()}</span> : i < 9 ? <span className="ep-key">{i + 1}</span> : null}
+              {e.id === settings.engineId ? <span className="ep-cur">{Icon.check()}</span> : i < 9 ? <span className="ep-key">{i + 1}</span> : null}
             </div>
           ))}
           <div className="ep-foot" />
@@ -329,20 +451,30 @@ export const App = () => {
       {/* 极简模式时钟 */}
       <div className="minimal-clock">
         <div className="mc-time">{`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`}</div>
-        <div className="mc-date">{`${now.getMonth() + 1}月${now.getDate()}日 星期${'日一二三四五六'[now.getDay()]}`}</div>
+        <div className="mc-date">{`${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 星期${'日一二三四五六'[now.getDay()]}`}</div>
       </div>
 
-      {/* 模式胶囊 + 头像 */}
+      {/* 模式胶囊 + 头像（悬停展开 + 说明句） */}
       {!settings.hideTop && (
         <>
           <div className="mode-pill">
             <span className="pill-ico">{Icon.modeStd()}</span>
             <div className="pill-opts">
               {([['minimal', '极简'], ['standard', '标准'], ['privacy', '隐私']] as const).map(([k, n]) => (
-                <div key={k} className={`pill-btn${settings.mode === k ? ' active' : ''}`} data-act="set-mode" data-v={k}>{n}</div>
+                <div key={k} className={`pill-btn${settings.mode === k ? ' active' : ''}`} data-act="set-mode" data-v={k}
+                  onMouseEnter={() => {
+                    const tip = document.getElementById('modeTip')
+                    if (tip === null) return
+                    tip.textContent = MODE_TIPS[k] ?? ''
+                    tip.classList.add('show')
+                  }}
+                  onMouseLeave={() => document.getElementById('modeTip')?.classList.remove('show')}>
+                  {k === 'minimal' ? Icon.modeMin() : k === 'standard' ? Icon.modeStd() : Icon.modePri()}{n}
+                </div>
               ))}
             </div>
           </div>
+          <div className="mode-tip" id="modeTip" />
           <div className="avatar" data-act="open-drawer" data-v="profile">{'T'}</div>
         </>
       )}
@@ -382,42 +514,34 @@ export const App = () => {
   )
 }
 
-/** 打开链接 / 搜索（打开方式遵循设置；真实扩展里由 core/link-opener 接管） */
-const openUrl = (st: ReturnType<typeof useApp.getState>, term: string, kind: 'search' | 'tiles' | 'other'): void => {
-  const engine = st.engines.find((e) => e.id === st.settings.engineId) ?? st.engines[0]
-  const base = engine?.base ?? ''
-  const url = kind === 'search' && base ? `${base}${encodeURIComponent(term)}` : /^https?:\/\//.test(term) ? term : ''
-  const mode = st.settings.openMode
-  if (url) window.open(url, mode === 'tab' ? '_blank' : '_self')
-  const how = mode === 'tab' ? '新标签页打开：' : '当前窗口打开：'
-  st.showToast(`${how}${term}`)
-}
-
-/** 单张卡片：外框 + 内容 + 名称标签 + 悬浮操作 */
-const GridCard = ({ item, now, nick, encourage, playing, dragging, onDragStart }: {
+/** 单张卡片：外框（点击开站 / 拖拽换位）+ 内容 + 名称标签 + 悬浮操作 */
+const GridCard = ({ item, now, nick, encourage, playing, weather, dragging, onDragStart }: {
   item: GridItem
   now: Date
   nick: string
   encourage: string
   playing: boolean
+  weather: WeatherData | null
   dragging: { x: number; y: number; moved: boolean } | null
   onDragStart: (e: ReactPointerEvent) => void
 }) => {
   const label = str(cfg(item)['label'], str(cfg(item)['name']))
-  const style = dragging?.moved
+  const draggingStyle = dragging !== null && dragging.moved
+  const style = draggingStyle
     ? { left: dragging.x, top: dragging.y, zIndex: 20, transition: 'none' }
     : undefined
   return (
     <>
-      <div className={`item${dragging?.moved ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...style }}
-        data-id={item.id} data-t={item.t} onPointerDown={onDragStart}>
-        <WidgetView item={item} now={now} nick={nick} encourage={encourage} playing={playing} />
+      <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...style }}
+        data-id={item.id} data-t={item.t} data-act={item.t === 'quote' ? undefined : 'item-open'}
+        onPointerDown={onDragStart}>
+        <WidgetView item={item} now={now} nick={nick} encourage={encourage} playing={playing} weather={weather} />
         <div className="item-acts">
           <div className="ia" data-act="item-edit" title="编辑">{Icon.edit()}</div>
           <div className="ia" data-act="item-del" title="删除">{Icon.trash()}</div>
         </div>
       </div>
-      {label ? <div className="item-label" style={parseBox(labelBox(item))}>{label}</div> : null}
+      {label !== '' ? <div className="item-label" style={parseBox(labelBox(item))}>{label}</div> : null}
     </>
   )
 }

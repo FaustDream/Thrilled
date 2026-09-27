@@ -8,6 +8,10 @@ export const CheckIcon = (): ReactElement => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 13l4 4L19 7" /></svg>
 )
 
+export const HeartIcon = (): ReactElement => (
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20s-7.4-4.4-7.4-9.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.4 3.2C19.4 15.6 12 20 12 20z" /></svg>
+)
+
 export const Icon = {
   search: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.6-3.6" /></svg>,
   close: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>,
@@ -34,4 +38,6 @@ export const Icon = {
   folder: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.6A2 2 0 0 1 5 4.6h3.5l1.8 2H19a2 2 0 0 1 2 2v8.2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>,
   calc: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="4" y="2.6" width="16" height="18.8" rx="2.4" /><path d="M8 7h8M8 11.6h2M12 11.6h2M16 11.6h.01M8 15.6h2M12 15.6h2M16 15.6h.01M8 19h8" /></svg>,
   trans: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.4 6h8M7.4 4.2V6M9.4 6c-.6 3.4-2.6 6.2-5.6 8M5.2 9.2c1 2 2.6 3.6 4.6 4.6" /><path d="M12.6 20l3.6-9.4L19.8 20M13.9 17h4.7" /></svg>,
+  check: CheckIcon,
+  heart: HeartIcon,
 }

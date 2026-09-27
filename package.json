@@ -1,6 +1,6 @@
 {
   "name": "thrilled",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "description": "Thrilled — Chrome MV3 新标签页（v4：React 18 + Vite + TypeScript）",
   "type": "module",
   "private": true,

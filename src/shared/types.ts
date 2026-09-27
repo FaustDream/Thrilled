@@ -1,172 +1,13 @@
 /**
  * 共享类型定义（跨上下文，纯类型，无 chrome.* 依赖）
  *
- * 集中定义新标签页项目的数据模型：磁贴、分页、搜索引擎、设置项等。
- * 命名约定：`TileId`/`PageIndex` 等品牌类型（Branded Type）用于防止原始类型混用；
- * 所有可空字段显式使用 `| null`，避免 `exactOptionalPropertyTypes` 下赋值歧义。
+ * 唯一数据模型 = v4 内容模型（冻结于 docs/v4/02-UI规格.md §13）：
+ * 卡片 = 对某个小组件定义的一次引用：位置与尺寸属于布局，config 属于内容。
+ * v3 的磁贴 / 分类分页 / 11 引擎注册表已删除（03 文档 D13）。
  */
-
-/**
- * 品牌类型工具：给原始类型打上语义标签
- * 采用「幽灵品牌」（optional 属性）：不强制构造处写品牌标记，仅用于文档化意图与
- * 防止跨语义的原始类型混用（配合 zod 产物与字面量赋值时零摩擦）。
- */
-export type Brand<T, B extends string> = T & { readonly __brand?: B };
-
-/** 磁贴 ID：`tile_<ts>_<rand>` */
-export type TileId = Brand<string, 'TileId'>;
-/** 页面索引（分类序号，从 0 开始） */
-export type PageIndex = number;
-
-/** 磁贴类型：favicon（站点图标）/ custom（自定义图标）/ text（首字符）/ emoji */
-export type TileType = 'favicon' | 'custom' | 'text' | 'emoji';
-
-/**
- * 磁贴（快捷方式）
- */
-export interface Tile {
-  /** 唯一 ID，`tile_<ts>_<rand>` */
-  id: TileId;
-  /** 显示名称 */
-  label: string;
-  /** 目标地址 */
-  url: string;
-  /** 图标渲染类型 */
-  type: TileType;
-  /** 图标 URL / emoji / SVG */
-  icon: string;
-  /** 磁贴底色 */
-  color: string;
-  /** 排序位 */
-  position: number;
-  /** 自定义图标 base64（`type === 'custom'` 时使用） */
-  imageData: string;
-}
-
-/** 磁贴分页（分类），每个分类一页 */
-export interface TilePage {
-  /** 分类名（页面名） */
-  name: string;
-  /** 该分类下的磁贴列表 */
-  tiles: Tile[];
-}
-
-/** 搜索引擎 id 字面量联合 */
-export type EngineId =
-  | 'google'
-  | 'bing'
-  | 'baidu'
-  | 'zhihu'
-  | 'weibo'
-  | 'duckduckgo'
-  | 'github'
-  | 'bilibili'
-  | 'yandex'
-  | 'gamer520'
-  | 'linuxdo';
-
-/**
- * 搜索引擎定义
- * 图标渲染优先级：iconName（SVG symbol）→ badge（文本徽标）→ svg（内联路径）
- */
-export interface SearchEngine {
-  id: EngineId;
-  /** 显示名 */
-  name: string;
-  /** 展示 URL */
-  url: string;
-  /** 搜索 URL 模板（query 需 encodeURIComponent） */
-  base: string;
-  /** SVG symbol 名（可选） */
-  iconName?: string;
-  /** 文本徽标（可选） */
-  badge?: string;
-  /** 内联 SVG path（可选） */
-  svg?: string;
-}
-
-/** 快捷方式尺寸 */
-export type ShortcutSize = 'small' | 'standard' | 'large';
-/** 快捷方式列数配置值 */
-export type ShortcutColumns = 'auto' | '4' | '5' | '6' | '7' | '8' | '10';
-
-/** 主题方案 */
-export type ColorScheme = 'light' | 'dark' | 'auto';
-
-/** 链接打开类型（link-opener 统一入口） */
-export type LinkOpenType = 'tiles' | 'search' | 'other';
-
-/**
- * 新标签页设置项（tabpage_ 前缀存储）
- */
-export interface TabPageSettings {
-  /** 当前搜索引擎 id */
-  engine: EngineId;
-  /** 快捷方式尺寸 */
-  shortcutSize: ShortcutSize;
-  /** 快捷方式列数 */
-  shortcutColumns: ShortcutColumns;
-  /** 自动聚焦开关 */
-  autoFocus: boolean;
-  /** 分类记忆开关 */
-  categoryMemory: boolean;
-  /** 分类按钮行开关 */
-  catRow: boolean;
-  /** 页面切换动画 */
-  pageTransition: boolean;
-  /** 磁贴新标签打开 */
-  linkNewTabTiles: boolean;
-  /** 搜索结果新标签打开 */
-  linkNewTabSearch: boolean;
-  /** 昵称（默认「主人」） */
-  nickname: string;
-  /** 上次所在分页（分类记忆恢复） */
-  lastPage: PageIndex;
-  /** 批量选择修饰键：ctrl / alt / ctrlShift */
-  batchModifierKey: string;
-}
-
-/** 倒计时目标（localStorage `countdowns`） */
-export interface CountdownItem {
-  id: string;
-  title: string;
-  /** 目标日期 YYYY-MM-DD */
-  targetDate: string;
-  /** 创建日期 YYYY-MM-DD */
-  createdAt: string;
-}
-
-/** 壁纸设置（localStorage `wallpaperSettings`） */
-export interface WallpaperSettings {
-  /** 模糊度 0-100 */
-  blur: number;
-  /** 遮罩透明度 0-100 */
-  overlay: number;
-}
-
-/** 搜索引擎注册表 */
-export const ENGINES: readonly SearchEngine[] = [
-  { id: 'google', name: 'Google', url: 'https://www.google.com', base: 'https://www.google.com/search?q=', iconName: 'google' },
-  { id: 'bing', name: 'Bing', url: 'https://www.bing.com', base: 'https://www.bing.com/search?q=', iconName: 'bing' },
-  { id: 'baidu', name: '百度', url: 'https://www.baidu.com', base: 'https://www.baidu.com/s?wd=', iconName: 'baidu' },
-  { id: 'zhihu', name: '知乎', url: 'https://www.zhihu.com', base: 'https://www.zhihu.com/search?type=content&q=', iconName: 'zhihu' },
-  { id: 'weibo', name: '微博', url: 'https://weibo.com', base: 'https://s.weibo.com/weibo?q=', iconName: 'weibo' },
-  { id: 'duckduckgo', name: 'DuckDuckGo', url: 'https://duckduckgo.com', base: 'https://duckduckgo.com/?q=', iconName: 'duckduckgo' },
-  { id: 'github', name: 'GitHub', url: 'https://github.com', base: 'https://github.com/search?q=', iconName: 'github' },
-  { id: 'bilibili', name: '哔哩哔哩', url: 'https://www.bilibili.com', base: 'https://search.bilibili.com/all?keyword=', iconName: 'bilibili' },
-  { id: 'yandex', name: 'Yandex', url: 'https://ya.ru/', base: 'https://ya.ru/search/?text=', iconName: 'yandex' },
-  { id: 'gamer520', name: 'Gamer520', url: 'https://www.gamer520.com/', base: 'https://www.gamer520.com/?s=', iconName: 'gamer520' },
-  { id: 'linuxdo', name: 'Linux.do', url: 'https://linux.do/', base: 'https://linux.do/search?q=', iconName: 'linuxdo' },
-] as const;
-
-/** 引擎查询辅助 */
-export function getEngineById(id: EngineId): SearchEngine | null {
-  return ENGINES.find((e) => e.id === id) ?? null;
-}
 
 /* ==========================================================================
- * v4 内容模型（冻结于 docs/v4/02-UI规格.md §13）
- * 卡片 = 对某个小组件定义的一次引用：位置与尺寸属于布局，config 属于内容。
+ * 内容模型
  * ========================================================================== */
 
 /** 小组件类型（= WIDGET_DEFS 的键） */
@@ -247,7 +88,7 @@ export interface GridItem {
 /** 一套模式的页面集合（每页是一组卡片） */
 export type ModePages = GridItem[][];
 
-/** 布局导出 / 导入文档（设置 → 数据与备份） */
+/** 布局导出 / 导入文档（设置 → 数据与备份；01 §5.1：本地导出文件 = 云快照的布局部分） */
 export interface LayoutDoc {
   v: number;
   app: string;
@@ -255,6 +96,10 @@ export interface LayoutDoc {
   standard: ModePages;
   privacy: ModePages;
 }
+
+/* ==========================================================================
+ * 搜索引擎
+ * ========================================================================== */
 
 /** v4 搜索引擎定义（内置 12 个见 BUILTIN_ENGINES；可隐藏、可排序、可自定义） */
 export interface EngineDef {
@@ -264,12 +109,14 @@ export interface EngineDef {
   color: string;
   /** 字形（占位素材） */
   glyph: string;
+  /** 自定义图标（URL 或 data:image，可选） */
+  img?: string | undefined;
   /** 拉丁字形（字号按 0.74 缩小） */
-  latin?: boolean;
+  latin?: boolean | undefined;
   /** 搜索地址（query 前拼） */
   base: string;
   /** 已隐藏（不出现在下拉 / 数字键 / 右键二级菜单） */
-  hidden?: boolean;
+  hidden?: boolean | undefined;
 }
 
 /** v4 内置搜索引擎全集（12 个 = 启用上限，见 docs/v4/04 §5.1） */
@@ -288,6 +135,29 @@ export const BUILTIN_ENGINES: readonly EngineDef[] = [
   { id: 'brave', name: 'Brave', color: '#FB542B', glyph: 'B', latin: true, base: 'https://search.brave.com/search?q=' },
 ] as const;
 
+/* ==========================================================================
+ * 风格皮肤（02 §6.1：用户可完全自定义的数据资产，内置 4 套仅为出厂初始值）
+ * ========================================================================== */
+
+export interface SkinPack {
+  /** 自由 id（文件名或时间戳生成） */
+  id: string;
+  /** 用户可改 */
+  name: string;
+  /** 出厂初始值 → 可「还原内置」；自建风格无此操作 */
+  builtin: boolean;
+  /** 仅决定文字与图标的对比基线，不限制配色 */
+  base: 'light' | 'dark';
+  /** 该风格配套壁纸（WALLS 下标，切风格可带出） */
+  wall: number;
+  /** 完整令牌集；缺省项回退 base 默认值 */
+  tokens: Record<string, string>;
+}
+
+/* ==========================================================================
+ * 设置与本地持久化文档
+ * ========================================================================== */
+
 /** 透明度与玻璃质感的六个可调区域（对应 --ga-* / --blur-*） */
 export type GlassKey = 'card' | 'tile' | 'dock' | 'search' | 'panel' | 'menu';
 export type GlassSettings = Record<GlassKey, number>;
@@ -295,7 +165,10 @@ export type GlassSettings = Record<GlassKey, number>;
 /** 模式（标准 / 隐私各自独立页面集，极简只留搜索 + 时钟 + Dock） */
 export type ViewMode = 'minimal' | 'standard' | 'privacy';
 
-/** v4 界面设置（本地保存，云同步见 01 §5） */
+/** 链接打开方式（link-opener 统一入口） */
+export type OpenMode = 'link' | 'tab' | 'search';
+
+/** v4 界面设置（本地持久化，云同步见 01 §5） */
 export interface AppSettings {
   mode: ViewMode;
   labels: boolean;
@@ -303,7 +176,7 @@ export interface AppSettings {
   hideSearch: boolean;
   mascot: boolean;
   engineId: string;
-  openMode: 'link' | 'tab' | 'search';
+  openMode: OpenMode;
   autoFocus: boolean;
   searchKeep: boolean;
   hideBtn: boolean;
@@ -320,6 +193,33 @@ export interface AppSettings {
   glass: GlassSettings;
   /** 全局透明度 0.2–1 */
   gAlpha: number;
+  /** 壁纸遮罩 0–1（02 §6.4 遮罩滑杆） */
+  cover: number;
+  /** 字体颜色（名称标签覆盖色；空串 = 跟随风格令牌） */
+  fontColor: string;
+  /** 沉浸式搜索框（与壁纸融合的透明样式） */
+  immersive: boolean;
+  /** 简洁模式搜索框改为线框样式 */
+  simpleSearch: boolean;
   skinId: string;
+  /** 内置壁纸下标（WALLS） */
   wallpaper: number;
+  /** 自定义壁纸引用（IndexedDB id；非空时优先于内置壁纸） */
+  wallpaperRef: string | null;
+}
+
+/** 本地持久化文档（chrome.storage 单键整存整取；快照式备份复用同一形状，01 §5.1） */
+export interface StoredDoc {
+  v: 2;
+  settings: AppSettings;
+  pages: { standard: ModePages; privacy: ModePages };
+  engines: EngineDef[];
+  skins: SkinPack[];
+  history: string[];
+  /** 本地演示账号（真实鉴权见 01 §4，thrilled-server 接入后替换） */
+  user: { email: string } | null;
+  /** 首次访问欢迎弹窗已展示 */
+  welcomed: boolean;
+  /** 上次备份时间（本地记录） */
+  backupTime: string | null;
 }

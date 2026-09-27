@@ -1,154 +1,93 @@
 /**
- * 收藏夹 → 分类/磁贴 转换（纯逻辑，无 chrome.* 直接调用，可单测）
+ * 收藏夹导入（v4，纯逻辑无 chrome.* 直接调用，可单测）
  *
- * 首次初始化时，将浏览器收藏夹树（chrome.bookmarks.getTree() 结果）转换为
- * 新标签页的分类（TilePage）与磁贴（Tile）：
- * - 收藏夹栏的直接子书签 → 「第1页」分类；子文件夹 → 各自独立分类
- * - 仅保留 http(s) 书签；空文件夹/空分类跳过
- * - 跳过「其他书签」「移动设备书签」等 Chrome 系统文件夹（id="2"/"3"）
+ * 将浏览器收藏夹树（chrome.bookmarks.getTree() 结果）转换为 v4 网址图标条目：
+ * - 只保留 http(s) 书签；跳过「其他书签」「移动设备书签」等 Chrome 系统文件夹
+ * - 同 URL 去重
+ * - 输出扁平列表，落位（findSlot / 自动翻页）由 app 层负责
  *
- * @see wiki/02 §2.4 磁贴数据模型
+ * @see docs/v4/02-UI规格.md §13（内容模型）
  */
 
-import { DEFAULT_PAGE_NAME } from '../shared/constants';
-import type { Tile, TilePage } from '../shared/types';
+import { warn } from './logger';
 
 /** 收藏夹栏顶层文件夹的典型 id（Chrome/Edge 固定 root 结构） */
 const BOOKMARKS_BAR_ID = '1';
 /** Chrome 系统文件夹 id（跳过，不导入） */
 const OTHER_BOOKMARKS_ID = '2';
 const MOBILE_BOOKMARKS_ID = '3';
-/** 收藏夹栏下直接书签的分类名（没有归属子文件夹的书签归入此分类） */
-const DIRECT_BOOKMARKS_CATEGORY = DEFAULT_PAGE_NAME;
 
 /** 可导入的 URL 协议白名单（仅 http/https） */
 const ALLOWED_PROTOCOLS: ReadonlySet<string> = new Set(['http:', 'https:']);
 
-/** 规范化书签节点树的最小形状（避免依赖 chrome.bookmarks.BookmarkTreeNode；exactOptionalPropertyTypes 下显式允许 undefined） */
-interface BookmarkNode {
+/** 规范化书签节点树的最小形状（避免依赖 chrome.bookmarks.BookmarkTreeNode） */
+export interface BookmarkNode {
   id?: string | undefined;
   title?: string | undefined;
   url?: string | undefined;
   children?: BookmarkNode[] | undefined;
 }
 
+/** 导出条目：网址图标实例的 config 素材 */
+export interface BookmarkEntry {
+  label: string;
+  url: string;
+}
+
 /** 判定书签 URL 是否可导入 */
 export function isImportableUrl(url: string): boolean {
   try {
-    const u = new URL(url);
-    return ALLOWED_PROTOCOLS.has(u.protocol);
+    return ALLOWED_PROTOCOLS.has(new URL(url).protocol);
   } catch {
     return false;
   }
 }
 
-/** 由单个书签项生成磁贴 */
-function makeTile(item: { title: string; url: string }, idx: number): Tile | null {
-  if (!isImportableUrl(item.url)) return null;
-  const label = item.title.trim() || item.url;
-  return {
-    id: `tile_bm_${idx}` as Tile['id'],
-    label,
-    url: item.url,
-    type: 'favicon',
-    icon: '',
-    color: '#1c1c1c',
-    position: idx,
-    imageData: '',
-  };
+/** 是否为 Chrome 系统文件夹（整个跳过） */
+function isSystemFolder(node: BookmarkNode): boolean {
+  return node.id === OTHER_BOOKMARKS_ID || node.id === MOBILE_BOOKMARKS_ID;
 }
 
-/** 从一组 {title,url} 生成 TilePage（去重同 URL） */
-function itemsToPage(items: Array<{ title: string; url: string }>, categoryName: string): TilePage | null {
-  const seen = new Set<string>();
-  const tiles: Tile[] = [];
-  for (const item of items) {
-    const norm = item.url.replace(/\/+$/, '');
-    if (seen.has(norm)) continue;
-    seen.add(norm);
-    const tile = makeTile(item, tiles.length);
-    if (tile !== null) tiles.push(tile);
-  }
-  if (tiles.length === 0) return null;
-  return { name: categoryName, tiles };
-}
-
-/** 收集节点下所有书签（递归平铺，用于子文件夹内容） */
-function collectBookmarks(node: BookmarkNode): Array<{ title: string; url: string }> {
-  const out: Array<{ title: string; url: string }> = [];
-  const walk = (n: BookmarkNode): void => {
-    if (typeof n.url === 'string' && n.url !== '') {
-      out.push({ title: n.title ?? '', url: n.url });
-      return;
+/** 深度优先收集可导入书签（URL 规范化去重：忽略尾斜杠差异） */
+function walk(nodes: BookmarkNode[] | undefined, out: BookmarkEntry[], seen: Set<string>): void {
+  if (!nodes) return;
+  for (const node of nodes) {
+    if (isSystemFolder(node)) continue;
+    const url = typeof node.url === 'string' ? node.url : '';
+    if (url !== '') {
+      const key = url.replace(/\/+$/, '');
+      if (!isImportableUrl(url) || seen.has(key)) continue;
+      seen.add(key);
+      out.push({ label: node.title?.trim() || url, url });
+      continue;
     }
-    for (const child of n.children ?? []) walk(child);
-  };
-  walk(node);
-  return out;
-}
-
-/** 判定节点是否为文件夹（无 url 且有 children） */
-function isFolder(node: BookmarkNode): boolean {
-  return node.url === undefined || node.url === '';
+    walk(node.children, out, seen);
+  }
 }
 
 /**
- * 收藏夹树 → 分类列表
- *
- * 分类策略：
- * 1. 收藏夹栏（id="1"）：
- *    a. 直接书签（非文件夹子节点）→ 「第1页」（DIRECT_BOOKMARKS_CATEGORY）
- *    b. 子文件夹 → 各自独立分类（文件夹名 = 分类名）
- * 2. 跳过「其他书签」（id="2"）和「移动设备书签」（id="3"）
- *
- * @param tree chrome.bookmarks.getTree() 的返回（根节点数组）
- * @returns 分类数组
+ * 收藏夹树 → 网址图标条目列表（收藏夹栏 + 其余顶层文件夹全部纳入，协议过滤、去重）
+ * @param root getTree() 返回的根节点数组
  */
-export function buildPagesFromBookmarks(tree: readonly BookmarkNode[]): TilePage[] {
-  const root = tree[0];
-  const topLevel = root?.children ?? [];
-  const pages: TilePage[] = [];
-  const seenNames = new Set<string>();
+export function collectBookmarks(root: BookmarkNode[]): BookmarkEntry[] {
+  const out: BookmarkEntry[] = [];
+  const seen = new Set<string>();
+  const bar = root.find((n) => n.id === BOOKMARKS_BAR_ID);
+  const rest = root.filter((n) => n.id !== BOOKMARKS_BAR_ID);
+  // 收藏夹栏在前，其余顶层（多为「其他书签」，已按 id 跳过）在后
+  walk(bar ? [bar] : [], out, seen);
+  walk(rest, out, seen);
+  return out;
+}
 
-  const pushPage = (name: string, page: TilePage | null): void => {
-    if (page === null) return;
-    if (seenNames.has(name)) return;
-    seenNames.add(name);
-    pages.push(page);
-  };
-
-  // 1) 收藏夹栏（id="1"）：子文件夹 → 独立分类；直接书签 → 「第1页」
-  const bar = topLevel.find((n) => n.id === BOOKMARKS_BAR_ID);
-  if (bar !== undefined) {
-    const directBookmarks: Array<{ title: string; url: string }> = [];
-    for (const child of bar.children ?? []) {
-      if (isFolder(child)) {
-        // 子文件夹 → 独立分类
-        const name = child.title?.trim();
-        if (name !== undefined && name !== '') {
-          const bookmarks = collectBookmarks(child).filter((x) => isImportableUrl(x.url));
-          pushPage(name, itemsToPage(bookmarks, name));
-        }
-      } else if (typeof child.url === 'string' && child.url !== '') {
-        // 直接书签
-        directBookmarks.push({ title: child.title ?? '', url: child.url });
-      }
-    }
-    // 收藏夹栏根层级直接书签 → 「第1页」
-    pushPage(DIRECT_BOOKMARKS_CATEGORY, itemsToPage(directBookmarks, DIRECT_BOOKMARKS_CATEGORY));
+/** 读取浏览器收藏夹树（非扩展环境返回 null，UI 引导用） */
+export async function readBookmarkTree(): Promise<BookmarkNode[] | null> {
+  if (typeof chrome === 'undefined' || chrome.bookmarks === undefined) return null;
+  try {
+    const tree = await chrome.bookmarks.getTree();
+    return tree as BookmarkNode[];
+  } catch (e) {
+    warn('bookmark-importer', '读取收藏夹失败', { err: (e as Error).message });
+    return null;
   }
-
-  // 2) 其余顶层文件夹（跳过 Chrome 系统文件夹：其他书签 id="2" / 移动设备 id="3"）
-  for (const folder of topLevel) {
-    const id = folder.id ?? '';
-    if (id === BOOKMARKS_BAR_ID || id === OTHER_BOOKMARKS_ID || id === MOBILE_BOOKMARKS_ID) continue;
-
-    const name = folder.title?.trim();
-    if (name === undefined || name === '') continue;
-
-    const bookmarks = collectBookmarks(folder).filter((x) => isImportableUrl(x.url));
-    pushPage(name, itemsToPage(bookmarks, name));
-  }
-
-  return pages;
 }

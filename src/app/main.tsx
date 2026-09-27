@@ -6,7 +6,10 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App } from './App'
+import { initPlatform } from './platform'
 import './styles/prototype.css'
+
+initPlatform()
 
 const host = document.getElementById('root')
 if (host) {

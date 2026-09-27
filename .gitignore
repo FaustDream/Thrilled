@@ -4,12 +4,8 @@ dist.zip
 *.map
 *.log
 .DS_Store
-tests/
-.codebuddy/
-scripts/
 bugs.md
 releases/
 docs/*
 !docs/v4/
-
-
+!docs/memory/
