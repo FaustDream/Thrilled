@@ -18,8 +18,8 @@ describe('verticalOffset', () => {
     ]
     const ty = verticalOffset(items)
     // 内容带高 2 行，可用带 673px → 位移应把内容推到垂直中点附近（约 240px）
-    expect(ty).toBeGreaterThan(200)
-    expect(ty).toBeLessThan(280)
+    expect(ty).toBeGreaterThan(260)
+    expect(ty).toBeLessThan(330)
   })
 
   it('空页返回 0', () => {

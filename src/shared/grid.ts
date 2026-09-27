@@ -4,8 +4,8 @@
  * 纯函数无依赖 → app（布局渲染 / 拖拽）与 core（导入校验 / 迁移落位）共用。
  */
 
-/** 单元格边长（px） */
-export const CELL = 60;
+/** 单元格边长（px）：放大以填满搜索行与 Dock 之间的可用带（72px 头部区 + 740px 网格 ≈ 无首尾留白） */
+export const CELL = 74;
 /** 卡片四边内缩（px） */
 export const INSET = 25;
 /** 网格列数 */
@@ -19,6 +19,10 @@ export const STAGE_W = 1920;
 export const STAGE_H = 945;
 /** 每种模式最多页数（04 §5.1：应用最多添加 5 页） */
 export const MAX_PAGES = 5;
+/** 网格顶边（CSS .grid top 对应值：搜索行 44+50=94 底下 8px 起排） */
+export const GRID_TOP = 77;
+/** 搜索行底边（search-row top:44 + h:50，与 CSS 对应） */
+export const SEARCH_ROW_BOTTOM = 94;
 
 /** 卡片尺寸档位（单位数，仅六档） */
 export const SIZES: readonly { w: number; h: number }[] = [
@@ -59,8 +63,6 @@ export const labelBox = (it: { c: number; r: number; w: number; h: number }): st
 
 /* ===== 页面内容垂直居中（消除稀疏页的非对称留白） ===== */
 
-/** 搜索行底边（search-row top:100 + h:50，与 CSS 对应） */
-export const SEARCH_ROW_BOTTOM = 150;
 /** Dock 顶边（stage 高 945 − dock 高 122） */
 export const DOCK_TOP = STAGE_H - 122;
 /** 名称标签高（视觉底边比单元格底边高出 4px） */
@@ -75,8 +77,6 @@ export const verticalOffset = (items: readonly { r: number; h: number }[]): numb
   const minR = Math.min(...items.map((it) => it.r));
   const maxR = Math.max(...items.map((it) => it.r + it.h));
   const bandCenter = (SEARCH_ROW_BOTTOM + DOCK_TOP) / 2;
-  const gridTop = STAGE_H / 2 - (ROWS * CELL) / 2;
-  // 内容视觉中心（本地坐标）：顶部 = minR×60 + 内缩，底部 = maxR×60 − 标签露出
   const contentCenterLocal = ((minR + maxR) * CELL + INSET - LABEL_VISUAL_OVERHANG) / 2;
-  return Math.round(bandCenter - gridTop - contentCenterLocal);
+  return Math.round(bandCenter - GRID_TOP - contentCenterLocal);
 };

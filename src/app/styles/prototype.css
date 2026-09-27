@@ -32,7 +32,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   pointer-events:none;z-index:1}
 
 /* ============ 2. 搜索栏（y=100 h=50） ============ */
-.search-row{position:absolute;left:0;top:100px;width:1920px;height:50px;display:flex;
+.search-row{position:absolute;left:0;top:44px;width:1920px;height:50px;display:flex;
   justify-content:center;align-items:flex-start;z-index:var(--z-pop)}
 .search-box{width:var(--search-width);height:54px;border-radius:var(--search-radius);
   border:2px solid rgba(255,255,255,.72);
@@ -85,7 +85,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* ============ 3. 翻页画布与网格 ============ */
 #pager{position:absolute;left:0;top:0;height:100%;z-index:2;transition:transform .42s var(--ease)}
 .page{position:absolute;top:0;width:1920px;height:100%}
-.grid{position:absolute;left:240px;top:50%;width:1440px;height:600px;margin-top:-300px}
+.grid{position:absolute;left:72px;top:77px;width:1776px;height:740px;margin-top:0}
 .item{position:absolute;border-radius:var(--radius-lg);overflow:hidden;
   background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-card) * 100%),transparent);
   backdrop-filter:blur(var(--blur-card));
@@ -601,8 +601,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .item[data-t='icon']:hover,.item[data-t='folder']:hover{transform:translateY(-3px)}
 .item[data-t='group']{background:transparent;backdrop-filter:none;box-shadow:none;outline:none}
 .item[data-t='icon'] .item-acts{right:2px;bottom:-2px}
-.v-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;font-size:27px;border-radius:12px;transition:transform .2s var(--ease-spring)}
-.v-icon.lat{font-size:19px}
+.v-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;font-size:31px;border-radius:12px;transition:transform .2s var(--ease-spring)}
+.v-icon.lat{font-size:23px}
 .item[data-t='icon']:hover .v-icon{transform:scale(1.1)}
 .v-cell img.v-icon{border-radius:12px}
 .gtile{background:transparent;border:none;box-shadow:none;backdrop-filter:none}

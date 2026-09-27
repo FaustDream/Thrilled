@@ -268,7 +268,7 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       }
       return (
         <div className="v-cell" style={{ position: 'absolute', inset: 0 }}>
-          <TileGlyph name={name} cls="v-icon" fs={24} size={46} />
+          <TileGlyph name={name} cls="v-icon" fs={31} size={60} />
         </div>
       )
     }
