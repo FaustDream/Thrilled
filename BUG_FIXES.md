@@ -3,6 +3,18 @@
 > 本地文档，不提交到 git。
 > 按版本号区分；发布新版本时，上一版本的修复记录即为该新版本的修复汇总。
 
+## v4.0 终评修复（2026-09-27）
+
+- 修复：**01 §5.1 云备份 schema 与冻结内容模型不一致**——v1（`mode` + 扁平 `items` + `page`/`kind`/`slot`）照实现会被服务端校验全部拒绝；重写为 v2：`standard` / `privacy` 页面集（数组套数组）+ 卡片实例 `{ id, c, r, w, h, t, config }`（config 只存覆盖值），与 `exportLayout` 实际输出、02 §13 完全一致
+- 修复：**01 §1.1 v3 复用表死链**——6 个已删除文件（tiles / page-manager / category-ui / settings-panel / onboarding / command-palette）标注「已删除、需重写」，已迁移服务改标 `core/` 新路径；「注册表原样复用」改为「v4 已建 `BUILTIN_ENGINES`（12 个），旧表 B13/D13 清理」；关键结论同步修订
+- 修复：**02 §5 小组件键名与 §13.1 两套并存**——`calendar` / `anniversary` / `favorites` / `translate` 统一为 `cal` / `ann` / `fav` / `trans`，配置项按定义表校正（`countdown` 只剩 `at` 等）；`mascot` 行作废（吉祥物是右键菜单项而非小组件），`iframe` 标注三期预留
+- 修复：**03 D11 / D13 表述失真**——D11 明确命令面板与引导的 v3 视图层已删除、未迁入 core/，接回需重写 UI（可从 git 历史找回参考）；D13 追加「D10 持久化动工前须先收敛引擎注册表」
+- 清理：**icon 实例 config 冗余 `name` 字段**——全仓无任何读取方（React 渲染的 `str(c['name'])` 回退同步删除），原型 6 处 + React（`layout.ts` 3 处、`panels.tsx` 4 处、`widgets.tsx` 回退）全部只留 `label`
+- 修复：**原型 `normItem` 导入时把定义默认值全量并入 config**——破坏「实例只存覆盖值」不变量（导出是增量、导入变全量）；改为只存 `x.config`（React 版本本就正确，原型对齐）
+- 清理：原型 `openLink` 死代码（无效自赋值 `e.u = e.u` 及其取值行）
+- 入库：**`.gitignore` 放行 `docs/v4/`**——原型、四份文档与复刻存档此前仅存本地（单点故障风险），现随仓库跟踪；`docs/memory/` 维持本地
+- 验证：原型 `node --check` 通过；`pnpm typecheck` 0 错误、`lint` 通过、单测 12 例全过
+
 ## v4.0（2026-09-26）——仓库一步到位重构
 
 - 重构：**仓库切到 v4 结构**——`src/app`（React 18 + Vite + TS 视图层）、`src/core`（16 个框架无关服务）、`src/background`（service worker）、`src/shared`；删除 v3 视图层（`src/pages/**`、`src/lib/**`）与 v3 样式（`css/*.css`）；根 `index.html` 换成 Vite 入口（原 44KB 的 v3 页面模板作废，界面以 `docs/v4/index.html` 原型为基准重写）

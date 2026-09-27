@@ -355,7 +355,7 @@ export const WidgetView = ({ item, now, nick, encourage, playing }: WidgetProps)
     default:
       return (
         <div className="v-cell" style={{ position: 'absolute', inset: 0 }}>
-          <TileGlyph name={str(c['label']) || str(c['name'], '网站')} cls="v-icon" fs={24} size={46} />
+          <TileGlyph name={str(c['label']) || '网站'} cls="v-icon" fs={24} size={46} />
         </div>
       )
   }

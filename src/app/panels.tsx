@@ -73,11 +73,11 @@ const AddPanel = () => {
       {tab === 1 && (
         <>
           <div className="btn-row" style={{ marginBottom: 10 }}>
-            <button className="btn sm" onClick={() => sites.slice(0, 6).forEach((n) => place('icon', { name: n, label: n }))}>批量添加</button>
+            <button className="btn sm" onClick={() => sites.slice(0, 6).forEach((n) => place('icon', { label: n }))}>批量添加</button>
           </div>
           <div className="nv-grid">
             {sites.map((n) => (
-              <div className="nv-item" key={n} onClick={() => place('icon', { name: n, label: n })}>
+              <div className="nv-item" key={n} onClick={() => place('icon', { label: n })}>
                 <div className="nv-ico">{n.slice(0, 1)}</div>
                 <div className="nv-name">{n}</div>
               </div>
@@ -93,7 +93,7 @@ const AddPanel = () => {
             <input className="f-input" placeholder="请输入网站链接地址" value={url} onChange={(e) => setUrl(e.target.value)} /></div>
           <Hint>支持拖拽调整位置与尺寸；确认后会放到当前页的空白位置。</Hint>
           <div className="btn-row end">
-            <button className="btn" onClick={() => { const n = name || '未命名'; place('icon', { name: n, label: n, url }); setName(''); setUrl('') }}>确认添加</button>
+            <button className="btn" onClick={() => { const n = name || '未命名'; place('icon', { label: n, url }); setName(''); setUrl('') }}>确认添加</button>
           </div>
         </>
       )}
@@ -381,7 +381,7 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
       <p className="sub">这张卡片是「{def.n}」小组件的实例：位置与尺寸属于布局，下面的字段只改本实例的内容。</p>
       <div className="f-row"><label className="f-label">名称标签</label>
         <input className="f-input" value={String(c['label'] ?? '')} placeholder="留空则不显示名称"
-          onChange={(e) => updateConfig(item.id, { label: e.target.value, ...(item.t === 'icon' ? { name: e.target.value } : {}) })} /></div>
+          onChange={(e) => updateConfig(item.id, { label: e.target.value })} /></div>
       {def.fields.map(field)}
       <div className="f-row"><label className="f-label">尺寸</label>
         <div className="cats">{SIZES.map((sz) => (

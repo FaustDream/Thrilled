@@ -1,0 +1,2047 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thrilled · 新标签页原型 v4</title>
+<style>
+/* ============ 1. 基础令牌（皮肤令牌由 JS 的 SKINS 注入 #stage） ============ */
+:root{
+  --cell:60px; --inset:25px; --radius-lg:16px; --radius-md:12px;
+  --fs-xs:11px; --fs-sm:12px; --fs-md:13px; --fs-lg:14px;
+  --z-pop:30; --z-float:40; --z-modal:50; --z-dropdown:55; --z-drawer:60; --z-toast:99;
+  --ease:cubic-bezier(.22,.61,.36,1);
+  --wp-blur:0px; --wp-mask:0; --dock-icon:66px; --mask-color:#060a10;
+  --g-alpha:1; --panel-sub:#6b7280;
+  /* 玻璃质感（分功能）：--ga-* 背景 alpha、--blur-* 背景模糊，由 applySkin 按 state.glass 写入 */
+  --ga-card:.67; --blur-card:15.6px; --ga-tile:.81; --blur-tile:9.1px;
+  --ga-dock:.61; --blur-dock:18.2px; --ga-search:.75; --blur-search:11.7px;
+  --ga-panel:.64; --blur-panel:16.9px; --ga-menu:.64; --blur-menu:16.9px;
+  --search-radius:25px; --search-width:880px;
+}
+*{box-sizing:border-box}
+#stage svg{display:block;max-width:100%;max-height:100%}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
+  font-family:'PingFang SC','Microsoft YaHei','Hiragino Sans GB',system-ui,-apple-system,'Segoe UI',sans-serif;
+  -webkit-font-smoothing:antialiased;user-select:none}
+#stage{position:absolute;left:0;top:0;width:1920px;height:945px;transform-origin:top left;overflow:hidden;
+  background:transparent;color:var(--panel-text)}
+/* 壁纸层：底色渐变 + 极细斜纹。斜纹是「玻璃质感」的参照物——没有可被模糊的细节，毛玻璃就看不出来 */
+#stage::before{content:'';position:absolute;inset:-40px;
+  background-image:var(--wallpaper),repeating-linear-gradient(135deg,rgba(122,136,160,.075) 0 1px,transparent 1px 8px);
+  background-size:cover,auto;filter:blur(var(--wp-blur))}
+#stage::after{content:'';position:absolute;inset:0;background:var(--mask-color);opacity:var(--wp-mask);
+  pointer-events:none;z-index:1}
+
+/* ============ 2. 搜索栏（y=100 h=50） ============ */
+.search-row{position:absolute;left:0;top:100px;width:1920px;height:50px;display:flex;
+  justify-content:center;align-items:flex-start;z-index:var(--z-pop)}
+.search-box{width:var(--search-width);height:54px;border-radius:var(--search-radius);
+  border:2px solid rgba(255,255,255,.72);
+  background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-search)));
+  backdrop-filter:blur(var(--blur-search));
+  box-shadow:0 8px 24px rgba(6,12,24,.14);
+  display:flex;align-items:center;gap:10px;padding:0 18px;transition:border-radius .18s,background .18s,width .18s}
+.search-box.line{border-radius:12px;background:transparent;border-color:rgba(255,255,255,.6)}
+.engine-ico{width:20px;height:20px;flex:0 0 auto;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;font-size:11px;font-weight:700;color:#fff;cursor:pointer;background:#2932e1}
+.search-box input{flex:1;height:100%;border:none;background:transparent;outline:none;
+  font-size:15px;color:var(--search-text);font-family:inherit}
+.search-box input::placeholder{color:var(--search-ph)}
+.search-go-btn{width:30px;height:30px;flex:0 0 auto;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;color:var(--search-text);cursor:pointer;transition:background .16s}
+.search-go-btn:hover{background:rgba(255,255,255,.25)}
+.search-go-btn svg{width:16px;height:16px}
+.search-panel{position:absolute;left:50%;top:160px;transform:translateX(-50%);width:772px;
+  background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-panel));
+  border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);padding:6px 0;display:none;z-index:var(--z-pop)}
+.search-panel.show{display:block}
+.sp-head{font-size:13px;font-weight:700;color:#111827;padding:8px 16px 4px}
+.sp-row{display:flex;align-items:center;gap:10px;height:40px;padding:0 16px;font-size:14px;
+  color:#1f2937;cursor:pointer;white-space:nowrap;overflow:hidden}
+.sp-row:hover{background:#f4f6fa}
+.sp-row span.t{flex:1;overflow:hidden;text-overflow:ellipsis}
+
+/* 搜索引擎下拉（点击搜索框左侧引擎图标展开；与搜索历史面板互斥） */
+.engine-panel{position:absolute;top:160px;width:242px;max-height:642px;overflow:auto;padding:6px;
+  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-menu));border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);
+  display:none;z-index:var(--z-dropdown);color:var(--panel-text)}
+.engine-panel.show{display:block}
+.ep-row{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:8px;
+  font-size:13px;color:var(--panel-text);cursor:pointer;white-space:nowrap;overflow:hidden}
+.ep-row:hover{background:var(--menu-hover)}
+.ep-row.on{color:var(--accent);font-weight:600}
+.ep-ico{width:18px;height:18px;flex:0 0 auto;border-radius:5px;color:#fff;font-size:11px;font-weight:800;
+  display:flex;align-items:center;justify-content:center}
+.ep-n{flex:1;overflow:hidden;text-overflow:ellipsis}
+.ep-key{flex:0 0 auto;font-size:11px;line-height:16px;padding:0 5px;border-radius:4px;
+  border:1px solid var(--line);color:var(--panel-sub)}
+.ep-cur{flex:0 0 auto;color:var(--accent)}
+.ep-cur svg{width:15px;height:15px}
+.ep-foot{height:1px;background:var(--line);margin:6px 4px}
+.ep-manage{color:var(--panel-sub)}
+.ep-manage svg{width:15px;height:15px;flex:0 0 auto}
+
+/* ============ 3. 翻页画布与网格 ============ */
+#pager{position:absolute;left:0;top:0;height:100%;z-index:2;transition:transform .42s var(--ease)}
+.page{position:absolute;top:0;width:1920px;height:100%}
+.grid{position:absolute;left:240px;top:50%;width:1440px;height:600px;margin-top:-300px}
+.item{position:absolute;border-radius:var(--radius-lg);overflow:hidden;
+  background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-card) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-card));
+  cursor:pointer;transition:transform .14s var(--ease)}
+.item:hover{transform:translateY(-2px)}
+.item-label{position:absolute;height:20px;line-height:20px;font-size:14px;color:var(--label-color);
+  text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.4);white-space:nowrap;overflow:hidden;
+  text-overflow:ellipsis;pointer-events:none}
+#stage[data-labels='0'] .item-label{display:none}
+#stage[data-hidetop='1'] .mode-pill,#stage[data-hidetop='1'] .avatar{display:none}
+#stage[data-hidesearch='1'] .search-row{display:none}
+#stage[data-showtime='0'] .ck-time{display:none}
+#stage[data-showdate='0'] .ck-date{display:none}
+#stage[data-showquote='0'] .item[data-t='quote']{display:none}
+#stage[data-mode='minimal'] #pager{display:none}
+#stage[data-mode='minimal'] .minimal-clock{display:block}
+#stage[data-mode='minimal'] .search-box{border-radius:12px;background:transparent}
+
+/* ============ 4. 图标瓦片（统一容器：白底 + 品牌色字形） ============ */
+/* 统一图标容器（规范）：品牌色字形 + 统一圆角 + 统一细边框与投影 + 玻璃质感（分功能可调）。
+   网格图标、图标格容器、Dock 应用与 Dock 功能按钮全部共用这一套，不出现第二种图标语言。 */
+.v-icon,.gi,.nv-ico,.dock-icon,.gtile{display:flex;align-items:center;justify-content:center;
+  font-weight:800;letter-spacing:-.5px;
+  background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-tile) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-tile));
+  border:1px solid rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(6,12,24,.12)}
+.v-icon{font-size:24px;border-radius:14px}
+.v-icon.lat{font-size:17px}
+.gcell{display:flex;align-items:center;justify-content:center}
+.gi{border-radius:14px}
+.w-group{padding:15px}
+
+/* ============ 5. 小组件 ============ */
+/* 新闻热点 */
+.w-news{display:flex;flex-direction:column}
+.news-head{height:40px;flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:0 10px 0 14px;
+  overflow:hidden;background:linear-gradient(90deg,#ff7a45,#ff4d4f);color:#fff}
+.news-tab{font-size:12px;opacity:.82;cursor:pointer;white-space:nowrap}
+.news-tab.active{opacity:1;font-weight:700}
+.news-more{margin-left:auto;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;font-size:13px;cursor:pointer;background:rgba(255,255,255,.22)}
+.news-list{flex:1;padding:4px 10px 6px;display:flex;flex-direction:column;justify-content:space-between}
+.news-row{display:flex;align-items:center;gap:8px;height:32px;border-radius:8px;padding:0 6px}
+.news-row.top{background:rgba(255,122,69,.12)}
+.news-idx{width:12px;flex:0 0 auto;font-size:13px;font-weight:700;color:#ff7a45;font-style:italic}
+.news-title{flex:1;font-size:13px;color:var(--card-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.news-heat{flex:0 0 auto;font-size:12px;font-weight:700;color:#ff7a45}
+
+/* 音乐（熊猫Dj） */
+.w-music{background:var(--mascot-grad);display:flex;flex-direction:column;align-items:center;
+  justify-content:center;position:relative;color:#fff}
+.mu-list{position:absolute;right:12px;top:12px;width:22px;height:22px;color:rgba(255,255,255,.9);cursor:pointer}
+.mu-disc{width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(from 210deg,#2b2140,#e05a8a,#8b5cf6,#f0a6c8,#2b2140);
+  box-shadow:0 10px 26px rgba(45,20,60,.35)}
+.mu-disc i{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.86);display:block}
+.mu-ctl{display:flex;align-items:center;gap:12px;margin-top:14px}
+.mu-btn{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.92);color:#8b5cf6;
+  display:flex;align-items:center;justify-content:center;cursor:pointer}
+.mu-btn.play{width:40px;height:40px;color:#7c3aed}
+.mu-btn svg{width:16px;height:16px}
+.mu-btn.play svg{width:19px;height:19px}
+
+/* UiTab AI 类入口 */
+.w-ai{background:linear-gradient(160deg,#0b1220,#111c31);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;color:#e8eefc}
+.ai-logo{font-size:54px;font-weight:800;line-height:1;letter-spacing:2px;
+  background:linear-gradient(180deg,#a7e8ff,#3b82f6);-webkit-background-clip:text;background-clip:text;
+  color:transparent;filter:drop-shadow(0 0 14px rgba(56,189,248,.6))}
+.ai-line{width:104px;height:1px;background:rgba(255,255,255,.26);margin:12px 0 10px}
+.ai-name{font-size:15px;font-weight:600}
+.ai-sub{font-size:11px;color:#93a4bf;margin-top:4px}
+
+/* 天气 */
+.w-weather{display:flex;align-items:center;padding:0 14px;color:var(--card-text)}
+.wx-temp{font-size:24px;font-weight:700;flex:0 0 auto}
+.wx-mid{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;margin-left:8px}
+.wx-city{font-size:13px}
+.wx-desc{font-size:12px;color:var(--card-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wx-ico{width:26px;height:24px;flex:0 0 auto;color:#7db8f0}
+
+/* 时钟 */
+.w-clock{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--card-text)}
+.ck-time{font-size:44px;font-weight:700;line-height:1.05;font-variant-numeric:tabular-nums;color:var(--clock-color)}
+.ck-date{font-size:14px;color:var(--card-sub)}
+.w-clock .ck-time.lg{font-size:52px}
+
+/* 收藏夹 */
+.w-fav{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--card-text)}
+.w-fav svg{width:26px;height:26px;color:var(--accent)}
+.fav-text{writing-mode:vertical-rl;font-size:13px;color:var(--card-sub);letter-spacing:3px}
+
+/* 待办 */
+.w-todo{position:relative;color:#38A29E}
+.w-todo .td-ico{position:absolute;left:18px;top:50%;transform:translateY(-50%);width:26px;height:26px}
+.w-todo .td-txt{position:absolute;right:45px;top:50%;transform:translateY(-50%);font-size:20px;font-weight:600}
+
+/* 日历 */
+.w-cal{display:flex;color:var(--card-text)}
+.cal-bar{width:55px;flex:0 0 auto;background:linear-gradient(180deg,#8DD8FF,#4492FF);color:#fff;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.cal-day{font-size:28px;font-weight:700;line-height:1}
+.cal-wd{font-size:14px}
+.cal-body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:6px;padding-left:16px}
+.cal-month{font-size:14px;font-weight:600}
+.cal-lunar{font-size:13px;color:var(--card-sub)}
+
+/* 下班倒计时 */
+.w-cd{padding:14px 18px;display:flex;color:var(--card-text)}
+.cd-l{flex:1;min-width:0;display:flex;flex-direction:column}
+.cd-hint{font-size:13px;color:var(--card-sub)}
+.cd-time{font-size:38px;font-weight:700;line-height:1.15;letter-spacing:2px;font-variant-numeric:tabular-nums}
+.cd-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:2px 14px;margin-top:6px}
+.cd-entry{display:flex;align-items:center;gap:6px}
+.cd-label{font-size:12px;color:var(--card-sub)}
+.cd-val{font-size:16px;font-weight:600}
+.cd-val.money{color:var(--accent)}
+.cd-mascot{width:132px;flex:0 0 auto;align-self:center}
+
+/* 纪念日 */
+.w-ann{padding:20px 24px;display:flex;align-items:center;justify-content:space-between;color:var(--card-text)}
+.ann-l{min-width:0;display:flex;flex-direction:column;gap:10px}
+.ann-title{font-size:18px;font-weight:600}
+.ann-date{font-size:13px;color:var(--card-sub)}
+.ann-r{flex:0 0 auto;display:flex;align-items:baseline;gap:6px}
+.ann-num{font-size:54px;font-weight:700;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.ann-unit{font-size:14px;color:var(--card-sub)}
+
+/* 图标文件夹 */
+.w-folder{display:flex;align-items:center;justify-content:center;color:var(--card-sub)}
+.w-folder svg{width:34px;height:34px}
+
+/* ============ 6. Dock（悬浮圆角栏 + 分隔线 + 4 功能按钮） ============ */
+.dock{position:absolute;left:0;bottom:0;width:1920px;height:122px;display:flex;align-items:center;
+  justify-content:center;z-index:var(--z-float)}
+.dock-bar{display:flex;align-items:center;padding:14px 10px;border-radius:24px;
+  background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-dock)));backdrop-filter:blur(var(--blur-dock));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 12px 34px rgba(6,12,24,.24)}
+#stage[data-mode='minimal'] .dock-bar{background:rgba(255,255,255,calc(var(--g-alpha) * (var(--ga-dock) + .12)))}
+.dock-apps,.dock-actions{display:flex}
+.dock-sep{width:1px;height:52px;margin:0 22px;background:var(--label-color);opacity:.28;flex:0 0 auto}
+.dock-item{width:98px;height:98px;display:flex;align-items:center;justify-content:center;
+  position:relative;cursor:pointer}
+.dock-icon{width:var(--dock-icon);height:var(--dock-icon);border-radius:20px;font-size:26px;flex:0 0 auto;
+  box-shadow:0 4px 12px rgba(6,12,24,.14);
+  transition:transform .16s var(--ease)}
+.dock-icon.circle{border-radius:50%}
+.dock-icon svg{width:32px;height:32px}
+.dock-item:hover .dock-icon{transform:scale(1.22)}
+.dock-name{position:absolute;top:4px;left:50%;transform:translate(-50%,-100%) scale(.92);
+  background:rgba(15,23,42,.86);color:#fff;font-size:12px;padding:4px 10px;border-radius:8px;
+  white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .16s,transform .16s}
+.dock-item:hover .dock-name{opacity:1;transform:translate(-50%,-100%) scale(1)}
+
+/* ============ 7. 模式胶囊 / 头像 ============ */
+.mode-pill{position:absolute;left:40px;top:16px;height:50px;border-radius:12px;display:flex;
+  align-items:center;gap:6px;padding:0 10px;color:var(--chip-text);
+  background:color-mix(in srgb,var(--chip-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-menu));z-index:var(--z-dropdown);cursor:pointer;overflow:hidden}
+.pill-ico{width:22px;height:22px;flex:0 0 auto}
+.pill-opts{display:flex;gap:6px;opacity:0;max-width:0;transition:opacity .18s,max-width .18s}
+.mode-pill:hover .pill-opts,.mode-pill.open .pill-opts{opacity:1;max-width:420px}
+.pill-btn{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;font-size:14px;
+  white-space:nowrap;color:var(--chip-text)}
+.pill-btn svg{width:15px;height:15px}
+.pill-btn.active{background:rgba(255,255,255,.92);color:#1f2937;font-weight:600}
+.mode-tip{position:absolute;left:392px;top:22px;padding:7px 12px;border-radius:9px;font-size:12px;
+  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);color:var(--menu-text);
+  box-shadow:0 10px 26px rgba(6,12,24,.26);
+  opacity:0;pointer-events:none;transition:opacity .16s;z-index:var(--z-dropdown);max-width:340px;line-height:1.5}
+.mode-tip.show{opacity:1}
+.avatar{position:absolute;right:56px;top:16px;width:42px;height:42px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;
+  cursor:pointer;background-image:linear-gradient(160deg,#f5c58a,#e08a4a);z-index:var(--z-dropdown);
+  box-shadow:0 6px 18px rgba(15,23,42,.28)}
+
+/* ============ 8. 极简模式大时钟 ============ */
+.minimal-clock{position:absolute;left:50%;top:250px;transform:translateX(-50%);text-align:center;
+  color:#fff;display:none;text-shadow:0 2px 14px rgba(0,0,0,.42);z-index:2}
+.mc-time{font-size:78px;font-weight:700;letter-spacing:3px;font-variant-numeric:tabular-nums}
+.mc-date{font-size:16px;opacity:.92;margin-top:6px}
+
+/* ============ 9. 右键菜单 ============ */
+.ctx{position:absolute;width:196px;color:var(--menu-text);border-radius:10px;
+  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-menu));
+  padding:6px 0;box-shadow:0 16px 44px rgba(6,12,24,.3);z-index:var(--z-dropdown);display:none}
+.ctx.show{display:block}
+.ctx-item{height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:0 14px;font-size:14px;cursor:pointer;position:relative}
+.ctx-item:hover{background:var(--menu-hover)}
+.ctx-arrow{width:0;height:0;border-left:5px solid var(--panel-sub);border-top:4px solid transparent;
+  border-bottom:4px solid transparent;opacity:.7}
+.ctx-switch{width:34px;height:18px;border-radius:9px;background:rgba(148,163,184,.55);position:relative;
+  flex:0 0 auto;transition:background .18s}
+.ctx-switch i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;
+  transition:left .18s}
+.ctx-switch.on{background:var(--accent)}
+.ctx-switch.on i{left:18px}
+.ctx-sub{position:absolute;left:100%;top:-6px;margin-left:2px;width:186px;border-radius:10px;padding:6px 0;
+  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-menu));
+  box-shadow:0 16px 44px rgba(6,12,24,.3);display:none}
+.ctx-item:hover>.ctx-sub{display:block}
+.ctx.flip .ctx-sub{left:auto;right:100%;margin-left:0;margin-right:2px}
+.ctx-sub-item{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;cursor:pointer}
+.ctx-sub-item:hover{background:var(--menu-hover)}
+.ctx-check{width:14px;height:14px;flex:0 0 auto;color:var(--accent);visibility:hidden}
+.ctx-sub-item.on .ctx-check{visibility:visible}
+
+/* ============ 10. 抽屉 ============ */
+.dw-mask{position:absolute;inset:0;background:rgba(8,12,20,.34);z-index:calc(var(--z-drawer) - 1);
+  opacity:0;pointer-events:none;transition:opacity .24s var(--ease)}
+.dw-mask.show{opacity:1;pointer-events:auto}
+.dw{position:absolute;top:0;right:0;height:100%;width:392px;color:var(--panel-text);
+  background:color-mix(in srgb,var(--panel-bg) calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-menu));
+  z-index:var(--z-drawer);display:flex;flex-direction:column;
+  transform:translateX(100%);transition:transform .24s var(--ease);box-shadow:-12px 0 40px rgba(6,12,24,.26)}
+.dw.open{transform:translateX(0)}
+.dw-head{height:58px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;border-bottom:1px solid var(--line)}
+.dw-title{font-size:16px;font-weight:600}
+.dw-sub{font-size:12px;color:var(--panel-sub);margin-top:2px}
+.dw-close{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;color:var(--panel-sub)}
+.dw-close:hover{background:var(--line)}
+.dw-close svg{width:16px;height:16px}
+.dw-tabs{display:flex;gap:6px;padding:10px 16px;border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+.dw-tab{padding:6px 12px;border-radius:9px;font-size:13px;color:var(--panel-sub);cursor:pointer;white-space:nowrap}
+.dw-tab.active{background:var(--accent);color:#fff}
+.dw-body{flex:1;overflow-y:auto;padding:16px}
+
+/* ============ 11. 表单与通用控件 ============ */
+.f-row{margin-bottom:14px}
+.f-label{display:block;font-size:12px;color:var(--panel-sub);margin-bottom:6px}
+.f-input{width:100%;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;
+  color:var(--panel-text);padding:0 12px;font-size:13px;outline:none;font-family:inherit}
+.f-input:focus{border-color:var(--accent)}
+input[type='color'].f-input{padding:3px 6px;cursor:pointer}
+.btn{height:38px;padding:0 16px;border-radius:10px;border:none;background:var(--accent);color:#fff;
+  font-size:13px;cursor:pointer;font-family:inherit}
+.btn:hover{filter:brightness(1.06)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--panel-text)}
+.btn.danger{background:#ef4444}
+.btn.sm{height:30px;padding:0 12px;font-size:12px}
+.btn.wide{width:100%}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.btn-row.end{justify-content:flex-end}
+.sec-title{font-size:13px;font-weight:600;margin:0 0 10px}
+.sec{margin-bottom:22px}
+.sec.plain{margin-bottom:0}
+.sub-tabs{display:flex;gap:8px;margin-bottom:12px}
+.sub-tab{font-size:12px;padding:5px 10px;border-radius:8px;background:var(--line);color:var(--panel-sub);cursor:pointer}
+.sub-tab.active{background:var(--accent);color:#fff}
+.switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;
+  padding:11px 0;border-bottom:1px solid var(--line)}
+.switch-row .sr-desc{display:block;font-size:11px;color:var(--panel-sub);margin-top:3px}
+.switch{width:38px;height:20px;border-radius:10px;background:rgba(148,163,184,.55);position:relative;
+  cursor:pointer;flex:0 0 auto}
+.switch i{position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;
+  transition:left .18s}
+.switch.on{background:var(--accent)}
+.switch.on i{left:20px}
+.hint-text{font-size:12px;color:var(--panel-sub);line-height:1.7;margin:10px 0 0}
+.empty-box{text-align:center;padding:32px 10px;color:var(--panel-sub);font-size:13px}
+.empty-box svg{width:44px;height:44px;margin-bottom:12px;opacity:.65}
+.slider-row{margin-bottom:16px}
+.sl-head{display:flex;justify-content:space-between;font-size:12px;color:var(--panel-sub);margin-bottom:8px}
+input[type='range']{width:100%;accent-color:var(--accent)}
+.color-ball{display:flex;gap:8px;flex-wrap:wrap}
+.cb{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.cb.on{border-color:var(--accent)}
+
+/* 网址导航 / 广场 */
+.nv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.nv-item{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 2px;
+  border-radius:10px;cursor:pointer}
+.nv-item:hover{background:var(--line)}
+.nv-ico{width:40px;height:40px;border-radius:12px;font-size:15px}
+.nv-name{font-size:11px;color:var(--panel-sub);max-width:100%;text-align:center;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.cats{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.cat{font-size:12px;padding:5px 10px;border-radius:8px;background:var(--line);color:var(--panel-sub);cursor:pointer}
+.cat.active{background:var(--accent);color:#fff}
+.eng-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
+.eng-row.sortable{cursor:grab;transition:opacity .15s}
+.eng-row.sortable.drag{opacity:.4}
+.eng-key{width:18px;height:18px;flex:0 0 auto;border-radius:5px;background:var(--menu-hover);color:var(--panel-sub);
+  font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.kbd{flex:0 0 auto;font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--line);
+  background:var(--menu-hover);color:var(--panel-sub);font-family:inherit}
+.eng-row .er-ico{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;
+  justify-content:center;color:#fff;font-size:11px;font-weight:700;flex:0 0 auto}
+.pz-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.pz-card{border:1px solid var(--line);border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+.pz-prev{height:96px;position:relative;overflow:hidden}
+.pz-prev .m-card{position:absolute;background:#fff;border-radius:5px;box-shadow:0 2px 6px rgba(15,23,42,.12)}
+.pz-prev .m-dock{position:absolute;left:14%;right:14%;bottom:8px;height:11px;border-radius:6px;
+  background:rgba(255,255,255,.62)}
+.pz-body{padding:8px 10px;flex:1;display:flex;flex-direction:column;gap:4px}
+.pz-title{font-size:13px;font-weight:600}
+.pz-sub{font-size:11px;color:var(--panel-sub)}
+.pz-like{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--panel-sub);cursor:pointer}
+.pz-like svg{width:12px;height:12px}
+.pz-acts{display:flex;gap:6px;margin-top:4px}
+.pager-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;font-size:12px;
+  color:var(--panel-sub)}
+.pager-row .pg{min-width:26px;height:26px;border-radius:8px;display:flex;align-items:center;
+  justify-content:center;cursor:pointer;background:var(--line)}
+.pager-row .pg.active{background:var(--accent);color:#fff}
+.wall-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.wall-thumb{height:64px;border-radius:10px;cursor:pointer;border:2px solid transparent;background-size:cover}
+.wall-thumb.sel{border-color:var(--accent)}
+.theme-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.theme-btn{border:2px solid var(--line);border-radius:12px;padding:8px;cursor:pointer;text-align:left}
+.theme-btn.sel{border-color:var(--accent)}
+.tb-prev{height:52px;border-radius:8px;margin-bottom:8px;position:relative;overflow:hidden}
+.tb-prev i{position:absolute;left:8px;top:8px;width:46px;height:24px;border-radius:5px;display:block}
+.tb-name{font-size:12px;display:flex;align-items:center;gap:6px}
+.tb-tag{font-size:10px;line-height:14px;padding:0 5px;border-radius:4px;background:var(--menu-hover);
+  color:var(--panel-sub)}
+.tb-desc{font-size:11px;color:var(--panel-sub);margin-top:4px}
+.color-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-top:12px}
+.color-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:var(--panel-sub)}
+.color-row input[type='color']{width:44px;height:26px;padding:0;border:1px solid var(--line);
+  border-radius:6px;background:none;cursor:pointer}
+.wp-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.wp-view{overflow:hidden;border-radius:14px}
+.wp-inner{display:flex;transition:transform .3s var(--ease)}
+.wp-page{min-width:100%;display:flex;gap:10px}
+.wp-card{flex:1;border:1px solid var(--line);border-radius:12px;overflow:hidden;cursor:pointer}
+.wp-card:hover{border-color:var(--accent)}
+.wp-prev{height:76px;display:flex;align-items:center;justify-content:center;
+  color:var(--card-text);font-size:18px;font-weight:700}
+.wp-meta{padding:8px 10px;font-size:11px;color:var(--panel-sub)}
+.wp-meta b{display:block;font-size:13px;color:var(--panel-text);margin-bottom:2px;font-weight:600}
+
+/* ============ 12. 弹窗与 Toast ============ */
+.modal-mask{position:absolute;inset:0;background:rgba(6,10,18,.52);z-index:var(--z-modal);display:none;
+  align-items:center;justify-content:center}
+.modal-mask.show{display:flex}
+.modal{width:780px;max-height:660px;overflow-y:auto;border-radius:20px;padding:30px 34px;
+  background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-panel));
+  color:#1f2937;box-shadow:0 24px 70px rgba(6,10,18,.4)}
+.modal.narrow{width:520px}
+.modal h2{margin:0 0 10px;font-size:24px}
+.modal p.sub{margin:0 0 22px;font-size:14px;color:#8b95a6;line-height:1.6}
+.th-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
+.th-card{border:2px solid #e8edf3;border-radius:14px;padding:8px;cursor:pointer}
+.th-card.sel{border-color:#3b82f6}
+.th-prev{height:94px;border-radius:10px;overflow:hidden;position:relative;margin-bottom:8px}
+.th-prev .t-card{position:absolute;border-radius:4px;background:#fff}
+.th-prev .t-dock{position:absolute;left:14%;right:14%;bottom:8px;height:10px;border-radius:5px;
+  background:rgba(255,255,255,.6)}
+.th-name{font-size:13px;text-align:center}
+.log-item{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid #eef1f6;font-size:13px;color:#4b5563}
+.log-item b{flex:0 0 82px;color:#111827}
+.log-item ul{margin:0;padding-left:18px;line-height:1.8}
+.toast{position:absolute;left:50%;bottom:160px;transform:translate(-50%,14px);background:rgba(15,23,42,.9);
+  color:#fff;font-size:13px;padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;
+  transition:opacity .2s var(--ease),transform .2s var(--ease);z-index:var(--z-toast);white-space:nowrap}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* ============ 13. 补充小组件（每日一言 / 木鱼 / 倒数日 / 迷你卡） ============ */
+:root{--mascot-grad:linear-gradient(150deg,#9294DF,#F1B2D9)}
+.news-row{height:auto;flex:1;min-height:0}
+.news-list{gap:2px;overflow:hidden}
+.w-fav{flex-direction:row;gap:10px}
+.w-quote{display:flex;flex-direction:column;justify-content:center;gap:8px;padding:0 24px;color:var(--card-text)}
+.qt-hi{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.qt-enc{display:flex;align-items:center;gap:10px;min-width:0}
+.qt-enc-t{border-left:3px solid var(--accent);padding-left:10px;font-size:13px;line-height:1.45;
+  color:var(--card-sub);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.w-quote.reloading .qt-enc-t{animation:qtpulse .4s var(--ease)}
+@keyframes qtpulse{0%{opacity:.2;transform:translateX(-6px)}100%{opacity:1;transform:none}}
+.w-fish{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  cursor:pointer;color:var(--card-text)}
+.fish-ico{width:36px;height:36px;color:#c98a4b;transition:transform .1s}
+.w-fish.hit .fish-ico{transform:scale(.88)}
+.fish-num{font-size:13px;font-weight:600}
+.w-count{padding:12px 16px;display:flex;flex-direction:column;justify-content:center;gap:5px;color:var(--card-text)}
+.ct-top{font-size:13px;color:var(--card-sub)}
+.ct-mid{display:flex;align-items:baseline;gap:6px}
+.ct-num{font-size:36px;font-weight:700;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.ct-unit{font-size:13px;color:var(--card-sub)}
+.w-mini{display:flex;align-items:center;gap:12px;padding:0 18px;color:var(--card-text)}
+.w-mini svg{width:28px;height:28px;flex:0 0 auto;color:var(--accent)}
+.mini-t{font-size:14px;font-weight:600}
+.mini-s{font-size:11px;color:var(--card-sub);margin-top:3px}
+.w-todo2{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding-right:45px;color:#38A29E;position:absolute;inset:0}
+.w-todo2 svg{width:24px;height:24px;flex:0 0 auto}
+.td-txt2{font-size:16px;font-weight:600;white-space:nowrap}
+.gcell-grid{display:grid;gap:10px;justify-content:center;align-content:center}
+.gtile{border-radius:14px;width:100%;height:100%}
+.v-cell{display:flex;align-items:center;justify-content:center}
+
+/* ============ 14. 条目悬浮操作 ============ */
+.item-acts{position:absolute;right:6px;bottom:6px;display:flex;gap:4px;opacity:0;
+  transition:opacity .16s;z-index:3}
+.item:hover .item-acts{opacity:1}
+.ia{width:22px;height:22px;border-radius:7px;background:rgba(15,23,42,.6);color:#fff;display:flex;
+  align-items:center;justify-content:center;cursor:pointer}
+.ia:hover{background:rgba(15,23,42,.85)}
+.ia svg{width:12px;height:12px}
+.item.dragging{opacity:.45}
+.page-dots{position:absolute;left:50%;bottom:132px;transform:translateX(-50%);display:flex;gap:8px;
+  z-index:var(--z-float)}
+.page-dot{width:8px;height:8px;border-radius:50%;background:var(--label-color);opacity:.45;cursor:pointer;
+  transition:opacity .18s,transform .18s}
+.page-dot.on{opacity:1;transform:scale(1.25)}
+#stage[data-mode='minimal'] .page-dots{display:none}
+</style>
+</head>
+<body>
+<div id="stage" data-mode="standard" data-labels="1" data-hidetop="0" data-hidesearch="0">
+  <div id="pager"></div>
+  <div class="page-dots" id="pageDots"></div>
+
+  <div class="search-row">
+    <div class="search-box" id="searchBox">
+      <span class="engine-ico" id="engineIco" data-act="engine-open">百</span>
+      <input id="searchInput" placeholder="百度 搜索" autocomplete="off" spellcheck="false">
+      <span class="search-go-btn" id="searchGoBtn" data-act="search-go" title="搜索"></span>
+    </div>
+  </div>
+  <div class="search-panel" id="searchPanel"></div>
+  <div class="engine-panel" id="enginePanel"></div>
+  <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+
+  <div class="minimal-clock" id="minimalClock">
+    <div class="mc-time" id="mcTime">15:42</div>
+    <div class="mc-date" id="mcDate">09月24日 星期四</div>
+  </div>
+
+  <div class="mode-pill" id="modePill">
+    <svg class="pill-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <rect x="3" y="4" width="18" height="16" rx="4"></rect><path d="M3 10h18"></path>
+    </svg>
+    <div class="pill-opts" id="pillOpts"></div>
+  </div>
+  <div class="mode-tip" id="modeTip"></div>
+
+  <div class="avatar" id="avatar" data-act="open-drawer" data-v="profile">T</div>
+
+  <div class="dock" id="dock"><div class="dock-bar" id="dockBar"></div></div>
+
+  <div class="ctx" id="ctx"></div>
+  <div class="dw-mask" id="dwMask"></div>
+  <div class="dw" id="dw">
+    <div class="dw-head">
+      <div>
+        <div class="dw-title" id="dwTitle"></div>
+        <div class="dw-sub" id="dwSub"></div>
+      </div>
+      <div class="dw-close" data-act="close-drawer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M6 6l12 12M18 6L6 18"></path>
+        </svg>
+      </div>
+    </div>
+    <div class="dw-tabs" id="dwTabs"></div>
+    <div class="dw-body" id="dwBody"></div>
+  </div>
+  <div class="modal-mask" id="modalMask"><div class="modal" id="modalBox"></div></div>
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+/* ===================== 1. 常量与工具 ===================== */
+const CELL = 60, INSET = 25, COLS = 24, ROWS = 10, PAGE_W = 1920
+const STAGE_W = 1920, STAGE_H = 945
+const FULL = 'position:absolute;inset:0'
+const q = (s, r) => (r || document).querySelector(s)
+const qa = (s, r) => Array.prototype.slice.call((r || document).querySelectorAll(s))
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const pad = n => String(n).padStart(2, '0')
+let _uid = 0
+const uid = () => 'i' + (_uid++)
+/* 实例工厂：只记录「引用哪个小组件（t）」+ 自己的 config，定义表提供默认值 */
+const G = (c, r, w, h, t, x) => ({ id: uid(), c: c, r: r, w: w, h: h, t: t, config: Object.assign({}, x || {}) })
+/* 读取实例的完整配置：定义默认值 ⊕ 实例覆盖值（默认值属于定义，实例只存差异） */
+const C = it => Object.assign({}, (WIDGET_DEFS[it.t] || {}).def, it.config || {})
+const allItems = () => PAGES[state.mode].reduce((a, p) => a.concat(p), [])
+const findItem = id => allItems().filter(x => x.id === id)[0] || null
+const itemBox = it => 'left:' + (it.c * CELL + INSET) + 'px;top:' + (it.r * CELL + INSET) + 'px;width:' + (it.w * CELL - 2 * INSET) + 'px;height:' + (it.h * CELL - 2 * INSET) + 'px'
+const labelBox = it => 'left:' + (it.c * CELL) + 'px;top:' + ((it.r + it.h) * CELL - 24) + 'px;width:' + (it.w * CELL) + 'px'
+
+/* ===================== 2. 图标 ===================== */
+const I = {
+  play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.4v13.2L19 12z"/></svg>',
+  pause: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1"/><rect x="13.4" y="5" width="3.6" height="14" rx="1"/></svg>',
+  prev: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h2v14H7z"/><path d="M19 5.4v13.2L10 12z"/></svg>',
+  next: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5h2v14h-2z"/><path d="M5 5.4v13.2L14 12z"/></svg>',
+  list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L20 8l-4-4L4 16z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>',
+  bookmark: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 3h10a1 1 0 0 1 1 1v17l-6-4-6 4V4a1 1 0 0 1 1-1z"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M5 13l4 4L19 7"/></svg>',
+  fish: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4c4.4 0 8 3.6 8 8s-3.6 8-8 8-8-3.6-8-8 3.6-8 8-8z"/><path d="M12 8.4c1.9 0 3.4 1.6 3.4 3.6S13.9 15.6 12 15.6"/><path d="M4 12H1.6"/></svg>',
+  calc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="4" y="2.6" width="16" height="18.8" rx="2.4"/><path d="M8 7h8M8 11.6h2M12 11.6h2M16 11.6h.01M8 15.6h2M12 15.6h2M16 15.6h.01M8 19h8"/></svg>',
+  trans: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3.4 6h8M7.4 4.2V6M9.4 6c-.6 3.4-2.6 6.2-5.6 8M5.2 9.2c1 2 2.6 3.6 4.6 4.6"/><path d="M12.6 20l3.6-9.4L19.8 20M13.9 17h4.7"/></svg>',
+  folder: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6.6A2 2 0 0 1 5 4.6h3.5l1.8 2H19a2 2 0 0 1 2 2v8.2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg>',
+  cloudy: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.5 18a4 4 0 0 1-.4-8A5.6 5.6 0 0 1 17 9.4a3.9 3.9 0 0 1-.6 8.6z"/></svg>',
+  close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  sliders: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
+  grid: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 2.6 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9 2 2 0 1 1 0 4z"/></svg>',
+  modeMin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 8h14M5 16h9"/></svg>',
+  modeStd: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="4.5" width="16" height="15" rx="3"/><path d="M4 10h16"/></svg>',
+  modePri: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3l7 3v5.4c0 4-2.9 7.6-7 9-4.1-1.4-7-5-7-9V6z"/><path d="M9.4 12l1.8 1.8 3.6-3.6"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>',
+  cloud: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 19a4.4 4.4 0 0 1-.5-8.8A5.9 5.9 0 0 1 17.5 11a4 4 0 0 1-.6 8z"/></svg>',
+  image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3.4" y="4.6" width="17.2" height="14.8" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M4.6 17l4.6-4.4 3.4 3.2 2.6-2.4 3.8 3.6"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20s-7.4-4.4-7.4-9.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.4 3.2C19.4 15.6 12 20 12 20z"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8.4" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>',
+  sync: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M20 12a8 8 0 0 1-13.6 5.7M4 12a8 8 0 0 1 13.6-5.7"/><path d="M17.6 3.4v3.2h-3.2M6.4 20.6v-3.2h3.2"/></svg>'
+}
+const panda = () => '<svg viewBox="0 0 160 140" width="100%" height="100%">' +
+  '<ellipse cx="80" cy="128" rx="52" ry="8" fill="rgba(0,0,0,.14)"/>' +
+  '<circle cx="40" cy="30" r="19" fill="#2b2b33"/><circle cx="120" cy="30" r="19" fill="#2b2b33"/>' +
+  '<ellipse cx="80" cy="72" rx="52" ry="50" fill="#fff"/>' +
+  '<ellipse cx="58" cy="62" rx="15" ry="17" fill="#2b2b33"/><ellipse cx="102" cy="62" rx="15" ry="17" fill="#2b2b33"/>' +
+  '<circle cx="60" cy="62" r="5" fill="#fff"/><circle cx="100" cy="62" r="5" fill="#fff"/>' +
+  '<ellipse cx="80" cy="86" rx="8" ry="6" fill="#2b2b33"/>' +
+  '<path d="M72 95q8 7 16 0" stroke="#2b2b33" stroke-width="3" fill="none" stroke-linecap="round"/>' +
+  '<circle cx="42" cy="86" r="8" fill="rgba(240,140,170,.5)"/><circle cx="118" cy="86" r="8" fill="rgba(240,140,170,.5)"/>' +
+  '</svg>'
+
+/* ===================== 3. 品牌瓦片 ===================== */
+const B = {
+  '哔哩哔哩': ['#00A1D6', '哔'], '知乎': ['#0084FF', '知'], '微博': ['#E6162D', '微'],
+  '百度': ['#2932E1', '百'], '腾讯视频': ['#FF6A00', '视'], '爱奇艺': ['#00BE06', '爱'],
+  '优酷': ['#1FA6E0', '优'], '芒果TV': ['#FF8500', '芒'], '抖音': ['#161823', '抖'],
+  '快手': ['#FF4906', '快'], '西瓜视频': ['#F94D2E', '西'], '网易云音乐': ['#C20C0C', '网'],
+  'QQ音乐': ['#31C27C', 'Q', 'lat'], '咪咕视频': ['#E60012', '咪'],
+  'Steam': ['#1B2838', 'St', 'lat'], 'Epic': ['#2A2A2A', 'Ep', 'lat'], 'TapTap': ['#00C4C4', 'T', 'lat'],
+  '米游社': ['#4EA1E0', '米'], 'NGA': ['#1B3A5C', 'N', 'lat'],
+  '微信': ['#07C160', '微'], 'QQ': ['#12B7F5', 'Q', 'lat'], '豆瓣': ['#2E963D', '豆'],
+  '贴吧': ['#3385FF', '贴'], '小红书': ['#FF2442', '小'], '钉钉': ['#0089FF', '钉'],
+  '飞书': ['#3370FF', '飞'], 'Discord': ['#5865F2', 'D', 'lat'], 'Telegram': ['#2AABEE', 'T', 'lat'],
+  '学习通': ['#2E7BD6', '学'], '中国大学MOOC': ['#0B8A5B', 'M', 'lat'], '网易公开课': ['#C20C0C', '公'],
+  '得到': ['#D93A2B', '得'], '语雀': ['#25B864', '语'], 'Notion': ['#1F1F1F', 'N', 'lat'],
+  '石墨文档': ['#2E7BE0', '石'], '腾讯文档': ['#2F6BFF', '文'], '印象笔记': ['#2DBE60', '印'],
+  'Gmail': ['#EA4335', 'M', 'lat'], '日历': ['#4285F4', '日'], '待办清单': ['#3B82F6', '待'],
+  '网盘': ['#2C7BE5', '盘'], '云盘': ['#3B82F6', '云'], '审批': ['#F59E0B', '审'],
+  '考勤': ['#10B981', '考'], '翻译': ['#3B82F6', '译'], '计算器': ['#8B5CF6', '算'],
+  '汇率': ['#0EA5E9', '汇'], '地图': ['#34A853', '图'], '快递': ['#FF6A00', '递'],
+  '记账': ['#F59E0B', '记'], '二维码': ['#111827', '码'], '截图': ['#6366F1', '截'],
+  '便签': ['#FBBF24', '签'], '淘宝': ['#FF4400', '淘'], '天猫': ['#FF0036', '猫'],
+  '京东': ['#E1251B', '京'], '拼多多': ['#E02E24', '拼'], '唯品会': ['#E1006E', '唯'],
+  '苏宁易购': ['#FFAA00', '苏'], '1688': ['#FF6A00', '16', 'lat'], '闲鱼': ['#E8C400', '闲'],
+  '得物': ['#00C2B3', '得'], '亚马逊': ['#FF9900', 'a', 'lat'],
+  '豆包': ['#3B82F6', '豆'], 'Kimi': ['#1F2937', 'K', 'lat'], '文心一言': ['#2932E1', '文'],
+  '通义千问': ['#605CE5', '通'], '智谱清言': ['#2C6BED', '智'], '讯飞星火': ['#1E88E5', '讯'],
+  'DeepSeek': ['#20304F', 'D', 'lat'], '腾讯元宝': ['#2F6BFF', '元'], '即梦AI': ['#1B1B1F', '即'],
+  '可灵AI': ['#111827', '可'], 'ChatGPT': ['#10A37F', 'G', 'lat'], 'Claude': ['#D97757', 'C', 'lat'],
+  '秘塔搜索': ['#2B6BE4', '秘'], 'GitHub': ['#24292F', 'G', 'lat'], 'YouTube': ['#FF0000', 'Y', 'lat'],
+  'X': ['#111111', 'X', 'lat'], 'Instagram': ['#E1306C', 'I', 'lat'], 'Reddit': ['#FF4500', 'R', 'lat'],
+  'Figma': ['#0D99FF', 'F', 'lat'], 'Dribbble': ['#EA4C89', 'D', 'lat'],
+  'Stack Overflow': ['#F48024', 'S', 'lat'], 'Medium': ['#111111', 'M', 'lat'],
+  'Spotify': ['#1DB954', 'S', 'lat'], 'Netflix': ['#E50914', 'N', 'lat'],
+  '音乐': ['#EC4899', '乐'], '影视': ['#7C3AED', '影'], '头像': ['#E08A4A', 'T', 'lat'],
+  '百度网盘': ['#3385FF', '盘'], '秘塔AI搜索': ['#2B6BE4', '秘'],
+  'OneDrive': ['#0078D4', 'O', 'lat'], 'Dropbox': ['#0061FF', 'D', 'lat'],
+  '微信读书': ['#1AAD19', '读'], '多看阅读': ['#FF6A00', '多'], '起点读书': ['#E4393C', '起'],
+  '酷狗音乐': ['#00A0E9', '酷'], '坚果云': ['#2E7BE0', '坚'],
+  'Gitee': ['#C71D23', 'G', 'lat'], '掘金': ['#1E80FF', '掘'], 'CSDN': ['#FC5531', 'C', 'lat'],
+  '少数派': ['#D93A2B', '少'], 'V2EX': ['#333333', 'V', 'lat'], 'Product Hunt': ['#DA552F', 'P', 'lat']
+}
+/* 统一图标容器：底色一律取自容器令牌（白/浅底），品牌色只用于字形 —— 全站只用这一种图标语言 */
+const tileHTML = (name, cls, fs, sz) => {
+  const t = B[name] || ['#64748B', String(name).slice(0, 1)]
+  const lat = t[2] === 'lat'
+  const fsz = lat ? Math.round(fs * .74) : fs
+  return '<div class="' + cls + (lat ? ' lat' : '') + '" style="color:' + t[0] +
+    (sz ? ';width:' + sz + 'px;height:' + sz + 'px' : '') + ';font-size:' + fsz + 'px">' + esc(t[1]) + '</div>'
+}
+
+/* ===================== 4. 数据 ===================== */
+/* 分区清单：每项只出现一次；Dock 常驻的服务（音乐 / 哔哩哔哩 / 淘宝 / 抖音 / 小红书 / 影视 / 百度网盘）
+   不再出现在网格分区里，避免同一服务多入口。 */
+const AI_APPS = ['豆包', 'Kimi', '秘塔AI搜索', '通义千问']
+const AI_EXTRA = ['智谱清言', '讯飞星火', 'DeepSeek', '文心一言', '即梦AI', '可灵AI', 'ChatGPT', 'Claude']
+const TOOL_APPS = ['翻译', '计算器', '截图', '二维码']
+const STUDY_APPS = ['学习通', '网易公开课', '语雀', 'Notion']
+const MEDIA_APPS = ['爱奇艺', '腾讯视频', '网易云音乐', 'YouTube']
+const SHOP_APPS = ['京东', '天猫', '拼多多', '唯品会', '苏宁易购']
+const GAME_APPS = ['Steam', 'TapTap']
+const SOC_APPS = ['微信', '知乎']
+const COMM_APPS = ['微博', 'V2EX']
+const DEV_APPS = ['掘金', 'CSDN', 'Stack Overflow', 'Gitee', 'Figma', 'Dribbble',
+  '少数派', 'Product Hunt', 'Medium', 'Reddit']
+const COOP_APPS = ['钉钉', '飞书', '腾讯文档', '石墨文档']
+const CLOUD_APPS = ['OneDrive', 'Dropbox', '印象笔记', '坚果云']
+const EFFI_APPS = ['便签', '快递', '记账', '汇率']
+const VIDEO2_APPS = ['优酷', '芒果TV', '咪咕视频', '西瓜视频', '快手']
+const GAME2_APPS = ['Epic', '米游社']
+const READ_APPS = ['得到', '微信读书', '多看阅读', '起点读书']
+const MUSIC2_APPS = ['QQ音乐', '酷狗音乐']
+const HOT = [
+  ['台风“桦加沙”最新路径公布', '326.4万'], ['国庆中秋假期出行全指南', '298.1万'],
+  ['我国成功发射新一组低轨卫星', '256.7万'], ['新能源汽车下乡政策发布', '218.3万'],
+  ['多地气温创入秋以来新低', '196.5万'], ['国产大模型开源新进展', '174.2万']
+]
+/* 内置搜索引擎全集（12 个 = 启用上限）。用户可隐藏、拖动排序、添加自定义引擎；
+   hide 为「已隐藏」标记，隐藏的引擎不出现在搜索栏下拉 / 数字键 / 右键二级菜单中 */
+const ENGINES = [
+  { n: '百度', c: '#2932E1', g: '百', u: 'https://www.baidu.com/s?wd=' },
+  { n: '必应', c: '#008373', g: '必', u: 'https://www.bing.com/search?q=' },
+  { n: '谷歌', c: '#4285F4', g: 'G', lat: 1, u: 'https://www.google.com/search?q=' },
+  { n: '搜狗', c: '#FD5720', g: '搜', u: 'https://www.sogou.com/web?query=' },
+  { n: '360 搜索', c: '#0EB55A', g: '360', lat: 1, u: 'https://www.so.com/s?q=' },
+  { n: '神马搜索', c: '#FF6A00', g: '神', u: 'https://so.m.sm.cn/s?q=' },
+  { n: '夸克搜索', c: '#2F6BFF', g: '夸', u: 'https://quark.sm.cn/s?q=' },
+  { n: '今日头条', c: '#F04142', g: '头', u: 'https://so.toutiao.com/search?keyword=' },
+  { n: '知乎', c: '#0084FF', g: '知', u: 'https://www.zhihu.com/search?type=content&q=' },
+  { n: '微博', c: '#E6162D', g: '微', u: 'https://s.weibo.com/weibo?q=' },
+  { n: 'DuckDuckGo', c: '#DE5833', g: 'D', lat: 1, u: 'https://duckduckgo.com/?q=' },
+  { n: 'Brave', c: '#FB542B', g: 'B', lat: 1, u: 'https://search.brave.com/search?q=' }
+]
+const engVisible = () => ENGINES.filter(e => !e.hide)
+const GREET_PERIODS = [
+  [5, 9, '早上好'], [9, 12, '上午好'], [12, 14, '中午好'], [14, 18, '下午好'], [18, 24, '晚上好']
+]
+const ENCOURAGE = [
+  '此刻就是开始的最好时刻。', '种一棵树最好的时间是十年前，其次是现在。', '把大目标拆成小步，今天先走一步。',
+  '专注当下，其余交给时间。', '你走的每一步都算数。', '少即是多，慢即是快。', '行动是治愈焦虑的良药。',
+  '给自己一点安静，把重要的事做好。', '今天也要温柔而坚定。', '完成比完美更重要。',
+  '持续做简单的事，就会不简单。', '心之所向，素履以往。', '稳住节奏，比冲刺更持久。',
+  '把注意力放回眼前这一件事。', '日拱一卒，功不唐捐。', '清醒地努力，松弛地生活。',
+  '先完成，再完善，最后完美。', '低谷时的坚持最见分量。', '世界很大，从手边做起。', '安静深耕，静待花开。'
+]
+const greetByHour = () => {
+  const h = new Date().getHours()
+  const p = GREET_PERIODS.filter(x => h >= x[0] && h < x[1])[0]
+  return p ? p[2] : '夜深了'
+}
+const MODES = [
+  { k: 'minimal', n: '极简', d: '简单可靠的网络访问', i: I.modeMin },
+  { k: 'standard', n: '标准', d: '灵活的拖拽&极致的响应交互', i: I.modeStd },
+  { k: 'privacy', n: '隐私', d: '链接都将从隐私窗口打开', i: I.modePri }
+]
+const PAGES = {
+  standard: [
+    /* 带 1（第 0–3 行）｜资讯与日程：新闻热点 · 天气 · 待办 · 日历 · 倒数日 · 时钟 · 收藏夹 · Gmail · GitHub */
+    [
+      G(0, 0, 8, 4, 'news'), G(8, 0, 4, 2, 'weather', { label: '天气' }),
+      G(8, 2, 4, 2, 'todo', { label: '待办' }), G(12, 0, 4, 2, 'cal', { label: '日历' }),
+      G(12, 2, 4, 2, 'countday', { label: '倒数日' }), G(16, 0, 4, 4, 'clock', { label: '时钟' }),
+      G(20, 0, 2, 4, 'fav', { label: '收藏夹' }),
+      G(22, 0, 2, 2, 'icon', { label: 'Gmail' }),
+      G(22, 2, 2, 2, 'icon', { label: 'GitHub' }),
+      /* 带 2（第 4–7 行）｜AI 与工具：AI 助手 · AI 工具 · 效率工具 · 学习文档 · 影音 · 音乐 */
+      G(0, 4, 4, 4, 'ai', { label: 'AI 助手' }),
+      G(4, 4, 4, 4, 'group', { apps: AI_APPS, cols: 2, label: 'AI 工具' }),
+      G(8, 4, 4, 4, 'group', { apps: TOOL_APPS, cols: 2, label: '效率工具' }),
+      G(12, 4, 4, 4, 'group', { apps: STUDY_APPS, cols: 2, label: '学习文档' }),
+      G(16, 4, 4, 4, 'group', { apps: MEDIA_APPS, cols: 2, label: '影音' }),
+      G(20, 4, 4, 4, 'music', { label: '音乐' }),
+      /* 带 3（第 8–9 行）｜娱乐与电商：购物 · 游戏 · 社交 · 社区 · 豆瓣 · 木鱼 */
+      G(0, 8, 8, 2, 'group', { apps: SHOP_APPS, cols: 5, label: '购物' }),
+      G(8, 8, 4, 2, 'group', { apps: GAME_APPS, cols: 2, label: '游戏' }),
+      G(12, 8, 4, 2, 'group', { apps: SOC_APPS, cols: 2, label: '社交' }),
+      G(16, 8, 4, 2, 'group', { apps: COMM_APPS, cols: 2, label: '社区' }),
+      G(20, 8, 2, 2, 'icon', { label: '豆瓣' }),
+      G(22, 8, 2, 2, 'woodfish', { label: '木鱼' })
+    ],
+    /* 第 2 页｜时间与纪念：下班倒计时 · 纪念日 · 每日一言 · 计算器 · 翻译 */
+    [
+      G(0, 0, 8, 4, 'countdown', { label: '下班倒计时' }), G(8, 0, 8, 4, 'ann', { label: '纪念日' }),
+      G(16, 0, 8, 2, 'quote', { label: '每日一言' }),
+      G(16, 2, 4, 2, 'calc', { label: '计算器' }), G(20, 2, 4, 2, 'trans', { label: '翻译' }),
+      /* 第 2 页下半｜开发与效率 */
+      G(0, 4, 8, 4, 'group', { apps: DEV_APPS, cols: 5, label: '开发' }),
+      G(8, 4, 4, 4, 'group', { apps: COOP_APPS, cols: 2, label: '协作' }),
+      G(12, 4, 4, 4, 'group', { apps: CLOUD_APPS, cols: 2, label: '网盘笔记' }),
+      G(16, 4, 4, 4, 'group', { apps: EFFI_APPS, cols: 2, label: '生活工具' }),
+      G(20, 4, 4, 4, 'group', { apps: READ_APPS, cols: 2, label: '阅读' }),
+      G(0, 8, 8, 2, 'group', { apps: VIDEO2_APPS, cols: 5, label: '视频' }),
+      G(8, 8, 4, 2, 'group', { apps: GAME2_APPS, cols: 2, label: '游戏平台' }),
+      G(12, 8, 4, 2, 'group', { apps: MUSIC2_APPS, cols: 2, label: '音乐' }),
+      G(16, 8, 8, 2, 'group', { apps: AI_EXTRA, cols: 5, label: '更多 AI' })
+    ]
+  ],
+  privacy: [
+    [
+      G(0, 0, 4, 2, 'clock', { label: '时钟' }), G(4, 0, 4, 2, 'weather', { label: '天气' }),
+      G(8, 0, 4, 2, 'todo', { label: '待办清单' }), G(12, 0, 4, 2, 'fav', { label: '收藏夹' }),
+      G(16, 0, 4, 2, 'countday', { label: '倒数日' }), G(20, 0, 4, 2, 'cal', { label: '日历' }),
+      G(0, 2, 4, 4, 'news'), G(4, 2, 4, 4, 'music'), G(8, 2, 8, 4, 'countdown', { label: '下班倒计时' }),
+      G(16, 2, 4, 4, 'ai'), G(20, 2, 4, 4, 'group', { apps: ['微信', 'QQ', '钉钉', '飞书', 'Gmail', 'Discord', 'Telegram', '语雀', 'Notion', 'DeepSeek', 'Claude', 'ChatGPT'] }),
+      G(0, 6, 8, 4, 'group', { apps: ['淘宝', '京东', '小红书', '豆瓣', '知乎', '微博', '哔哩哔哩', '快手', 'Spotify', 'YouTube', 'GitHub', 'Figma', 'Medium', 'Reddit', 'V2EX', 'Notion', '语雀', '掘金', 'CSDN', '少数派', 'Product Hunt', 'Dribbble', 'Stack Overflow', 'Netflix'] }),
+      G(8, 6, 8, 2, 'quote', { label: '' }), G(8, 8, 8, 2, 'woodfish', { label: '木鱼' }),
+      G(16, 6, 4, 2, 'calc', { label: '计算器' }), G(20, 6, 4, 2, 'trans', { label: '翻译' }),
+      G(16, 8, 8, 2, 'group', { apps: ['百度', '必应', '知乎', '豆瓣', 'V2EX', 'Medium', 'Dribbble', 'Spotify'], cols: 8 })
+    ]
+  ]
+}
+/* 出厂默认布局：恢复默认 / 一键重置的还原源（用户改布局只影响实例，不动这里） */
+const DEFAULT_PAGES = JSON.parse(JSON.stringify(PAGES))
+/* ============ 小组件定义表（内容模型的唯一来源） ============
+   实例「引用」定义表中的某个 kind：{ id, c, r, w, h, t, config }
+   - 定义决定：显示名 / 字形 / 品牌色 / 默认单位尺寸 / 可编辑字段 / 默认配置
+   - 实例决定：位置与尺寸（布局）+ config（内容）→ 布局不变，内容完全自定义
+   - fields 类型：text 文本 / num 数字 / list 逗号分隔列表 / bool 开关 / sel 选项 */
+const WIDGET_DEFS = {
+  news: { n: '新闻热点', g: '闻', c: '#FF4D4F', s: '看点 / 百度 / 微博 / 抖音热榜', units: [8, 4],
+    fields: [{ k: 'source', l: '热榜来源', t: 'sel', o: ['看点', '百度', '微博', '抖音'] },
+      { k: 'count', l: '显示条数', t: 'num', ph: '1–6' }],
+    def: { source: '看点', count: 5 } },
+  clock: { n: '时钟', g: '钟', c: '#3B82F6', s: '数字时钟 · 时分秒可调', units: [4, 4],
+    fields: [{ k: 'showSeconds', l: '显示秒数', t: 'bool' }], def: { showSeconds: false } },
+  cal: { n: '日历', g: '历', c: '#0EA5E9', s: '公历 / 农历 / 宜忌', units: [4, 2], fields: [], def: {} },
+  weather: { n: '天气', g: '天', c: '#38BDF8', s: '实况天气 · 城市可调', units: [4, 2],
+    fields: [{ k: 'city', l: '城市', t: 'text', ph: '北京' }], def: { city: '北京' } },
+  todo: { n: '待办清单', g: '待', c: '#38A29E', s: '多清单 · 今日任务', units: [4, 2],
+    fields: [{ k: 'title', l: '清单名称', t: 'text', ph: '待办' }], def: { title: '待办' } },
+  ann: { n: '纪念日', g: '纪', c: '#F472B6', s: '在一起 · 生日 · 倒数', units: [8, 4],
+    fields: [{ k: 'title', l: '标题', t: 'text', ph: '与 MiNa 相识' },
+      { k: 'date', l: '起始日期', t: 'text', ph: '2020-05-20' }],
+    def: { title: '与MiNa相识', date: '2020-05-20' } },
+  countday: { n: '倒数日', g: '倒', c: '#A855F7', s: '距离某天还有多久', units: [4, 2],
+    fields: [{ k: 'title', l: '标题', t: 'text', ph: '距离国庆假期' }, { k: 'days', l: '剩余天数', t: 'num', ph: '5' }],
+    def: { title: '距离国庆假期', days: 5 } },
+  countdown: { n: '下班倒计时', g: '班', c: '#FB923C', s: '进度 / 工资 / 任务', units: [8, 4],
+    fields: [{ k: 'at', l: '下班时刻', t: 'text', ph: '18:00' }], def: { at: '18:00' } },
+  fav: { n: '收藏夹', g: '藏', c: '#F59E0B', s: '管理浏览器书签收藏夹', units: [2, 4],
+    fields: [{ k: 'folder', l: '收藏夹', t: 'text', ph: '书签栏' }], def: { folder: '收藏夹' } },
+  quote: { n: '每日一言', g: '言', c: '#6366F1', s: '时段问候 + 昵称 + 鼓励语', units: [8, 2], fields: [], def: {} },
+  music: { n: '音乐', g: '乐', c: '#EC4899', s: '熊猫Dj · 在线电台', units: [4, 4],
+    fields: [{ k: 'station', l: '电台', t: 'text', ph: '熊猫Dj' }], def: { station: '熊猫Dj' } },
+  trans: { n: '翻译', g: '译', c: '#3B82F6', s: '多语种即时翻译', units: [4, 2],
+    fields: [{ k: 'pair', l: '语言对', t: 'text', ph: '中 ⇄ 英' }], def: { pair: '中英互译 · 划词' } },
+  calc: { n: '计算器', g: '算', c: '#8B5CF6', s: '科学计算 / 单位换算', units: [4, 2], fields: [], def: {} },
+  woodfish: { n: '木鱼', g: '鱼', c: '#C98A4B', s: '功德 +1 · 可关后台敲击', units: [2, 2],
+    fields: [{ k: 'count', l: '起始功德', t: 'num', ph: '128' }], def: { count: 128 } },
+  ai: { n: 'AI 对话', g: 'AI', c: '#111827', s: '智能问答入口', units: [4, 4],
+    fields: [{ k: 'provider', l: '提供方', t: 'text', ph: 'UiTab AI' }], def: { provider: 'UiTab AI' } },
+  icon: { n: '网站图标', g: '网', c: '#64748B', s: '添加单个网站到桌面', units: [2, 2],
+    fields: [{ k: 'url', l: '网站链接', t: 'text', ph: 'https://' }], def: { url: '' } },
+  folder: { n: '图标文件夹', g: '夹', c: '#94A3B8', s: '把多个图标收进文件夹', units: [2, 2], fields: [], def: {} },
+  group: { n: '图标格容器', g: '格', c: '#0EA5E9', s: '一格里放多个网站图标', units: [4, 4],
+    fields: [{ k: 'cols', l: '列数', t: 'num', ph: '2–8' }, { k: 'apps', l: '应用列表', t: 'list', ph: '淘宝, 京东, 知乎' }],
+    def: { cols: 5, apps: [] } }
+}
+/* 添加面板的展示清单：由定义表生成，另加同 kind 的别名入口 */
+const WIDGET_LIST = Object.keys(WIDGET_DEFS).map(k => Object.assign({ t: k }, WIDGET_DEFS[k]))
+  .concat([Object.assign({ t: 'quote' }, WIDGET_DEFS.quote, { n: '经典语录', g: '语', c: '#8B5CF6', s: '随机经典语录' })])
+const NAVI = [
+  { c: '常用', l: ['百度', '哔哩哔哩', '知乎', '微博', '淘宝', '京东', 'GitHub', 'Gmail'] },
+  { c: '影音', l: MEDIA_APPS },
+  { c: '游戏', l: GAME_APPS },
+  { c: '社交', l: SOC_APPS },
+  { c: '学习', l: STUDY_APPS },
+  { c: '购物', l: SHOP_APPS },
+  { c: '工具', l: TOOL_APPS },
+  { c: 'AI', l: AI_APPS }
+]
+const PZ = {
+  hot: [
+    { t: '极夜星轨', a: '星野', l: 1284, b: 'linear-gradient(150deg,#141b2e,#2a2350 60%,#0b0e18)' },
+    { t: '晨雾山峦', a: '青山', l: 962, b: 'linear-gradient(150deg,#dfe7ef,#a9b8c9 60%,#7d8fa3)' },
+    { t: '樱色渐变', a: 'Momo', l: 743, b: 'linear-gradient(150deg,#ffd9e5,#ffb6c9 55%,#f0879f)' },
+    { t: '深海静谧', a: 'Aqua', l: 651, b: 'linear-gradient(150deg,#0f3b52,#0b2233 55%,#07131d)' }
+  ],
+  mine: [
+    { t: '我的工作台', a: '我', l: 12, b: 'linear-gradient(150deg,#1b2532,#0b1017)' },
+    { t: '摸鱼模式', a: '我', l: 8, b: 'linear-gradient(150deg,#2a1b46,#0d0818)' }
+  ]
+}
+const WALLS = [
+  { n: '默认壁纸', c: '极简', bg: 'radial-gradient(120% 90% at 78% 8%,rgba(255,178,120,.34),transparent 62%),radial-gradient(90% 80% at 14% 86%,rgba(96,140,255,.30),transparent 64%),linear-gradient(160deg,#1b2532,#0b1017 72%)' },
+  { n: '暮色', c: '风景', bg: 'linear-gradient(160deg,#3b2a4d,#1b1530 60%,#0c0a14)' },
+  { n: '海岸', c: '风景', bg: 'linear-gradient(170deg,#0f3b52,#0b2233 55%,#07131d)' },
+  { n: '晨雾', c: '极简', bg: 'linear-gradient(150deg,#dfe7ef,#b9c6d6 60%,#8f9fb3)' },
+  { n: '樱', c: '动漫', bg: 'linear-gradient(160deg,#ffd9e5,#ffc0cf 45%,#f39ab3)' },
+  { n: '夜紫', c: '更多', bg: 'linear-gradient(160deg,#2a1b46,#1a1030 55%,#0d0818)' },
+  { n: '云白', c: '极简', bg: 'radial-gradient(110% 90% at 78% 6%,rgba(255,214,170,.35),transparent 60%),radial-gradient(90% 80% at 12% 88%,rgba(140,180,255,.26),transparent 62%),linear-gradient(155deg,#fdfeff,#eef4fb 55%,#dbe6f5)' }
+]
+const SKIN_FIELDS = [
+  ['--card-bg', '卡片背景'], ['--card-text', '卡片文字'], ['--card-sub', '次要文字'], ['--accent', '主题色'],
+  ['--label-color', '名称标签'], ['--panel-bg', '面板背景'], ['--panel-text', '面板文字'],
+  ['--line', '分隔线'], ['--chip-bg', '顶部胶囊'], ['--chip-text', '胶囊文字'],
+  ['--menu-bg', '菜单背景'], ['--menu-hover', '菜单悬停']
+]
+const SKIN_DEF = [
+  {
+    id: 'classic', n: '经典', base: '#eef2f8', wall: 6,
+    t: { '--card-bg': '#ffffff', '--card-text': '#1f2937', '--card-sub': '#6b7280', '--accent': '#3b82f6', '--label-color': '#1f2937', '--panel-bg': '#ffffff', '--panel-text': '#1f2937', '--panel-sub': '#6b7280', '--line': '#eef1f6', '--chip-bg': 'rgba(255,255,255,.55)', '--chip-text': '#1f2937', '--menu-bg': '#ffffff', '--menu-hover': '#f3f5f9', '--clock-color': '#1f2937', '--search-text': '#1f2937', '--search-ph': 'rgba(31,41,55,.55)', '--mask-color': '#ffffff' }
+  },
+  {
+    id: 'glass', n: '光感', base: '#8f9fb3', wall: 3,
+    t: { '--card-bg': 'rgba(255,255,255,.72)', '--card-text': '#16202e', '--card-sub': '#5d6b7d', '--accent': '#2f6bff', '--label-color': '#16202e', '--panel-bg': '#ffffff', '--panel-text': '#16202e', '--panel-sub': '#5d6b7d', '--line': '#e6ebf2', '--chip-bg': 'rgba(255,255,255,.55)', '--chip-text': '#16202e', '--menu-bg': '#ffffff', '--menu-hover': '#f1f5fa', '--clock-color': '#16202e', '--search-text': '#16202e', '--search-ph': 'rgba(22,32,46,.6)', '--mask-color': '#ffffff' }
+  },
+  {
+    id: 'dark', n: '暗黑', base: '#080b10', wall: 2,
+    t: { '--card-bg': '#1b2030', '--card-text': '#e6ebf5', '--card-sub': '#8d9bb0', '--accent': '#3b82f6', '--label-color': '#ffffff', '--panel-bg': '#151a26', '--panel-text': '#e6ebf5', '--panel-sub': '#8d9bb0', '--line': '#252c3d', '--chip-bg': 'rgba(20,26,38,.72)', '--chip-text': '#e6ebf5', '--menu-bg': '#1b2030', '--menu-hover': '#252c3d', '--clock-color': '#ffffff', '--search-text': '#ffffff', '--search-ph': 'rgba(255,255,255,.7)', '--mask-color': '#060a10' }
+  },
+  {
+    id: 'purple', n: '黑紫', base: '#0b0710', wall: 5, desc: '基于黑紫色的简洁风格',
+    t: { '--card-bg': '#17111f', '--card-text': '#ece6f5', '--card-sub': '#9583ab', '--accent': '#a855f7', '--label-color': '#ffffff', '--panel-bg': '#140e1c', '--panel-text': '#ece6f5', '--panel-sub': '#9583ab', '--line': '#261c33', '--chip-bg': 'rgba(23,17,31,.72)', '--chip-text': '#ece6f5', '--menu-bg': '#1b1424', '--menu-hover': '#2a1f38', '--clock-color': '#e9d5ff', '--search-text': '#ffffff', '--search-ph': 'rgba(255,255,255,.68)', '--mask-color': '#060a10' }
+  }
+]
+const MENU_ITEMS = [
+  { k: 'open', n: '打开方式', sub: [['link', '当前窗口打开链接'], ['tab', '打开新标签页'], ['search', '当前窗口打开搜索结果']], tip: '在线版不可设置打开方式' },
+  { k: 'searchBar', n: '搜索栏', sw: 1 },
+  { k: 'dock', n: 'Dock栏', sub: [['alpha', '栏透明度'], ['count', '栏应用数量'], ['icon', '栏图标']] },
+  { k: 'minimal', n: '极简模式', sw: 1 },
+  { k: 'hideItem', n: '隐藏项目', sw: 1 },
+  { k: 'engine', n: '搜索引擎', sub: 'engines' },
+  { k: 'mascot', n: '吉祥物', sw: 1 },
+  { k: 'sync', n: '同步数据' },
+  { k: 'msg', n: '站内消息' },
+  { k: 'log', n: '更新记录' },
+  { k: 'about', n: '关于我们' }
+]
+const CHANGELOG = [
+  { v: '2.8.2', d: '2026-09-18', l: ['全局右键菜单新增「同步数据」入口', '界面广场修改为精确分页', '收藏夹采用更加合理的收藏夹逻辑', '修复本地上传壁纸无法下拉的问题'] },
+  { v: '2.8.0', d: '2026-08-22', l: ['重新设计搜索框的样式与搜索功能', '添加搜索指示词以及其显示隐藏控制', '新增搜索引擎管理，可拖动引擎、隐藏不需要的引擎', '每套模式最多添加 5 页应用'] },
+  { v: '2.7.4', d: '2026-07-30', l: ['代码大范围重构、底层优化', '极大加快首页显示速度，减少大部分闪烁现象', '解决打开多个标签页后首次加载闪烁问题', '修复删除全部图标崩溃的问题'] }
+]
+const DOCK_APPS = ['音乐', '哔哩哔哩', '淘宝', '抖音', '小红书', '头像', '影视', '百度网盘']
+const DOCK_ACTIONS = [
+  { k: 'add', n: '添加', g: I.plus, c: '#3b82f6' },
+  { k: 'personal', n: '个性化', g: I.sliders, c: '#8b5cf6' },
+  { k: 'square', n: '广场', g: I.grid, c: '#0ea5e9' },
+  { k: 'setting', n: '设置', g: I.gear, c: '#64748b' }
+]
+
+/* ===================== 5. 状态 ===================== */
+const state = {
+  mode: 'standard', cur: { standard: 0, privacy: 0 },
+  labels: true, hideTop: false, hideSearch: false, mascot: true,
+  user: null, engine: 0, openMode: 'tab',
+  immersive: false, simpleSearch: false,
+  autoFocus: false, searchKeep: false, hideBtn: false, searchHistory: true,
+  nick: '主人', encourage: ENCOURAGE[0], clockColor: '#1f2937',
+  searchWidth: 880, searchRadius: 25, dockCount: 8, dockIcon: 'rect',
+  glass: { card: .6, tile: .35, dock: .7, search: .45, panel: .65, menu: .65 },
+  gAlpha: 1,
+  cover: .18, activeColor: '#ffffff',
+  clockStyle: 'digital', showTime: true, showDate: true, showQuote: true,
+  skinId: 'classic', skins: SKIN_DEF.map(s => JSON.parse(JSON.stringify(s))), wall: 0,
+  draw: null, dwTab: 0, addTab: 0, addCat: 0, addKw: '', navKw: '', pzTab: 0, pzPage: 1, like: {},
+  playing: true, history: ['新标签页 布局', 'uiTab 复刻', 'prisma session'],
+  itemId: null, menu: null, selSkin: 'classic', selWall: 0, fold: false
+}
+
+/* ===================== 6. 小组件渲染 ===================== */
+const INNER = {
+  news: it => { const c = C(it)
+    return '<div class="w-news" style="' + FULL + '"><div class="news-head">' +
+      ['看点', '百度', '微博', '抖音'].map(t => '<div class="news-tab' + (t === (c.source || '看点') ? ' active' : '') +
+        '" data-act="hot-tab">' + t + '</div>').join('') +
+      '<div class="news-more" data-act="hot-refresh">»</div></div>' +
+      '<div class="news-list">' + HOT.slice(0, Math.max(1, Math.min(6, +c.count || 5))).map((h, i) =>
+        '<div class="news-row' + (i === 0 ? ' top' : '') + '" data-act="hot-open" data-v="' + esc(h[0]) + '">' +
+        '<span class="news-idx">' + (i + 1) + '</span><span class="news-title">' + esc(h[0]) +
+        '</span><span class="news-heat">' + h[1] + '</span></div>').join('') + '</div></div>' },
+  music: () => '<div class="w-music" style="' + FULL + '">' +
+    '<div class="mu-list" data-act="music-list">' + I.list + '</div>' +
+    '<div class="mu-disc"><i></i></div>' +
+    '<div class="mu-ctl"><div class="mu-btn" data-act="music-prev">' + I.prev + '</div>' +
+    '<div class="mu-btn play" data-act="music-play">' + (state.playing ? I.pause : I.play) + '</div>' +
+    '<div class="mu-btn" data-act="music-next">' + I.next + '</div></div></div>',
+  ai: it => '<div class="w-ai" style="' + FULL + '"><div class="ai-logo">AI</div>' +
+    '<div class="ai-line"></div><div class="ai-name">' + esc(C(it).provider || 'UiTab AI') + '</div>' +
+    '<div class="ai-sub">试试问问这些问题</div></div>',
+  weather: it => '<div class="w-weather" style="' + FULL + '"><div class="wx-temp">20°C</div>' +
+    '<div class="wx-mid"><div class="wx-city">' + esc(C(it).city || '北京') + '</div>' +
+    '<div class="wx-desc">多云转小雨 18°/24° 空气优</div></div>' +
+    '<div class="wx-ico">' + I.cloudy + '</div></div>',
+  clock: () => '<div class="w-clock" style="' + FULL + '"><div class="ck-time" data-clock="t">--:--</div>' +
+    '<div class="ck-date" data-clock="d"></div></div>',
+  fav: it => '<div class="w-fav" style="' + FULL + '">' + I.bookmark + '<div class="fav-text">' + esc(C(it).folder || '收藏夹') + '</div></div>',
+  todo: it => '<div class="w-todo2" style="' + FULL + '">' + I.check + '<span class="td-txt2">' + esc(C(it).title || '待办') + '</span></div>',
+  cal: () => '<div class="w-cal" style="' + FULL + '"><div class="cal-bar">' +
+    '<div class="cal-day" data-clock="day">--</div><div class="cal-wd" data-clock="wd">--</div></div>' +
+    '<div class="cal-body"><div class="cal-month" data-clock="ym"></div>' +
+    '<div class="cal-lunar">八月十五 · 宜出行</div></div></div>',
+  countdown: () => '<div class="w-cd" style="' + FULL + '"><div class="cd-l">' +
+    '<div class="cd-hint">坚持住，距下班只有</div><div class="cd-time" data-clock="cd">--:--:--</div>' +
+    '<div class="cd-grid">' +
+    '<div class="cd-entry"><span class="cd-label">发薪日</span><span class="cd-val">21天</span></div>' +
+    '<div class="cd-entry"><span class="cd-label">周五</span><span class="cd-val">1天</span></div>' +
+    '<div class="cd-entry"><span class="cd-label">中秋节</span><span class="cd-val">0天</span></div>' +
+    '<div class="cd-entry"><span class="cd-label">日赚</span><span class="cd-val money">745.896￥</span></div>' +
+    '</div></div><div class="cd-mascot">' + panda() + '</div></div>',
+  ann: it => { const c = C(it); const t0 = Date.parse(c.date || '2020-05-20')
+    const n = isNaN(t0) ? 0 : Math.max(0, Math.floor((Date.now() - t0) / 864e5))
+    return '<div class="w-ann" style="' + FULL + '"><div class="ann-l">' +
+      '<div class="ann-title">' + esc(c.title || '与MiNa相识') + '</div>' +
+      '<div class="ann-date">' + esc(c.date || '2020-05-20') + '</div></div>' +
+      '<div class="ann-r"><span class="ann-num">' + n + '</span><span class="ann-unit">天</span></div></div>' },
+  quote: () => '<div class="w-quote" style="' + FULL + '">' +
+    '<div class="qt-hi">' + greetByHour() + '，' + esc(state.nick) + '</div>' +
+    '<div class="qt-enc"><span class="qt-enc-t">' + esc(state.encourage) + '</span></div></div>',
+  woodfish: it => '<div class="w-fish" style="' + FULL + '" data-act="fish-hit">' +
+    '<span class="fish-ico">' + I.fish + '</span><span class="fish-num">' + (+C(it).count || 0) + '</span></div>',
+  countday: it => '<div class="w-count" style="' + FULL + '"><div class="ct-top">' + esc(C(it).title || '距离国庆假期') + '</div>' +
+    '<div class="ct-mid"><span class="ct-num">' + (+C(it).days || 0) + '</span><span class="ct-unit">天</span></div></div>',
+  calc: () => '<div class="w-mini" style="' + FULL + '">' + I.calc +
+    '<div class="mini-l"><div class="mini-t">计算器</div><div class="mini-s">点击开始计算</div></div></div>',
+  trans: it => '<div class="w-mini" style="' + FULL + '">' + I.trans +
+    '<div class="mini-l"><div class="mini-t">翻译</div><div class="mini-s">' + esc(C(it).pair || '中英互译 · 划词') + '</div></div></div>',
+  group: it => {
+    const c = C(it)
+    const cols = +c.cols || 5
+    const W = it.w * CELL - 2 * INSET, H = it.h * CELL - 2 * INSET
+    const pad = 15, gap = 10
+    const cell = Math.min((W - pad * 2 - (cols - 1) * gap) / cols, H - pad * 2)
+    const rows = Math.max(1, Math.floor((H - pad * 2 + gap) / (cell + gap)))
+    const apps = (c.apps || []).slice(0, cols * rows)
+    return '<div class="w-group" style="' + FULL + '"><div class="gcell-grid" style="grid-template-columns:repeat(' +
+      cols + ',' + cell + 'px);grid-template-rows:repeat(' + rows + ',' + cell + 'px)">' +
+      apps.map(n => tileHTML(n, 'gtile', Math.round(cell * .34))).join('') + '</div></div>'
+  },
+  folder: () => '<div class="w-folder" style="' + FULL + '">' + I.folder + '</div>',
+  icon: it => '<div class="v-cell" style="' + FULL + '">' + tileHTML(C(it).label || C(it).name || '网站', 'v-icon', 24, 46) + '</div>'
+}
+const ACTS = '<div class="item-acts">' +
+  '<div class="ia" data-act="item-edit" title="编辑">' + I.edit + '</div>' +
+  '<div class="ia" data-act="item-del" title="删除">' + I.trash + '</div></div>'
+const renderItem = it => {
+  const fn = INNER[it.t] || INNER.icon
+  const lb = C(it).label
+  return '<div class="item" style="' + itemBox(it) + '"' + (it.t === 'quote' ? '' : ' data-act="item"') +
+    ' data-id="' + it.id + '" data-t="' + it.t + '">' +
+    fn(it) + ACTS + '</div>' + (lb ? '<div class="item-label" style="' + labelBox(it) + '">' + esc(lb) + '</div>' : '')
+}
+const curPage = () => PAGES[state.mode][state.cur[state.mode]]
+
+/* ===================== 7. 主渲染 ===================== */
+const renderPager = () => {
+  const list = PAGES[state.mode]
+  q('#pager').innerHTML = list.map((p, i) =>
+    '<div class="page" style="left:' + (i * PAGE_W) + 'px"><div class="grid">' + p.map(renderItem).join('') + '</div></div>').join('')
+  q('#pager').style.transform = 'translateX(-' + (state.cur[state.mode] * PAGE_W) + 'px)'
+  q('#pageDots').innerHTML = list.map((p, i) =>
+    '<div class="page-dot' + (i === state.cur[state.mode] ? ' on' : '') + '" data-act="go-page" data-v="' + i + '"></div>').join('')
+  q('#pageDots').style.display = list.length > 1 ? 'flex' : 'none'
+}
+const renderDock = () => {
+  const circle = state.dockIcon === 'circle' ? ' circle' : ''
+  const apps = DOCK_APPS.slice(0, state.dockCount).map(n =>
+    '<div class="dock-item" data-act="dock-app" data-v="' + esc(n) + '">' + tileHTML(n, 'dock-icon' + circle, 30) +
+    '<div class="dock-name">' + esc(n) + '</div></div>').join('')
+  const acts = DOCK_ACTIONS.map(a =>
+    '<div class="dock-item" data-act="dock-act" data-v="' + a.k + '"><div class="dock-icon' + circle +
+    '" style="color:' + a.c + '">' + a.g + '</div>' +
+    '<div class="dock-name">' + a.n + '</div></div>').join('')
+  q('#dockBar').innerHTML = '<div class="dock-apps">' + apps + '</div>' +
+    '<div class="dock-sep"></div><div class="dock-actions">' + acts + '</div>'
+  q('#dockBar').style.display = state.mascot ? 'flex' : 'none'
+}
+const renderPill = () => {
+  q('#pillOpts').innerHTML = MODES.map(m =>
+    '<div class="pill-btn' + (m.k === state.mode ? ' active' : '') + '" data-act="set-mode" data-v="' + m.k + '">' +
+    m.i + m.n + '</div>').join('')
+}
+const renderEngine = () => {
+  const e = ENGINES[state.engine]
+  const el = q('#engineIco')
+  el.textContent = e.g
+  el.style.background = e.c
+  el.style.color = '#fff'
+  el.style.fontSize = e.lat ? '11px' : '12px'
+  el.style.borderRadius = '6px'
+  const box = q('#searchBox')
+  box.className = 'search-box' + (state.simpleSearch ? ' line' : '') + (state.immersive ? ' immersive' : '')
+  box.style.width = state.searchWidth + 'px'
+  box.style.borderRadius = state.searchRadius + 'px'
+  q('#searchInput').placeholder = e.n + ' 搜索'
+  const btn = q('#searchGoBtn')
+  btn.innerHTML = I.search
+  btn.style.display = state.hideBtn ? 'none' : 'flex'
+}
+const renderSearchPanel = () => {
+  const p = q('#searchPanel')
+  if (!state.searchHistory || !state.history.length) { p.classList.remove('show'); p.innerHTML = ''; return }
+  hideEnginePanel()
+  p.innerHTML = '<div class="sp-head">搜索历史</div>' + state.history.map(h =>
+    '<div class="sp-row" data-act="sp-pick" data-v="' + esc(h) + '">' + I.search + '<span class="t">' + esc(h) +
+    '</span><span class="sp-del" data-act="sp-del" data-v="' + esc(h) + '">' + I.close + '</span></div>').join('')
+  p.classList.add('show')
+}
+/* 搜索引擎下拉：列出全部可见引擎（点击切换）+ 底部「管理搜索引擎」设置入口 */
+const hideEnginePanel = () => q('#enginePanel').classList.remove('show')
+const renderEnginePanel = () => {
+  const cur = ENGINES[state.engine]
+  q('#enginePanel').innerHTML = engVisible().map((e, i) =>
+    '<div class="ep-row' + (e === cur ? ' on' : '') + '" data-act="eng-set" data-v="' + ENGINES.indexOf(e) + '">' +
+    '<span class="ep-ico" style="background:' + e.c + (e.lat ? ';font-size:9px' : '') + '">' + e.g + '</span>' +
+    '<span class="ep-n">' + esc(e.n) + '</span>' +
+    (e === cur ? '<span class="ep-cur">' + I.check + '</span>' : (i < 9 ? '<span class="ep-key">' + (i + 1) + '</span>' : '')) +
+    '</div>').join('') +
+    '<div class="ep-foot"></div><div class="ep-row ep-manage" data-act="engine-manage">' + I.gear +
+    '<span class="ep-n">管理搜索引擎</span><span class="ep-key">设置</span></div>'
+  const sr = q('#stage').getBoundingClientRect(), br = q('#searchBox').getBoundingClientRect()
+  q('#enginePanel').style.left = Math.max(16, (br.left - sr.left) / (sr.width / STAGE_W)) + 'px'
+}
+const addHistory = term => {
+  state.history = [term].concat(state.history.filter(h => h !== term)).slice(0, 8)
+}
+const applySkin = (id, syncWall) => {
+  const s = state.skins.filter(x => x.id === id)[0] || state.skins[0]
+  state.skinId = s.id
+  if (syncWall) state.wall = s.wall
+  const rt = document.documentElement
+  Object.keys(s.t).forEach(k => rt.style.setProperty(k, s.t[k]))
+  Object.keys(state.glass).forEach(k => {
+    const g = state.glass[k]
+    rt.style.setProperty('--ga-' + k, String(1 - .55 * g))
+    rt.style.setProperty('--blur-' + k, (26 * g).toFixed(1) + 'px')
+  })
+  rt.style.setProperty('--wallpaper', WALLS[state.wall].bg)
+  rt.style.setProperty('--wp-mask', String(state.cover))
+  rt.style.setProperty('--wp-blur', state.cover > .3 ? '6px' : '0px')
+  rt.style.setProperty('--g-alpha', String(state.gAlpha))
+  rt.style.setProperty('--search-width', state.searchWidth + 'px')
+  rt.style.setProperty('--search-radius', state.searchRadius + 'px')
+  document.body.style.background = s.base
+  q('#avatar').style.color = '#fff'
+}
+const toast = msg => {
+  const el = q('#toast')
+  el.textContent = msg
+  el.classList.add('show')
+  clearTimeout(toast._t)
+  toast._t = setTimeout(() => el.classList.remove('show'), 1800)
+}
+const fit = () => {
+  const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H)
+  const st = q('#stage')
+  st.style.transform = 'scale(' + s + ')'
+  st.style.left = ((window.innerWidth - STAGE_W * s) / 2) + 'px'
+  st.style.top = ((window.innerHeight - STAGE_H * s) / 2) + 'px'
+}
+const goPage = i => {
+  const list = PAGES[state.mode]
+  if (i < 0 || i >= list.length) return
+  state.cur[state.mode] = i
+  q('#pager').style.transform = 'translateX(-' + (i * PAGE_W) + 'px)'
+  qa('#pageDots .page-dot').forEach((d, k) => d.classList.toggle('on', k === i))
+}
+const findSlot = (page, w, h) => {
+  for (let r = 0; r + h <= ROWS; r++) {
+    for (let c = 0; c + w <= COLS; c++) {
+      const hit = page.some(it => it.c < c + w && c < it.c + it.w && it.r < r + h && r < it.r + it.h)
+      if (!hit) return { c: c, r: r }
+    }
+  }
+  return null
+}
+const clockTick = () => {
+  const d = new Date()
+  const wd = '日一二三四五六'[d.getDay()]
+  const ds = pad(d.getMonth() + 1) + '月' + pad(d.getDate()) + '日 星期' + wd
+  q('#mcTime').textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds())
+  q('#mcDate').textContent = d.getFullYear() + '年' + ds
+  /* 卡片内容按各自实例的 config 渲染：时钟可在编辑面板里打开「显示秒数」 */
+  qa('[data-clock="t"]').forEach(e => {
+    const it = findItem(e.closest('.item') && e.closest('.item').getAttribute('data-id'))
+    const sec = it && C(it).showSeconds
+    e.textContent = pad(d.getHours()) + ':' + pad(d.getMinutes()) + (sec ? ':' + pad(d.getSeconds()) : '')
+  })
+  qa('[data-clock="d"]').forEach(e => e.textContent = ds)
+  qa('[data-clock="day"]').forEach(e => e.textContent = pad(d.getDate()))
+  qa('[data-clock="wd"]').forEach(e => e.textContent = wd)
+  qa('[data-clock="ym"]').forEach(e => e.textContent = d.getFullYear() + '年' + (d.getMonth() + 1) + '月')
+  qa('[data-clock="cd"]').forEach(e => {
+    const it = findItem(e.closest('.item') && e.closest('.item').getAttribute('data-id'))
+    const p = String(it && C(it).at || '18:00').split(':')
+    const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), +p[0] || 18, +p[1] || 0, 0)
+    let left = Math.floor((end - d) / 1000)
+    if (left < 0) left = 0
+    e.textContent = pad(Math.floor(left / 3600)) + ':' + pad(Math.floor(left / 60) % 60) + ':' + pad(left % 60)
+  })
+}
+/* ===================== 8. 通用控件 ===================== */
+const sw = (on, act, v) => '<div class="switch' + (on ? ' on' : '') + '" data-act="' + act + '" data-v="' + (v == null ? '' : v) + '"><i></i></div>'
+const swRow = (l, d, on, act, v) => '<div class="switch-row"><div><span>' + l + '</span>' +
+  (d ? '<span class="sr-desc">' + d + '</span>' : '') + '</div>' + sw(on, act, v) + '</div>'
+const slRow = (l, val, min, max, key, disp, desc) => '<div class="slider-row"><div class="sl-head"><span>' + l +
+  '</span><span>' + (disp == null ? val : disp) + '</span></div>' +
+  (desc ? '<div class="sr-desc" style="margin-bottom:6px">' + desc + '</div>' : '') +
+  '<input type="range" min="' + min + '" max="' + max +
+  '" value="' + val + '" data-inp="' + key + '"></div>'
+const secTitle = t => '<div class="sec-title">' + t + '</div>'
+/* 编辑面板的字段行：完全由小组件定义里的 fields 驱动（text / num / list / bool / sel） */
+const editField = (f, val) => {
+  if (f.t === 'bool') return swRow(f.l, '', !!val, 'edit-bool', f.k)
+  if (f.t === 'sel') return '<div class="f-row"><label class="f-label">' + f.l + '</label><div class="cats">' +
+    f.o.map(o => '<div class="cat' + (o === val ? ' active' : '') + '" data-act="edit-pick" data-v="' + f.k + '|' + o + '">' + o + '</div>').join('') +
+    '</div></div>'
+  const disp = f.t === 'list' && Array.isArray(val) ? val.join(', ') : (val == null ? '' : val)
+  return '<div class="f-row"><label class="f-label">' + f.l + '</label><input class="f-input" data-inp="edit:' + f.k + '"' +
+    (f.t === 'num' ? ' type="number"' : '') + ' value="' + esc(disp) + '" placeholder="' + esc(f.ph || '') + '"></div>'
+}
+const subTabs = (list, act, cur) => '<div class="sub-tabs">' + list.map((x, i) =>
+  '<div class="sub-tab' + (i === cur ? ' active' : '') + '" data-act="' + act + '" data-v="' + i + '">' + x + '</div>').join('') + '</div>'
+const colorBall = c => '<div class="cb' + (state.activeColor === c ? ' on' : '') + '" style="background:' + c +
+  '" data-act="active-color" data-v="' + c + '"></div>'
+const SIZES = [[2, 2], [2, 4], [4, 2], [4, 4], [8, 4], [8, 2]]
+const emptyBox = t => '<div class="empty-box">' + I.search + '<div>' + t + '</div></div>'
+/* 设置抽屉里的引擎清单：序号与「数字键 1–9」的可见顺序一致，隐藏项用 — 占位 */
+const engRows = () => { let n = 0
+  return ENGINES.map((e, i) => { const k = e.hide ? 0 : ++n
+    return '<div class="eng-row sortable" draggable="true" data-idx="' + i + '">' +
+      '<span style="color:var(--panel-sub);cursor:grab">⋮⋮</span>' +
+      '<span class="eng-key">' + (k ? (k <= 9 ? k : '·') : '—') + '</span>' +
+      '<div class="er-ico" style="background:' + e.c + ';' + (e.hide ? 'opacity:.45' : '') + '">' + e.g + '</div>' +
+      '<span style="flex:1;' + (e.hide ? 'opacity:.55' : '') + '">' + esc(e.n) + '</span>' +
+      (state.engine === i ? '<span class="tb-tag">正在使用中</span>' : '<button class="btn sm ghost" data-act="eng-set" data-v="' + i + '">启用</button>') +
+      '<button class="btn sm ghost" data-act="eng-hide" data-v="' + i + '">' + (e.hide ? '显示' : '隐藏') + '</button></div>'
+  }).join('')
+}
+
+/* ===================== 9. 抽屉面板 ===================== */
+const P = {
+  add: () => {
+    const kw = state.addKw
+    const head = '<div class="f-row"><input class="f-input" data-inp="addKw" placeholder="本地搜索：输入网站和小组件描述" value="' + esc(kw) + '"></div>' +
+      subTabs(['小组件', '网址导航', '自定义'], 'add-tab', state.addTab)
+    if (state.addTab === 0) {
+      const ws = WIDGET_LIST.filter(w => !kw || w.n.indexOf(kw) >= 0 || w.s.indexOf(kw) >= 0)
+      return head + '<div class="hint-text">清单由小组件定义表驱动；「添加」会放到当前页空白位置，当前页满了自动新建一页（每种模式最多 5 页）</div><div id="addList">' +
+        (ws.length ? ws.map(w => '<div class="eng-row"><div class="er-ico" style="background:' + w.c + '">' + w.g + '</div>' +
+          '<div style="flex:1;min-width:0"><div>' + w.n + '</div><div class="sr-desc" style="color:var(--panel-sub);font-size:11px">' + w.s + '</div></div>' +
+          '<button class="btn sm" data-act="add-widget" data-v="' + w.t + '">添加</button></div>').join('') : '<div class="empty-box">暂无结果</div>') + '</div>'
+    }
+    if (state.addTab === 1) {
+      const cat = NAVI[state.addCat]
+      const list = cat.l.filter(n => !kw || n.indexOf(kw) >= 0)
+      return head + '<div class="cats">' + NAVI.map((c, i) =>
+        '<div class="cat' + (i === state.addCat ? ' active' : '') + '" data-act="add-cat" data-v="' + i + '">' + c.c + '</div>').join('') + '</div>' +
+        '<div class="btn-row" style="margin-bottom:10px"><button class="btn sm" data-act="add-batch">批量添加</button>' +
+        '<button class="btn sm ghost" data-act="pick-all">全选</button></div>' +
+        '<div class="nv-grid">' + list.map(n => '<div class="nv-item" data-act="add-site" data-v="' + esc(n) + '">' +
+          tileHTML(n, 'nv-ico', 18) + '<div class="nv-name">' + esc(n) + '</div></div>').join('') + '</div>'
+    }
+    return head + '<div class="f-row"><label class="f-label">网站名称</label><input class="f-input" data-inp="linkName" placeholder="请输入网站名称" value="' + esc(state.linkName || '') + '"></div>' +
+      '<div class="f-row"><label class="f-label">网站链接</label><input class="f-input" data-inp="linkUrl" placeholder="请输入网站链接地址" value="' + esc(state.linkUrl || '') + '"></div>' +
+      '<div class="f-row"><label class="f-label">图标</label><div class="btn-row">' +
+      '<button class="btn sm ghost" data-act="up-icon">' + (state.user ? '上传新图标' : '登录后上传新图标') + '</button>' +
+      '<button class="btn sm ghost" data-act="up-img">上传自定义图标</button></div></div>' +
+      '<div class="f-row"><label class="f-label">添加到文件夹</label>' +
+      '<input class="f-input" data-inp="folderName" placeholder="请输入文件夹名称" value="' + esc(state.folderName || '') + '"></div>' +
+      '<div class="hint-text">支持拖拽调整位置与尺寸；确认后会放到当前页的空白位置。</div>' +
+      '<div class="btn-row end" style="margin-top:14px"><button class="btn" data-act="add-custom">确认添加</button></div>'
+  },
+  personal: () => {
+    const wall = WALLS
+    return secTitle('壁纸') +
+      '<div class="wp-head"><span class="hint-text" style="margin:0">当前壁纸：' + wall[state.wall].n + '</span>' +
+      '<span class="btn-row"><button class="btn sm ghost" data-act="wall-random">随机壁纸</button></span></div>' +
+      '<div class="wall-grid">' + wall.map((w, i) => '<div class="wall-thumb' + (i === state.wall ? ' sel' : '') +
+        '" style="background:' + w.bg + '" data-act="wall-pick" data-v="' + i + '" title="' + w.n + '"></div>').join('') + '</div>' +
+      '<div class="cats">' + ['全部', '极简', '风景', '动漫', '更多'].map((c, i) =>
+        '<div class="cat' + (i === 0 ? ' active' : '') + '" data-act="wall-cat">' + c + '</div>').join('') + '</div>' +
+      '<div class="btn-row" style="margin-bottom:8px"><button class="btn sm ghost" data-act="wall-local">本地上传</button>' +
+      '<button class="btn sm ghost" data-act="wall-cloud">云端上传</button>' +
+      '<button class="btn sm ghost" data-act="wall-link">外链上传</button></div>' +
+      '<div class="hint-text">仅经典主题可更换背景；本地上传不对分享界面生效；当前窗口是第一张为封面。</div>' +
+      secTitle('透明度（全局）') +
+      slRow('全局透明度', Math.round(state.gAlpha * 100), 20, 100, 'gAlpha', Math.round(state.gAlpha * 100) + '%') +
+      '<div class="hint-text">一个总开关，同时缩放所有面的背景透明：卡片、图标容器、Dock 栏、搜索框、面板、菜单。文字与图标始终不透明。</div>' +
+      secTitle('玻璃质感（分功能）') +
+      [['card', '卡片', '资讯卡 / 小组件卡'], ['tile', '图标容器', '网站图标与图标格'],
+        ['dock', 'Dock 栏', '底部悬浮栏'], ['search', '搜索框', '顶部搜索框'],
+        ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'], ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡']]
+        .map(x => slRow(x[1], Math.round(state.glass[x[0]] * 100), 0, 100, 'glass:' + x[0], Math.round(state.glass[x[0]] * 100) + '%', x[2])).join('') +
+      '<div class="hint-text">每条滑杆只管一个区域：数值同时决定该区域的「透」与「糊」——0% 是不透明的纯色平面，越高越通透、背后的壁纸也越模糊（当前换算式：alpha = 1 − 0.55×值，模糊 = 26px×值）。调低某一条即可只让该区域回到纯色。</div>' +
+      secTitle('遮罩与字体') + slRow('遮罩', Math.round(state.cover * 100), 0, 100, 'cover') +
+      '<div class="slider-row"><div class="sl-head"><span>字体颜色</span></div><div class="color-ball">' +
+      ['#ffffff', '#1f2937', '#3b82f6', '#f97316', '#ec4899', '#22c55e'].map(colorBall).join('') + '</div></div>' +
+      secTitle('时间与日期') +
+      swRow('展示时间', '时钟以 24 小时制显示', state.showTime, 'tog-time') +
+      swRow('展示日期', '显示公历与星期', state.showDate, 'tog-date') +
+      swRow('展示每日一言', '顶部展示一句话', state.showQuote, 'tog-quote') +
+      '<div class="f-row" style="margin-top:12px"><label class="f-label">时间颜色</label>' +
+      '<input type="color" class="f-input" data-inp="clockColor" value="' + state.clockColor + '"></div>' +
+      secTitle('显隐') +
+      swRow('隐藏顶部区域', '隐藏左上模式胶囊与右上头像', state.hideTop, 'tog-top') +
+      swRow('隐藏搜索框', '隐藏整条搜索栏', state.hideSearch, 'tog-search') +
+      swRow('隐藏图标标签', '只保留图标，不显示名称', !state.labels, 'tog-labels') +
+      secTitle('搜索框') +
+      slRow('搜索框宽度', state.searchWidth, 400, 1400, 'searchWidth', state.searchWidth + 'px') +
+      slRow('搜索框圆角', state.searchRadius, 0, 25, 'searchRadius', state.searchRadius + 'px') +
+      swRow('沉浸式搜索框', '与壁纸融合的透明样式', state.immersive, 'tog-immersive') +
+      swRow('简洁模式搜索框改为线框样式', '仅极简模式生效', state.simpleSearch, 'tog-simple') +
+      secTitle('Dock 栏') +
+      slRow('Dock栏应用数量', state.dockCount, 4, 8, 'dockCount', state.dockCount + ' 个') +
+      swRow('栏图标', '开启后 Dock 图标改为圆形', state.dockIcon === 'circle', 'tog-dockicon') +
+      secTitle('主题与风格') + themeCards() + swRow('主题色绑定主题而非壁纸', '主题色不随壁纸变化', state.fold, 'tog-bind') +
+      secTitle('风格皮肤（可自定义）') + skinEditor()
+  },
+  square: () => {
+    const tabs = subTabs(['大厅', '分享', '我的'], 'pz-tab', state.pzTab)
+    if (state.pzTab === 0) {
+      const list = PZ.hot.concat(PZ.mine)
+      return tabs + '<div class="f-row"><input class="f-input" data-inp="pzKw" placeholder="按关键字搜索界面 / 或粘贴至大厅搜索框搜索" value="' + esc(state.pzKw || '') + '"></div>' +
+        '<div class="cats">' + ['热门推荐', '用户分享'].map((c, i) => '<div class="cat' + (i === 0 ? ' active' : '') + '" data-act="pz-cat">' + c + '</div>').join('') + '</div>' +
+        '<div class="pz-grid">' + list.map((p, i) => '<div class="pz-card"><div class="pz-prev" style="background:' + p.b + '">' +
+          '<div class="m-card" style="left:12%;top:16%;width:34%;height:26%"></div>' +
+          '<div class="m-card" style="left:52%;top:16%;width:34%;height:26%"></div>' +
+          '<div class="m-card" style="left:12%;top:50%;width:34%;height:22%"></div>' +
+          '<div class="m-card" style="left:52%;top:50%;width:34%;height:22%"></div>' +
+          '<div class="m-dock"></div></div>' +
+          '<div class="pz-body"><div class="pz-title">' + p.t + '</div><div class="pz-sub">by ' + p.a + ' · 发布于 09-24</div>' +
+          '<div class="pz-like" data-act="pz-like" data-v="' + i + '">' + I.heart + (p.l + (state.like[i] ? 1 : 0)) + ' 收藏</div>' +
+          '<div class="pz-acts"><button class="btn sm" data-act="pz-apply">应用</button>' +
+          '<button class="btn sm ghost" data-act="open-modal" data-v="share">分享</button></div></div></div>').join('') + '</div>' +
+        '<div class="pager-row">' + [1, 2, 3].map(i => '<div class="pg' + (i === state.pzPage ? ' active' : '') + '" data-act="pz-page" data-v="' + i + '">' + i + '</div>').join('') + '</div>'
+    }
+    if (state.pzTab === 1) return tabs +
+      '<div class="switch-row"><div><span>公开分享</span><span class="sr-desc">任何人都能在广场看到</span></div>' + sw(state.sharePub !== false, 'share-pub') + '</div>' +
+      '<div class="switch-row"><div><span>私密分享</span><span class="sr-desc">私密分享只能主页粘贴分享链接访问</span></div>' + sw(state.sharePub === false, 'share-pri') + '</div>' +
+      '<div class="f-row" style="margin-top:14px"><label class="f-label">界面标题</label><input class="f-input" data-inp="shareTitle" placeholder="请输入界面标题" value="' + esc(state.shareTitle || '我的新标签页') + '"></div>' +
+      '<div class="f-row"><label class="f-label">界面描述</label><input class="f-input" data-inp="shareDesc" placeholder="请输入界面描述"></div>' +
+      '<div class="f-row"><label class="f-label">分享模式</label><div class="cats">' +
+      ['从标准模式分享', '从隐私模式分享'].map((c, i) => '<div class="cat' + (i === 0 ? ' active' : '') + '" data-act="share-mode">' + c + '</div>').join('') + '</div></div>' +
+      '<div class="btn-row"><button class="btn" data-act="share-do">立即分享</button>' +
+      '<button class="btn ghost" data-act="copy-link">复制分享链接</button></div>' +
+      '<div class="hint-text">分享时只有上传云端壁纸或在线壁纸才能正常分享；分享后可更新，请及时备份。</div>'
+    return tabs + subTabs(['我的作品', '我的收藏', '应用记录', '使用记录'], 'pz-mine', state.pzMine || 0) +
+      (state.user ? '<div class="pz-grid" style="margin-top:12px">' + PZ.mine.map(p => '<div class="pz-card"><div class="pz-prev" style="background:' + p.b + '"></div>' +
+        '<div class="pz-body"><div class="pz-title">' + p.t + '</div><div class="pz-sub">发布于 09-20</div>' +
+        '<div class="pz-acts"><button class="btn sm ghost" data-act="pz-apply">应用之前的界面</button>' +
+        '<button class="btn sm ghost" data-act="pz-del">删除作品</button></div></div></div>').join('') + '</div>'
+        : emptyBox('登录查看我的作品') + '<div class="btn-row" style="justify-content:center"><button class="btn" data-act="open-modal" data-v="login">现在登录</button></div>') +
+      '<div class="hint-text">应用记录仅保存在本地；恢复后将覆盖当前界面，可以在详情页单独添加界面应用。</div>'
+  },
+  setting: () => secTitle('搜索引擎') +
+    '<div class="hint-text" style="margin:0 0 8px">内置 12 个主流引擎：百度 / 必应 / 谷歌 / 搜狗 / 360 / 神马 / 夸克 / 头条 / 知乎 / 微博 / DuckDuckGo / Brave；可拖动排序、可隐藏，启用上限 12 个。搜索框左侧引擎图标就是下拉入口，下拉底部有「管理搜索引擎」。</div>' +
+    engRows() +
+    '<div class="btn-row" style="margin-top:12px"><button class="btn sm" data-act="open-modal" data-v="addEngine">添加自定义搜索引擎</button>' +
+    '<button class="btn sm ghost" data-act="open-modal" data-v="engine">搜索引擎管理</button></div>' +
+    secTitle('搜索框设置') +
+    swRow('自动聚焦', '打开新标签时自动聚焦搜索框', state.autoFocus, 'tog-autofocus') +
+    swRow('保留搜索内容', '搜索后不清空输入框内容', state.searchKeep, 'tog-keep') +
+    swRow('隐藏搜索按钮', '仅通过 Enter 键触发搜索', state.hideBtn, 'tog-hidebtn') +
+    swRow('搜索历史', '关闭后搜索框不再弹出任何下拉', state.searchHistory, 'tog-history') +
+    '<div class="hint-text">本项目不做搜索联想：输入时不出候选词，只在开启搜索历史时展示历史记录。</div>' +
+    secTitle('每日问候') +
+    '<div class="f-row"><label class="f-label">昵称</label>' +
+    '<input class="f-input" data-inp="nick" value="' + esc(state.nick) + '" placeholder="主人"></div>' +
+    '<div class="hint-text">用在每日一言卡：时段问候 + 昵称 + 竖线鼓励语；双击卡片可换一条鼓励语。</div>' +
+    secTitle('打开方式') + [['link', '当前窗口打开链接'], ['tab', '打开新标签页'], ['search', '当前窗口打开搜索结果']].map(o =>
+      '<div class="switch-row"><span>' + o[1] + '</span>' + sw(state.openMode === o[0], 'open-mode', o[0]) + '</div>').join('') +
+    '<div class="hint-text">在线版不可设置打开方式，请转到插件中使用。</div>' +
+    secTitle('数据与备份') +
+    '<div class="btn-row"><button class="btn" data-act="open-modal" data-v="backup">备份当前界面</button>' +
+    '<button class="btn ghost" data-act="cloud-backup">云端备份</button>' +
+    '<button class="btn ghost" data-act="open-modal" data-v="restore">恢复为默认界面</button>' +
+    '<button class="btn ghost" data-act="clear-local">清除本地数据</button>' +
+    '<button class="btn danger" data-act="open-modal" data-v="reset">一键重置</button></div>' +
+    '<div class="btn-row" style="margin-top:8px"><button class="btn ghost" data-act="export-layout">导出布局 JSON</button>' +
+    '<button class="btn ghost" data-act="import-layout">导入布局 JSON</button></div>' +
+    '<div class="hint-text">导出内容 = 标准 / 隐私两套页面的全部卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来。</div>' +
+    '<div class="hint-text">云端备份专用于管理用户备份；换绑或重新登录后，不同账号出于安全考虑会清空隐私数据。</div>' +
+    secTitle('账号') + (state.user
+      ? '<div class="eng-row"><div class="er-ico" style="background:linear-gradient(160deg,#f5c58a,#e08a4a)">' + (state.user.email[0] || 'T').toUpperCase() + '</div>' +
+        '<div style="flex:1"><div>' + esc(state.user.email) + '</div><div style="color:var(--panel-sub);font-size:11px">已登录 · 个性签名：这个人很懒</div></div>' +
+        '<button class="btn sm ghost" data-act="logout">退出登录</button></div>'
+      : '<div class="btn-row"><button class="btn" data-act="open-modal" data-v="login">现在登录</button></div>') +
+    '<div class="switch-row"><span>全局启用</span><span class="sr-desc">在所有新标签页生效</span>' + sw(true, 'noop') + '</div>' +
+    secTitle('关于') +
+    '<div class="eng-row"><span style="flex:1">版本</span><span style="color:var(--panel-sub)">2.8.2（插件版本 2.8.2）</span></div>' +
+    '<div class="btn-row"><button class="btn sm ghost" data-act="open-modal" data-v="log">更新记录</button>' +
+    '<button class="btn sm ghost" data-act="open-modal" data-v="about">关于我们</button>' +
+    '<button class="btn sm ghost" data-act="feedback">问题反馈</button>' +
+    '<button class="btn sm ghost" data-act="policy">隐私协议</button>' +
+    '<button class="btn sm ghost" data-act="contact">联系作者</button></div>' +
+    secTitle('快捷键') +
+    [['1 – 9', '切换搜索引擎（非输入状态）'], ['Enter', '执行搜索'], ['← →', '切换页面'],
+      ['双击每日一言卡', '换一条鼓励语'], ['Esc', '关闭面板 / 菜单 / 搜索历史']].map(k =>
+      '<div class="eng-row"><span style="flex:1">' + k[1] + '</span><kbd class="kbd">' + k[0] + '</kbd></div>').join(''),
+  profile: () => state.user
+    ? '<div class="eng-row"><div class="er-ico" style="width:44px;height:44px;border-radius:50%;font-size:16px;background:linear-gradient(160deg,#f5c58a,#e08a4a)">' +
+      (state.user.email[0] || 'T').toUpperCase() + '</div><div style="flex:1"><div style="font-size:15px">' + esc(state.user.email) + '</div>' +
+      '<div style="color:var(--panel-sub);font-size:12px">已登录 · 个性签名：这个人很懒</div></div></div>' +
+      '<div class="btn-row" style="margin:14px 0"><button class="btn sm ghost" data-act="bind-mail">绑定邮箱</button>' +
+      '<button class="btn sm ghost" data-act="change-pwd">修改密码</button>' +
+      '<button class="btn sm ghost" data-act="sign-name">我的个性签名</button></div>' +
+      secTitle('我的内容') + subTabs(['我的作品', '我的收藏', '最近删除'], 'pf-tab', state.pfTab || 0) +
+      '<div class="hint-text">应用记录仅保存在本地；点击右上方同步按钮可同步旧版本的链接和会员权益。</div>' +
+      '<div class="btn-row" style="margin-top:14px"><button class="btn ghost" data-act="logout">退出登录</button>' +
+      '<button class="btn ghost" data-act="del-account">注销账号</button></div>'
+    : emptyBox('登录后查看个人信息') +
+      '<div class="btn-row" style="justify-content:center"><button class="btn" data-act="open-modal" data-v="login">现在登录</button></div>' +
+      '<div class="hint-text">登录后才能进入隐私模式；换绑或再次登录时出于安全考虑会清空隐私数据。</div>'
+}
+const DRAWERS = {
+  add: ['添加', '在这里添加你喜爱的网站图标和小组件'],
+  personal: ['个性化', '在这里进行个性化配置'],
+  square: ['广场', '在这里查看别人分享的壁纸'],
+  setting: ['设置', '在这里进行网站的设置'],
+  profile: ['我的', '登录后查看个人信息']
+}
+const themeCards = () => '<div class="theme-grid">' + state.skins.map(s => '<div class="theme-btn' + (s.id === state.skinId ? ' sel' : '') +
+  '" data-act="skin-pick" data-v="' + s.id + '"><div class="tb-prev" style="background:' + (WALLS[s.wall || 0].bg) + '">' +
+  '<i style="background:' + s.t['--card-bg'] + '"></i></div><div class="tb-name">' + s.n +
+  '<span class="tb-tag">出厂</span></div>' + (s.desc ? '<div class="tb-desc">' + s.desc + '</div>' : '') + '</div>').join('') + '</div>'
+const skinEditor = () => {
+  const s = state.skins.filter(x => x.id === state.skinId)[0]
+  return '<div class="f-row"><label class="f-label">皮肤名称</label><input class="f-input" data-inp="skinName" value="' + esc(s.n) + '"></div>' +
+    '<div class="color-grid">' + SKIN_FIELDS.map(f => { const v = s.t[f[0]]; const hex = v.charAt(0) === '#' ? v : '#ffffff'; return '<div class="color-row"><span>' + f[1] + '</span>' +
+      '<input type="color" value="' + hex + '" data-inp="skin:' + f[0] + '"></div>' }).join('') + '</div>' +
+    '<div class="btn-row" style="margin-top:12px"><button class="btn sm" data-act="skin-new">新建皮肤</button>' +
+    '<button class="btn sm ghost" data-act="skin-reset">还原内置</button>' +
+    '<button class="btn sm danger" data-act="skin-del">删除皮肤</button></div>'
+}
+
+/* ===================== 10. 弹窗 ===================== */
+const MO = {
+  theme: () => '<h2>欢迎来到 Thrilled</h2><p class="sub">选择风格来搭配组件和图标，之后可随时在「个性化 - 主题与风格」中更换。</p>' +
+    '<div class="th-grid">' + state.skins.map(s => '<div class="th-card' + (s.id === state.selSkin ? ' sel' : '') + '" data-act="theme-pick" data-v="' + s.id + '">' +
+      '<div class="th-prev" style="background:' + WALLS[s.wall || 0].bg + '">' +
+      '<div class="t-card" style="left:10%;top:14%;width:34%;height:26%;background:' + s.t['--card-bg'] + '"></div>' +
+      '<div class="t-card" style="left:52%;top:14%;width:34%;height:26%;background:' + s.t['--card-bg'] + '"></div>' +
+      '<div class="t-card" style="left:10%;top:48%;width:34%;height:22%;background:' + s.t['--card-bg'] + '"></div>' +
+      '<div class="t-card" style="left:52%;top:48%;width:34%;height:22%;background:' + s.t['--card-bg'] + '"></div>' +
+      '<div class="t-dock"></div></div><div class="th-name">' + s.n + '</div></div>').join('') + '</div>' +
+    '<div class="btn-row end"><button class="btn ghost" data-act="close-modal">稍后再说</button>' +
+    '<button class="btn" data-act="theme-apply">应用风格</button></div>',
+  engine: () => '<h2>搜索引擎管理</h2><p class="sub">拖动可排序；隐藏后的引擎不会出现在搜索框下拉、数字键切换与右键二级菜单里。搜索框左侧图标展开的下拉底部也有这个入口。</p>' +
+    ENGINES.map((e, i) => '<div class="eng-row"><div class="er-ico" style="background:' + e.c + ';' + (e.hide ? 'opacity:.45' : '') + '">' + e.g + '</div>' +
+      '<span style="flex:1;' + (e.hide ? 'opacity:.55' : '') + '">' + esc(e.n) + '</span>' +
+      (state.engine === i ? '<span class="tb-tag">正在使用中</span>' : '') + (e.hide ? '<span class="tb-tag">已隐藏</span>' : '') +
+      (state.engine === i ? '' : '<button class="btn sm ghost" data-act="eng-set" data-v="' + i + '">设为默认</button>') +
+      '<button class="btn sm ghost" data-act="eng-hide" data-v="' + i + '">' + (e.hide ? '显示' : '隐藏') + '</button></div>').join('') +
+    '<div class="btn-row end" style="margin-top:16px"><button class="btn ghost" data-act="open-modal" data-v="addEngine">添加自定义搜索引擎</button>' +
+    '<button class="btn" data-act="close-modal">完成</button></div>',
+  addEngine: () => '<h2>添加自定义搜索引擎</h2><p class="sub">请输入搜索引擎名称、图片与搜索地址。</p>' +
+    '<div class="f-row"><label class="f-label">名称</label><input class="f-input" data-inp="engName" placeholder="请输入搜索引擎名称"></div>' +
+    '<div class="f-row"><label class="f-label">图标</label><div class="btn-row"><button class="btn sm ghost" data-act="up-img">上传搜索引擎图片</button></div></div>' +
+    '<div class="f-row"><label class="f-label">搜索地址</label><input class="f-input" data-inp="engUrl" placeholder="例如百度为 https://www.baidu.com/s?wd="></div>' +
+    '<div class="btn-row end"><button class="btn ghost" data-act="close-modal">取消</button><button class="btn" data-act="eng-add">确定</button></div>',
+  log: () => '<h2>更新记录</h2><p class="sub">当前版本 2.8.2</p>' + CHANGELOG.map(c => '<div class="log-item"><b>' + c.v +
+    '<div style="font-size:11px;color:#9aa4b2;font-weight:400">' + c.d + '</div></b><ul>' + c.l.map(x => '<li>' + x + '</li>').join('') + '</ul></div>').join('') +
+    '<div class="btn-row end" style="margin-top:16px"><button class="btn" data-act="close-modal">知道了</button></div>',
+  about: () => '<h2>关于我们</h2><p class="sub">开发助手 · 新标签页 2.8.2</p>' +
+    '<div class="btn-row"><button class="btn ghost" data-act="feedback">问题反馈</button>' +
+    '<button class="btn ghost" data-act="policy">隐私协议</button>' +
+    '<button class="btn ghost" data-act="contact">联系作者</button>' +
+    '<button class="btn ghost" data-act="to-plugin">应用官网</button></div>' +
+    '<div class="hint-text">壁纸来源于互联网，如有侵权请联系工作人员；为保障用户的数据安全与用户体验，请及时备份。</div>' +
+    '<div class="btn-row end" style="margin-top:16px"><button class="btn" data-act="close-modal">关闭</button></div>',
+  login: () => '<h2>现在登录</h2><p class="sub">扫码同步旧版本的链接和会员权益；登录后才能进入隐私模式。</p>' +
+    subTabs(['微信登录', '邮箱登录', '扫码登录'], 'login-tab', state.loginTab || 0) +
+    (state.loginTab === 2
+      ? '<div class="empty-box" style="border:1px dashed #d8dfe9;border-radius:14px">' + I.grid + '二维码过期，点击刷新</div>'
+      : '<div class="f-row"><label class="f-label">' + (state.loginTab === 0 ? '手机号 / 微信' : '邮箱') + '</label>' +
+        '<input class="f-input" data-inp="loginMail" placeholder="请输入邮箱" value="' + esc(state.loginMail || '') + '"></div>' +
+        '<div class="f-row"><label class="f-label">密码</label><input class="f-input" type="password" placeholder="请输入新密码"></div>') +
+    '<div class="btn-row end"><button class="btn ghost" data-act="close-modal">取消</button>' +
+    '<button class="btn" data-act="login-do">登录</button></div>' +
+    '<div class="hint-text">演示：点击「登录」即模拟登录成功，随后自动进入隐私模式。</div>',
+  backup: () => '<h2>备份当前界面</h2><p class="sub">立即备份当前界面到云端，备份数据包含布局、图标、小组件与皮肤配置。</p>' +
+    '<div class="eng-row"><span style="flex:1">上次备份时间</span><span style="color:#9aa4b2">' + (state.backupTime || '暂无记录') + '</span></div>' +
+    '<div class="btn-row end"><button class="btn ghost" data-act="close-modal">取消</button>' +
+    '<button class="btn" data-act="backup-do">立即备份当前界面</button></div>',
+  restore: () => '<h2>恢复为默认界面</h2><p class="sub">恢复后将覆盖当前界面，建议选择以下选项再退出。</p>' +
+    swRow('保留极简和标准模式状态', '仅重置标准模式的布局', true, 'noop') +
+    '<div class="btn-row end" style="margin-top:16px"><button class="btn ghost" data-act="close-modal">取消</button>' +
+    '<button class="btn" data-act="restore-do">确认恢复</button></div>',
+  reset: () => '<h2>一键重置</h2><p class="sub">将彻底删除选中的本地数据（图标、布局、皮肤、壁纸配置），且不可撤销。</p>' +
+    swRow('图标与布局', '', true, 'noop') + swRow('皮肤与主题', '', true, 'noop') + swRow('壁纸与缓存', '', false, 'noop') +
+    '<div class="btn-row end" style="margin-top:16px"><button class="btn ghost" data-act="close-modal">取消</button>' +
+    '<button class="btn danger" data-act="reset-do">确认重置</button></div>',
+  editItem: () => {
+    const it = findItem(state.itemId)
+    if (!it) return '<h2>编辑卡片</h2>'
+    const d = WIDGET_DEFS[it.t] || WIDGET_DEFS.icon
+    const c = C(it)
+    return '<h2>编辑 · ' + d.n + '</h2>' +
+      '<p class="sub">这张卡片是「' + d.n + '」小组件的实例：位置与尺寸属于布局，下面的字段只改本实例的内容。</p>' +
+      '<div class="f-row"><label class="f-label">名称标签</label><input class="f-input" data-inp="edit:label" value="' +
+      esc(c.label || '') + '" placeholder="留空则不显示名称"></div>' +
+      d.fields.map(f => editField(f, c[f.k])).join('') +
+      '<div class="f-row"><label class="f-label">尺寸</label><div class="cats">' + SIZES.map(s => '<div class="cat' +
+      (it.w === s[0] && it.h === s[1] ? ' active' : '') + '" data-act="item-size" data-v="' + s[0] + 'x' + s[1] + '">' + s[0] + '×' + s[1] + '</div>').join('') + '</div></div>' +
+      '<div class="hint-text">引用的小组件：' + d.s + '。想要别的类型，可在卡片右键菜单里「更换小组件」。</div>' +
+      '<div class="btn-row end" style="margin-top:16px"><button class="btn ghost" data-act="close-modal">取消</button>' +
+      '<button class="btn" data-act="item-save">确认修改</button></div>'
+  }
+}
+const openModal = k => {
+  state.modal = k
+  if (k === 'theme') state.selSkin = state.skinId
+  q('#modalBox').className = 'modal' + (k === 'log' || k === 'about' || k === 'engine' ? ' narrow' : '')
+  q('#modalBox').innerHTML = (MO[k] || MO.about)()
+  q('#modalMask').classList.add('show')
+}
+const closeModal = () => { q('#modalMask').classList.remove('show'); state.modal = null }
+const refreshModal = () => { if (state.modal) q('#modalBox').innerHTML = (MO[state.modal] || MO.about)() }
+
+/* ===================== 11. 抽屉渲染 ===================== */
+const refreshDrawer = () => {
+  const k = state.draw
+  if (!k) return
+  q('#dwTitle').textContent = DRAWERS[k][0]
+  q('#dwSub').textContent = DRAWERS[k][1]
+  q('#dwTabs').innerHTML = ''
+  q('#dwBody').innerHTML = P[k]()
+  q('#dw').classList.add('open')
+  q('#dwMask').classList.add('show')
+}
+const openDrawer = (k, tab) => {
+  state.draw = k
+  if (tab != null) state.dwTab = tab
+  if (k === 'add') { state.addKw = ''; state.addTab = 0 }
+  refreshDrawer()
+}
+const closeDrawer = () => {
+  state.draw = null
+  q('#dw').classList.remove('open')
+  q('#dwMask').classList.remove('show')
+}
+
+/* ===================== 12. 右键菜单 ===================== */
+const CTX_TOG = {
+  searchBar: () => state.hideSearch, minimal: () => state.mode === 'minimal',
+  hideItem: () => !state.labels, mascot: () => state.mascot
+}
+const ctxSub = m => {
+  if (m.sub === 'engines') return engVisible().map(e => { const i = ENGINES.indexOf(e)
+    return '<div class="ctx-sub-item' + (i === state.engine ? ' on' : '') + '" data-act="eng-set" data-v="' + i + '">' +
+      '<span class="ctx-check">' + I.check + '</span>' + esc(e.n) + '</div>' }).join('') +
+    '<div class="ctx-sub-item" data-act="open-modal" data-v="engine"><span class="ctx-check"></span>管理搜索引擎</div>'
+  return m.sub.map(s => m.k === 'open'
+    ? '<div class="ctx-sub-item' + (state.openMode === s[0] ? ' on' : '') + '" data-act="open-mode" data-v="' + s[0] + '"><span class="ctx-check">' + I.check + '</span>' + s[1] + '</div>'
+    : '<div class="ctx-sub-item" data-act="ctx-do" data-v="' + s[0] + '">' + s[1] + '</div>').join('')
+}
+const ctxGlobal = () => MENU_ITEMS.map(m => {
+  if (m.sw) return '<div class="ctx-item" data-act="ctx-tog" data-v="' + m.k + '"><span>' + m.n + '</span>' +
+    '<span class="ctx-switch' + (CTX_TOG[m.k]() ? ' on' : '') + '"><i></i></span></div>'
+  if (m.sub) return '<div class="ctx-item"><span>' + m.n + '</span><span class="ctx-arrow"></span><div class="ctx-sub">' + ctxSub(m) + '</div></div>'
+  return '<div class="ctx-item" data-act="ctx-do" data-v="' + m.k + '"><span>' + m.n + '</span></div>'
+}).join('')
+const ctxItem = () => {
+  const it = findItem(state.itemId)
+  if (!it) return ''
+  return '<div class="ctx-item" data-act="open-link"><span>打开</span></div>' +
+    '<div class="ctx-item" data-act="item-edit"><span>编辑信息</span></div>' +
+    '<div class="ctx-item"><span>更换小组件</span><span class="ctx-arrow"></span><div class="ctx-sub" style="max-height:560px;overflow:auto">' +
+    Object.keys(WIDGET_DEFS).map(k => '<div class="ctx-sub-item' + (it.t === k ? ' on' : '') + '" data-act="item-swap" data-v="' + k + '">' +
+      '<span class="ctx-check">' + I.check + '</span>' + WIDGET_DEFS[k].n + '</div>').join('') + '</div></div>' +
+    '<div class="ctx-item"><span>修改尺寸</span><span class="ctx-arrow"></span><div class="ctx-sub">' +
+    SIZES.map(s => '<div class="ctx-sub-item' + (it.w === s[0] && it.h === s[1] ? ' on' : '') + '" data-act="item-size" data-v="' + s[0] + 'x' + s[1] + '"><span class="ctx-check">' + I.check + '</span>' + s[0] + '×' + s[1] + '</div>').join('') + '</div></div>' +
+    '<div class="ctx-item" data-act="item-folder"><span>添加到文件夹</span></div>' +
+    '<div class="ctx-item" data-act="item-del"><span>删除该书签</span></div>'
+}
+const renderCtx = (x, y, id) => {
+  const c = q('#ctx')
+  state.itemId = id
+  c.innerHTML = id ? ctxItem() : ctxGlobal()
+  c.classList.add('show')
+  c.style.left = x + 'px'
+  c.style.top = y + 'px'
+  const w = c.offsetWidth, h = c.offsetHeight
+  const flip = x + w > STAGE_W - 20
+  if (flip) c.style.left = Math.max(8, x - w - 120) + 'px'
+  if (y + h > STAGE_H - 20) c.style.top = Math.max(8, STAGE_H - h - 20) + 'px'
+  c.classList.toggle('flip', flip)
+}
+const hideCtx = () => { q('#ctx').classList.remove('show'); state.itemId = null }
+
+/* ===================== 13. 动作表 ===================== */
+const syncStage = () => {
+  const st = q('#stage')
+  st.setAttribute('data-labels', state.labels ? '1' : '0')
+  st.setAttribute('data-hidetop', state.hideTop ? '1' : '0')
+  st.setAttribute('data-hidesearch', state.hideSearch ? '1' : '0')
+  st.setAttribute('data-showtime', state.showTime ? '1' : '0')
+  st.setAttribute('data-showdate', state.showDate ? '1' : '0')
+  st.setAttribute('data-showquote', state.showQuote ? '1' : '0')
+}
+const setMode = m => {
+  if (m === 'privacy' && !state.user) { toast('登录后才能进入隐私模式'); openModal('login'); return }
+  state.mode = m
+  q('#stage').setAttribute('data-mode', m)
+  renderPager()
+  renderPill()
+  hideCtx()
+  if (m === 'minimal') toast('已进入极简模式')
+  if (m === 'privacy') toast('已进入隐私模式')
+}
+const place = (w, h, type, extra) => {
+  const pages = PAGES[state.mode]
+  const page = curPage()
+  const slot = findSlot(page, w, h)
+  const what = type === 'icon' ? '网站' : '小组件'
+  if (slot) {
+    page.push(G(slot.c, slot.r, w, h, type, extra))
+    renderPager()
+    toast('添加' + what + '成功')
+    return
+  }
+  /* 当前页没有空间：按 UiTab 的「每种模式最多 5 页」规则自动开一页放进去 */
+  if (pages.length < 5) {
+    pages.push([G(0, 0, w, h, type, extra)])
+    state.cur[state.mode] = pages.length - 1
+    renderPager()
+    toast('当前页已满，已新建第 ' + pages.length + ' 页放入' + what)
+    return
+  }
+  toast('每种模式最多 5 页，已没有位置可放')
+}
+/* 布局导入 / 导出：内容完全自定义的另一半——整套布局可以带走、也能拿回来 */
+const normItem = x => {
+  if (!x || !x.t || !(x.w > 0) || !(x.h > 0)) return null
+  const t = WIDGET_DEFS[x.t] ? x.t : 'icon'
+  return { id: x.id || uid(), c: Math.max(0, Math.min(COLS - x.w, +x.c || 0)),
+    r: Math.max(0, Math.min(ROWS - x.h, +x.r || 0)), w: +x.w, h: +x.h, t: t,
+    config: Object.assign({}, x.config || {}) }
+}
+/* 导入的页集合：支持「多页（数组套数组）」与「扁平数组＝单页」两种写法，坏数据直接丢弃 */
+const normPages = arr => {
+  if (!Array.isArray(arr) || !arr.length) return []
+  const pages = Array.isArray(arr[0]) ? arr : [arr]
+  return pages.map(pg => (Array.isArray(pg) ? pg : []).map(normItem).filter(Boolean)).filter(pg => pg.length)
+}
+const importLayout = data => {
+  const std = normPages(data && data.standard)
+  const pri = normPages(data && data.privacy)
+  if (!std.length || !pri.length) return false
+  PAGES.standard = std
+  PAGES.privacy = pri
+  state.cur = { standard: 0, privacy: 0 }
+  renderPager()
+  return true
+}
+const exportLayout = () => {
+  const data = { v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), standard: PAGES.standard, privacy: PAGES.privacy }
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+  a.download = 'thrilled-layout.json'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000)
+}
+const reseedLayout = () => {
+  PAGES.standard = JSON.parse(JSON.stringify(DEFAULT_PAGES.standard))
+  PAGES.privacy = JSON.parse(JSON.stringify(DEFAULT_PAGES.privacy))
+  state.cur = { standard: 0, privacy: 0 }
+  renderPager()
+}
+const RANGE = {
+  cover: (v, el) => { state.cover = v / 100; applySkin(state.skinId); setHead(el, v) },
+  gAlpha: (v, el) => { state.gAlpha = v / 100; applySkin(state.skinId); setHead(el, v + '%') },
+  searchWidth: (v, el) => { state.searchWidth = v; renderEngine(); setHead(el, v + 'px') },
+  searchRadius: (v, el) => { state.searchRadius = v; renderEngine(); setHead(el, v + 'px') },
+  dockCount: (v, el) => { state.dockCount = v; renderDock(); setHead(el, v + ' 个') }
+}
+const setHead = (el, txt) => { const h = el.parentElement.querySelector('.sl-head span:last-child'); if (h) h.textContent = txt }
+const skinSet = (p, v) => {
+  const s = state.skins.filter(x => x.id === state.skinId)[0]
+  s.t[p] = v
+  applySkin(state.skinId)
+}
+const ACTIONS = {
+  'noop': () => { },
+  'set-mode': v => setMode(v),
+  'go-page': v => goPage(+v),
+  'engine-open': () => {
+    const p = q('#enginePanel')
+    q('#searchPanel').classList.remove('show')
+    if (p.classList.contains('show')) { p.classList.remove('show'); return }
+    renderEnginePanel(); p.classList.add('show')
+  },
+  'engine-manage': () => { hideEnginePanel(); openDrawer('setting'); toast('已打开设置 · 搜索引擎') },
+  'hot-tab': (v, el) => { qa('.news-tab').forEach(t => t.classList.toggle('active', t === el)); toast('已切换：' + el.textContent) },
+  'hot-refresh': () => toast('已换一批热点'),
+  'hot-open': v => toast('打开链接：' + v),
+  'search-go': () => {
+    const v = q('#searchInput').value.trim()
+    if (!v) { toast('请输入搜索内容'); return }
+    addHistory(v)
+    openLink(v)
+    if (!state.searchKeep) q('#searchInput').value = ''
+    q('#searchPanel').classList.remove('show')
+    hideEnginePanel()
+    if (state.draw === 'setting') refreshDrawer()
+  },
+  'sp-pick': v => { q('#searchInput').value = v; ACTIONS['search-go']() },
+  'sp-del': (v, el) => { el.parentElement.remove(); state.history = state.history.filter(h => h !== v); renderSearchPanel() },
+  'quote-refresh': (v, el) => {
+    const next = ENCOURAGE.filter(x => x !== state.encourage)
+    state.encourage = next[Math.floor(Math.random() * next.length)] || state.encourage
+    const box = el.closest('.item')
+    if (box && box.getAttribute('data-t') === 'quote') {
+      box.classList.add('reloading')
+      setTimeout(() => box.classList.remove('reloading'), 400)
+    }
+    renderPager()
+    toast('鼓励语已刷新')
+  },
+  'music-play': () => { state.playing = !state.playing; renderPager() },
+  'music-prev': () => toast('上一首'),
+  'music-next': () => toast('下一首'),
+  'music-list': () => { const it = findItem(state.itemId); toast('播放列表：' + (it ? C(it).station : '熊猫Dj')) },
+  'fish-hit': (v, el) => { const it = findItem(state.itemId)
+    if (it) { it.config.count = (+C(it).count || 0) + 1
+      const num = el.querySelector('.fish-num'); if (num) num.textContent = it.config.count }
+    el.classList.add('hit'); setTimeout(() => el.classList.remove('hit'), 130) },
+  'item': () => { const it = findItem(state.itemId); const c = it ? C(it) : {}
+    toast('打开：' + (c.label || c.name || '链接')) },
+  'open-link': () => { const it = findItem(state.itemId); hideCtx(); if (it) { const c = C(it); openLink(c.label || c.name || '链接') } },
+  'item-edit': () => { const id = state.itemId; hideCtx(); state.itemId = id; openModal('editItem') },
+  /* 内容自定义：配置在编辑面板里即时写入实例（默认值仍由定义表提供），确认只是收尾 */
+  'item-save': () => { closeModal(); renderPager(); toast('修改成功') },
+  /* 更换引用的小组件：保留位置与尺寸，只换 kind（config 回到该定义默认值，名称标签沿用） */
+  'item-swap': v => { const it = findItem(state.itemId); hideCtx()
+    const d = WIDGET_DEFS[v]
+    if (!it || !d) return
+    const lbl = C(it).label || C(it).name
+    it.t = v
+    it.config = Object.assign({}, d.def, lbl ? { label: lbl } : {})
+    renderPager(); toast('已更换为：' + d.n) },
+  'edit-bool': v => { const it = findItem(state.itemId); if (!it) return
+    it.config[v] = !C(it)[v]; renderPager(); refreshModal() },
+  'edit-pick': v => { const it = findItem(state.itemId); if (!it) return
+    const p = v.split('|'); it.config[p[0]] = p[1]; renderPager(); refreshModal() },
+  'item-size': v => { const it = curPage().filter(x => x.id === state.itemId)[0]; hideCtx(); if (!it) return
+    const p = v.split('x'); const w = +p[0], h = +p[1]
+    const page = curPage(); const old = { c: it.c, r: it.r, w: it.w, h: it.h }
+    page.splice(page.indexOf(it), 1)
+    const clash = page.some(x => x.c < it.c + w && it.c < x.c + x.w && x.r < it.r + h && it.r < x.r + x.h)
+    if (clash) { const slot = findSlot(page, w, h); if (!slot) { it.w = old.w; it.h = old.h; page.push(it); renderPager(); toast('没有足够空间修改尺寸'); return } it.c = slot.c; it.r = slot.r }
+    it.w = w; it.h = h
+    page.push(it); renderPager(); toast('尺寸已更新为 ' + w + '×' + h) },
+  'item-del': () => { const page = curPage(); const id = state.itemId; hideCtx()
+    const i = page.findIndex(x => x.id === id)
+    if (i >= 0) { page.splice(i, 1); renderPager(); toast('删除成功') } },
+  'item-folder': () => { hideCtx(); toast('添加到文件夹：请输入文件夹名称') },
+  'dock-app': v => openLink(v),
+  'dock-act': v => openDrawer({ add: 'add', personal: 'personal', square: 'square', setting: 'setting' }[v]),
+  'open-drawer': v => openDrawer(v || 'profile'),
+  'close-drawer': () => closeDrawer(),
+  'add-tab': v => { state.addTab = +v; refreshDrawer() },
+  'add-cat': v => { state.addCat = +v; refreshDrawer() },
+  'add-widget': v => { const d = WIDGET_DEFS[v] || WIDGET_DEFS.icon; place(d.units[0], d.units[1], v, { label: d.n }) },
+  'add-site': v => place(2, 2, 'icon', { label: v }),
+  'add-batch': () => { const l = NAVI[state.addCat].l.slice(0, 6); let n = 0
+    l.forEach(x => { const slot = findSlot(curPage(), 2, 2); if (slot) { curPage().push(G(slot.c, slot.r, 2, 2, 'icon', { label: x })); n++ } })
+    renderPager(); toast('已处理待添加列表，添加 ' + n + ' 个') },
+  'pick-all': () => toast('全选当页'),
+  'add-custom': () => { const n = state.linkName || '未命名'; place(2, 2, 'icon', { label: n, url: state.linkUrl || '' }); state.linkName = ''; state.linkUrl = ''; refreshDrawer() },
+  'up-icon': () => toast(state.user ? '请选择图标文件' : '登录后上传新图标'),
+  'up-img': () => toast('上传自定义图标'),
+  'wall-pick': v => { state.wall = +v; applySkin(state.skinId); refreshDrawer(); toast('壁纸已切换：' + WALLS[state.wall].n) },
+  'wall-random': () => { state.wall = Math.floor(Math.random() * WALLS.length); applySkin(state.skinId); refreshDrawer(); toast('随机壁纸：' + WALLS[state.wall].n) },
+  'wall-cat': (v, el) => { qa('.cats .cat', el.parentElement).forEach(c => c.classList.toggle('active', c === el)) },
+  'wall-local': () => toast('点击或拖拽到此处上传；本地背景格式错误或文件丢失时会自动回退默认背景'),
+  'wall-cloud': () => toast(state.user ? '将当前壁纸上传（最多上传 20 张）' : '登录后上传'),
+  'wall-link': () => toast('请输入正确的图片或视频地址'),
+  'active-color': v => { state.activeColor = v; refreshDrawer() },
+  'tog-time': () => { state.showTime = !state.showTime; syncStage(); refreshDrawer() },
+  'tog-date': () => { state.showDate = !state.showDate; syncStage(); refreshDrawer() },
+  'tog-quote': () => { state.showQuote = !state.showQuote; syncStage(); refreshDrawer() },
+  'tog-top': () => { state.hideTop = !state.hideTop; syncStage(); refreshDrawer() },
+  'tog-search': () => { state.hideSearch = !state.hideSearch; syncStage(); refreshDrawer() },
+  'tog-labels': () => { state.labels = !state.labels; syncStage(); refreshDrawer() },
+  'tog-immersive': () => { state.immersive = !state.immersive; renderEngine(); refreshDrawer() },
+  'tog-simple': () => { state.simpleSearch = !state.simpleSearch; renderEngine(); refreshDrawer() },
+  'tog-autofocus': () => { state.autoFocus = !state.autoFocus; refreshDrawer(); toast('自动聚焦：' + (state.autoFocus ? '已开启' : '已关闭')) },
+  'tog-keep': () => { state.searchKeep = !state.searchKeep; refreshDrawer() },
+  'tog-hidebtn': () => { state.hideBtn = !state.hideBtn; renderEngine(); refreshDrawer() },
+  'tog-history': () => { state.searchHistory = !state.searchHistory; if (!state.searchHistory) q('#searchPanel').classList.remove('show'); refreshDrawer(); toast('搜索历史：' + (state.searchHistory ? '已开启' : '已关闭，搜索框不再弹出下拉')) },
+  'tog-dockicon': () => { state.dockIcon = state.dockIcon === 'circle' ? 'rect' : 'circle'; renderDock(); refreshDrawer() },
+  'tog-bind': () => { state.fold = !state.fold; refreshDrawer(); toast('主题色绑定主题而非壁纸：' + (state.fold ? '已开启' : '已关闭')) },
+  'skin-pick': v => { applySkin(v, true); refreshDrawer() },
+  'skin-new': () => { const s = JSON.parse(JSON.stringify(state.skins.filter(x => x.id === state.skinId)[0])); s.id = 'c' + Date.now(); s.n = s.n + ' 副本'; s.builtin = false; state.skins.push(s); applySkin(s.id); refreshDrawer(); toast('新建成功') },
+  'skin-reset': () => { const cur = state.skins.filter(x => x.id === state.skinId)[0]; const d = SKIN_DEF.filter(x => x.id === cur.id)[0]
+    if (!d) { toast('自定义皮肤无法还原为内置'); return } cur.t = JSON.parse(JSON.stringify(d.t)); applySkin(cur.id); refreshDrawer(); toast('恢复成功') },
+  'skin-del': () => { if (state.skins.length <= 1) { toast('至少保留一套皮肤'); return }
+    const i = state.skins.findIndex(x => x.id === state.skinId)
+    if (SKIN_DEF.some(d => d.id === state.skins[i].id)) { toast('内置皮肤不可删除'); return }
+    state.skins.splice(i, 1); applySkin(state.skins[0].id); refreshDrawer(); toast('删除成功') },
+  'theme-pick': v => { state.selSkin = v; refreshModal() },
+  'theme-apply': () => { const s = state.skins.filter(x => x.id === state.selSkin)[0]; state.wall = s.wall || 0; applySkin(s.id); closeModal(); toast('应用成功') },
+  'eng-set': v => { state.engine = +v; renderEngine(); hideEnginePanel(); hideCtx(); if (state.modal) refreshModal(); if (state.draw) refreshDrawer(); toast('该搜索引擎正在使用中') },
+  'eng-hide': v => {
+    const e = ENGINES[+v]
+    if (!e) return
+    if (!e.hide && engVisible().length <= 1) { toast('至少保留一个可见的搜索引擎'); return }
+    e.hide = !e.hide
+    if (e.hide && ENGINES[state.engine] === e) state.engine = ENGINES.indexOf(engVisible()[0])
+    renderEngine(); renderEnginePanel(); refreshDrawer(); if (state.modal) refreshModal()
+    toast((e.hide ? '已隐藏：' : '已显示：') + e.n)
+  },
+  'eng-up': v => { const i = +v; if (i > 0) { const t = ENGINES[i - 1]; ENGINES[i - 1] = ENGINES[i]; ENGINES[i] = t; if (state.engine === i) state.engine = i - 1; refreshModal(); renderEngine(); renderEnginePanel() } },
+  'eng-add': () => { if (engVisible().length >= 12) { toast('展示数量已达上限 12 个，请先隐藏其他引擎'); return }
+    const n = state.engName || '自定义'; ENGINES.push({ n: n, c: '#0EA5E9', g: n.slice(0, 1), u: (state.engUrl || '') })
+    closeModal(); renderEngine(); renderEnginePanel(); toast('添加成功') },
+  'open-mode': v => { state.openMode = v; hideCtx() },
+  'ctx-tog': v => { CTX_TOG[v](); syncStage(); renderDock(); hideCtx() },
+  'ctx-do': v => { hideCtx()
+    const map = { alpha: 'glass', count: 'dockCount', icon: 'dockIcon' }
+    if (map[v]) { openDrawer('personal'); return }
+    if (v === 'sync') { toast('正在同步数据…'); setTimeout(() => toast('同步完成'), 900); return }
+    if (v === 'msg') { toast('暂无消息'); return }
+    if (v === 'log') { openModal('log'); return }
+    if (v === 'about') { openModal('about'); return } },
+  'open-modal': v => { hideCtx(); openModal(v) },
+  'close-modal': () => closeModal(),
+  'login-tab': v => { state.loginTab = +v; refreshModal() },
+  'login-do': () => { state.user = { email: state.loginMail || 'me@thrilled.dev' }; closeModal(); refreshDrawer(); toast('登录成功，已进入隐私模式'); setMode('privacy') },
+  'logout': () => { state.user = null; refreshDrawer(); toast('退出成功') },
+  'bind-mail': () => toast('请输入旧邮箱 / 请输入新邮箱'),
+  'change-pwd': () => toast('请输入旧密码 / 请输入新密码'),
+  'sign-name': () => toast('我的个性签名'),
+  'del-account': () => toast('注销账号：将彻底删除选中的账号数据'),
+  'pf-tab': v => { state.pfTab = +v; refreshDrawer() },
+  'pz-tab': v => { state.pzTab = +v; refreshDrawer() },
+  'pz-mine': v => { state.pzMine = +v; refreshDrawer() },
+  'pz-cat': (v, el) => { qa('.cats .cat', el.parentElement).forEach(c => c.classList.toggle('active', c === el)) },
+  'pz-page': v => { state.pzPage = +v; refreshDrawer() },
+  'pz-like': v => { state.like[v] = !state.like[v]; refreshDrawer() },
+  'pz-apply': () => { closeDrawer(); toast('应用成功，恢复后将覆盖当前界面') },
+  'pz-del': () => toast('确定删除作品'),
+  'share-do': () => { closeDrawer(); toast('正在分享…'); setTimeout(() => toast('分享成功'), 800) },
+  'copy-link': () => toast('复制分享链接查看'),
+  'share-pub': () => { state.sharePub = true; refreshDrawer() },
+  'share-pri': () => { state.sharePub = false; refreshDrawer() },
+  'share-mode': (v, el) => { qa('.cats .cat', el.parentElement).forEach(c => c.classList.toggle('active', c === el)) },
+  'backup-do': () => { state.backupTime = new Date().toLocaleString('zh-CN'); closeModal(); toast('备份成功') },
+  'cloud-backup': () => toast(state.user ? '云端备份完成' : '请先登录'),
+  'restore-do': () => { closeModal(); reseedLayout(); toast('已恢复为默认界面') },
+  'clear-local': () => toast('清除本地数据成功'),
+  'reset-do': () => { closeModal(); reseedLayout(); toast('已一键重置为出厂布局') },
+  'export-layout': () => { exportLayout(); toast('已导出 thrilled-layout.json') },
+  'import-layout': () => { const f = q('#importFile'); f.value = ''; f.click() },
+  'feedback': () => toast('问题反馈：请联系工作人员'),
+  'policy': () => toast('隐私协议：尊重用户的隐私权利'),
+  'contact': () => toast('联系作者：请联系工作人员'),
+  'to-plugin': () => toast('请转到插件中使用')
+}
+const openLink = name => {
+  toast((state.openMode === 'tab' ? '新标签页打开：' : '当前窗口打开：') + name)
+}
+
+/* ===================== 14. 事件 ===================== */
+const stage = q('#stage')
+document.addEventListener('click', e => {
+  const t = e.target.closest && e.target.closest('[data-act]')
+  if (t) {
+    const host = t.closest('.item')
+    if (host) state.itemId = host.getAttribute('data-id')
+    const fn = ACTIONS[t.getAttribute('data-act')]
+    if (fn) fn(t.getAttribute('data-v') || '', t)
+    return
+  }
+  if (!(e.target.closest && e.target.closest('#ctx'))) hideCtx()
+  if (!(e.target.closest && (e.target.closest('#searchBox') || e.target.closest('#searchPanel')))) q('#searchPanel').classList.remove('show')
+  if (!(e.target.closest && (e.target.closest('#engineIco') || e.target.closest('#enginePanel')))) hideEnginePanel()
+  if (e.target.id === 'modalMask') closeModal()
+  if (e.target.classList && e.target.classList.contains('grid')) { q('#searchInput').focus(); renderSearchPanel() }
+})
+document.addEventListener('contextmenu', e => {
+  e.preventDefault()
+  const el = e.target.closest && e.target.closest('.item')
+  const r = q('#stage').getBoundingClientRect()
+  const s = r.width / STAGE_W
+  const x = (e.clientX - r.left) / s, y = (e.clientY - r.top) / s
+  renderCtx(Math.min(x, STAGE_W - 240), y, el ? el.getAttribute('data-id') : null)
+})
+document.addEventListener('input', e => {
+  const k = e.target.getAttribute && e.target.getAttribute('data-inp')
+  if (!k) return
+  const v = e.target.value
+  if (RANGE[k]) { RANGE[k](+v, e.target); return }
+  /* 编辑面板字段：即时写入实例 config（type=num 转数字，type=list 拆成数组） */
+  if (k.indexOf('edit:') === 0) {
+    const it = findItem(state.itemId)
+    if (!it) return
+    const key = k.slice(5)
+    const d = WIDGET_DEFS[it.t] || WIDGET_DEFS.icon
+    const f = d.fields.filter(x => x.k === key)[0]
+    it.config[key] = f && f.t === 'list' ? v.split(/[,，]/).map(s => s.trim()).filter(Boolean)
+      : (f && f.t === 'num' ? (v === '' ? 0 : +v) : v)
+    if (key === 'label' && it.t === 'icon') it.config.name = v
+    return
+  }
+  if (k.indexOf('glass:') === 0) {
+    state.glass[k.slice(6)] = +v / 100
+    applySkin(state.skinId)
+    setHead(e.target, v + '%')
+    return
+  }
+  if (k.indexOf('skin:') === 0) { skinSet(k.slice(5), v); return }
+  if (k === 'addKw') { state.addKw = v
+    const box = q('#addList'); if (!box) return
+    const ws = WIDGET_LIST.filter(w => !v || w.n.indexOf(v) >= 0 || w.s.indexOf(v) >= 0)
+    box.innerHTML = ws.length ? ws.map(w => '<div class="eng-row"><div class="er-ico" style="background:' + w.c + '">' + w.g + '</div>' +
+      '<div style="flex:1;min-width:0"><div>' + w.n + '</div><div style="color:var(--panel-sub);font-size:11px">' + w.s + '</div></div>' +
+      '<button class="btn sm" data-act="add-widget" data-v="' + w.t + '">添加</button></div>').join('') : '<div class="empty-box">暂无结果</div>'
+    return }
+  if (k === 'nick') { state.nick = v; qa('.qt-hi').forEach(el => el.textContent = greetByHour() + '，' + state.nick); return }
+  if (k === 'clockColor') { state.clockColor = v; document.documentElement.style.setProperty('--clock-color', v); return }
+  state[k] = v
+})
+q('#searchInput').addEventListener('focus', () => renderSearchPanel())
+/* 编辑字段失焦后刷新网格（输入过程中不重绘，避免丢焦点）；导入布局走隐藏的 file input */
+document.addEventListener('change', e => {
+  const k = e.target.getAttribute && e.target.getAttribute('data-inp')
+  if (k && k.indexOf('edit:') === 0) renderPager()
+})
+q('#importFile').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0]
+  if (!f) return
+  const rd = new FileReader()
+  rd.onload = () => {
+    try {
+      const d = JSON.parse(String(rd.result))
+      toast(importLayout(d) ? '布局导入成功' : '布局导入失败：standard / privacy 不能为空')
+    } catch {
+      toast('布局导入失败：不是合法的 JSON 文件')
+    }
+  }
+  rd.readAsText(f)
+})
+q('#searchInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); ACTIONS['search-go']() }
+})
+q('#stage').addEventListener('dblclick', e => {
+  const host = e.target.closest && e.target.closest('.item')
+  if (host && host.getAttribute('data-t') === 'quote') ACTIONS['quote-refresh']('', host)
+})
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { hideCtx(); hideEnginePanel(); closeModal(); closeDrawer(); q('#searchPanel').classList.remove('show'); return }
+  const typing = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return
+  if (e.key >= '1' && e.key <= '9') {
+    const vis = engVisible(); const i = +e.key - 1
+    if (i < vis.length) { state.engine = ENGINES.indexOf(vis[i]); renderEngine(); renderEnginePanel(); toast('已切换到：' + vis[i].n) }
+    return
+  }
+  if (e.key === 'ArrowLeft') goPage(state.cur[state.mode] - 1)
+  if (e.key === 'ArrowRight') goPage(state.cur[state.mode] + 1)
+})
+q('#modePill').addEventListener('mouseenter', () => { q('#modeTip').classList.add('show') })
+q('#modePill').addEventListener('mouseleave', () => { q('#modeTip').classList.remove('show') })
+let dragRow = null
+document.addEventListener('dragstart', e => {
+  const row = e.target.closest && e.target.closest('.eng-row.sortable')
+  if (!row) return
+  dragRow = row
+  row.classList.add('drag')
+  e.dataTransfer.effectAllowed = 'move'
+})
+document.addEventListener('dragover', e => {
+  if (!dragRow) return
+  const row = e.target.closest && e.target.closest('.eng-row.sortable')
+  if (!row || row === dragRow) return
+  e.preventDefault()
+  const box = row.parentElement
+  const rows = qa('.eng-row.sortable', box)
+  box.insertBefore(dragRow, rows.indexOf(dragRow) < rows.indexOf(row) ? row.nextSibling : row)
+})
+document.addEventListener('drop', e => { if (dragRow) e.preventDefault() })
+document.addEventListener('dragend', () => {
+  if (!dragRow) return
+  dragRow.classList.remove('drag')
+  dragRow = null
+  const curName = ENGINES[state.engine].n
+  const next = qa('.eng-row.sortable').map(r => ENGINES[+r.getAttribute('data-idx')])
+  ENGINES.length = 0
+  next.forEach(x => ENGINES.push(x))
+  state.engine = Math.max(0, ENGINES.findIndex(x => x.n === curName))
+  renderEngine(); refreshDrawer(); toast('搜索引擎顺序已更新')
+})
+document.addEventListener('mouseover', e => {
+  const b = e.target.closest && e.target.closest('.pill-btn')
+  const tip = q('#modeTip')
+  if (b) { const m = MODES.filter(x => x.k === b.getAttribute('data-v'))[0]
+    tip.textContent = m ? m.d : ''
+    tip.style.left = (b.getBoundingClientRect().left - q('#stage').getBoundingClientRect().left) / (q('#stage').getBoundingClientRect().width / STAGE_W) + 'px'
+    tip.classList.add('show') }
+})
+let wheelT = 0
+stage.addEventListener('wheel', e => {
+  if (!e.target.closest('#pager')) return
+  const now = Date.now()
+  if (now - wheelT < 450) return
+  const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY
+  if (Math.abs(d) < 12) return
+  wheelT = now
+  goPage(state.cur[state.mode] + (d > 0 ? 1 : -1))
+}, { passive: true })
+let drag = null
+stage.addEventListener('mousedown', e => {
+  const el = e.target.closest && e.target.closest('.item')
+  if (!el || e.button !== 0 || e.target.closest('.ia')) return
+  const it = curPage().filter(x => x.id === el.getAttribute('data-id'))[0]
+  if (!it) return
+  const gr = el.parentElement.getBoundingClientRect()
+  const s = gr.width / (COLS * CELL)
+  drag = { it: it, el: el, lab: el.nextElementSibling, gr: gr, s: s,
+    gx: (e.clientX - gr.left) / s - (it.c * CELL + INSET), gy: (e.clientY - gr.top) / s - (it.r * CELL + INSET), moved: false }
+})
+document.addEventListener('mousemove', e => {
+  if (!drag) return
+  const L = (e.clientX - drag.gr.left) / drag.s - drag.gx
+  const T = (e.clientY - drag.gr.top) / drag.s - drag.gy
+  if (!drag.moved && Math.abs(L - (drag.it.c * CELL + INSET)) < 4 && Math.abs(T - (drag.it.r * CELL + INSET)) < 4) return
+  drag.moved = true
+  drag.el.classList.add('dragging')
+  drag.el.style.left = L + 'px'
+  drag.el.style.top = T + 'px'
+  drag.c = Math.max(0, Math.min(COLS - drag.it.w, Math.round((L - INSET) / CELL)))
+  drag.r = Math.max(0, Math.min(ROWS - drag.it.h, Math.round((T - INSET) / CELL)))
+  if (drag.lab && drag.lab.classList.contains('item-label')) {
+    drag.lab.style.left = (drag.c * CELL) + 'px'
+    drag.lab.style.top = ((drag.r + drag.it.h) * CELL - 24) + 'px'
+  }
+})
+document.addEventListener('mouseup', () => {
+  if (!drag) return
+  const d = drag
+  drag = null
+  d.el.classList.remove('dragging')
+  if (!d.moved) return
+  const page = curPage()
+  const clash = page.some(x => x !== d.it && x.c < d.c + d.it.w && d.c < x.c + x.w && x.r < d.r + d.it.h && d.r < x.r + x.h)
+  if (clash) { toast('该位置已被占用'); renderPager(); return }
+  d.it.c = d.c
+  d.it.r = d.r
+  renderPager()
+})
+window.addEventListener('resize', fit)
+
+/* ===================== 15. 初始化 ===================== */
+const boot = () => {
+  applySkin(state.skinId, true)
+  syncStage()
+  renderPager()
+  renderDock()
+  renderPill()
+  renderEngine()
+  clockTick()
+  setInterval(clockTick, 1000)
+  fit()
+  if (state.autoFocus) q('#searchInput').focus()
+  if (!sessionStorage.getItem('thrilled-welcome')) {
+    sessionStorage.setItem('thrilled-welcome', '1')
+    openModal('theme')
+  }
+}
+boot()
+</script>
+</body>
+</html>
