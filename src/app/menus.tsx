@@ -5,7 +5,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from './store'
 import { WIDGET_DEFS } from '../shared/widget-defs'
-import { SIZES, STAGE_W, STAGE_H } from '../shared/grid'
+import { SIZES } from '../shared/grid'
+import { stage } from './stage'
 import { CheckIcon, Icon } from './icons'
 import { cfg } from './widgets'
 import type { WidgetKind } from '../shared/types'
@@ -105,10 +106,10 @@ export const ContextMenu = () => {
     if (!ctx || !ref.current) return
     const w = ref.current.offsetWidth
     const h = ref.current.offsetHeight
-    const flip = ctx.x + w > STAGE_W - 20
+    const flip = ctx.x + w > stage.w - 20
     setBox({
       x: flip ? Math.max(8, ctx.x - w - 120) : ctx.x,
-      y: ctx.y + h > STAGE_H - 20 ? Math.max(8, STAGE_H - h - 20) : ctx.y,
+      y: ctx.y + h > stage.h - 20 ? Math.max(8, stage.h - h - 20) : ctx.y,
       flip,
     })
   }, [ctx])

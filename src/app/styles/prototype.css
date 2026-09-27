@@ -32,7 +32,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   pointer-events:none;z-index:1}
 
 /* ============ 2. 搜索栏（y=100 h=50） ============ */
-.search-row{position:absolute;left:0;top:44px;width:1920px;height:50px;display:flex;
+.search-row{position:absolute;left:0;top:44px;width:100%;height:50px;display:flex;
   justify-content:center;align-items:flex-start;z-index:var(--z-pop)}
 .search-box{width:var(--search-width);height:54px;border-radius:var(--search-radius);
   border:2px solid rgba(255,255,255,.72);
@@ -85,7 +85,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* ============ 3. 翻页画布与网格 ============ */
 #pager{position:absolute;left:0;top:0;height:100%;z-index:2;transition:transform .42s var(--ease)}
 .page{position:absolute;top:0;width:1920px;height:100%}
-.grid{position:absolute;left:72px;top:77px;width:1776px;height:740px;margin-top:0}
+.grid{position:absolute;left:50%;top:77px;width:1776px;height:740px;margin-left:-888px}
 .item{position:absolute;border-radius:var(--radius-lg);overflow:hidden;
   background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-card) * 100%),transparent);
   backdrop-filter:blur(var(--blur-card));
@@ -219,7 +219,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .w-folder svg{width:34px;height:34px}
 
 /* ============ 6. Dock（悬浮圆角栏 + 分隔线 + 4 功能按钮） ============ */
-.dock{position:absolute;left:0;bottom:0;width:1920px;height:122px;display:flex;align-items:center;
+.dock{position:absolute;left:0;bottom:0;width:100%;height:122px;display:flex;align-items:center;
   justify-content:center;z-index:var(--z-float)}
 .dock-bar{display:flex;align-items:center;padding:14px 10px;border-radius:24px;
   background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-dock)));backdrop-filter:blur(var(--blur-dock));
@@ -645,8 +645,6 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .modal,.dw{box-shadow:0 24px 60px -20px rgba(15,23,42,.34)}
 .toast{box-shadow:0 10px 28px -12px rgba(15,23,42,.36)}
 
-/* —— 页面网格垂直居中的平滑过渡（内容增删 / 拖拽后重对中） —— */
-.grid{transition:transform .35s var(--ease)}
 
 /* ============ 18. 全窗口壁纸层（消除缩放白边） ============ */
 /* 壁纸 / 遮罩 / 视频改为固定定位全窗口铺满：舞台等比缩放后上下（或左右）的白边由同一壁纸延续，不再出现色带 */

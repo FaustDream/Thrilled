@@ -7,7 +7,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, WALLS, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
-import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_H, STAGE_W, verticalOffset } from '../shared/grid'
+import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
+import { stage } from './stage'
 import { DOCK_APPS } from './layout'
 import { WidgetView, TileGlyph, cfg, str } from './widgets'
 import { siteUrlOf } from './brands'
@@ -143,14 +144,32 @@ export const App = () => {
     return () => clearInterval(t)
   }, [])
   useEffect(() => {
+    /* 舞台铺满窗口：设计像素 = 窗口/缩放；窗口小于设计尺寸时整体等比缩小（origin 左上，无居中偏移） */
     const fit = () => {
-      const s = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H)
+      const s = Math.min(1, window.innerWidth / STAGE_W, window.innerHeight / 945)
       const el = stageRef.current
-      if (el) el.style.transform = `translate(${(window.innerWidth - STAGE_W * s) / 2}px,${(window.innerHeight - STAGE_H * s) / 2}px) scale(${s})`
+      if (el) {
+        el.style.width = `${window.innerWidth / s}px`
+        el.style.height = `${window.innerHeight / s}px`
+        el.style.transform = `scale(${s})`
+      }
+      stage.w = window.innerWidth / s
+      stage.h = window.innerHeight / s
+      stage.scale = s
     }
     fit()
-    window.addEventListener('resize', fit)
-    return () => window.removeEventListener('resize', fit)
+    /* 视口变更监听：resize 事件 + ResizeObserver（布局驱动，覆盖不触发事件的宿主环境）；
+       事件可能先于实际尺寸生效（竞态），多级延迟校准 */
+    const onResize = (): void => { fit(); [90, 350].forEach((d) => window.setTimeout(fit, d)) }
+    window.addEventListener('resize', onResize)
+    window.visualViewport?.addEventListener('resize', onResize)
+    const ro = new ResizeObserver(onResize)
+    ro.observe(document.body)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.visualViewport?.removeEventListener('resize', onResize)
+      ro.disconnect()
+    }
   }, [])
   useEffect(() => {
     if (!toastMsg) return
@@ -260,10 +279,10 @@ export const App = () => {
       const el = stageRef.current
       if (!el) return
       const r = el.getBoundingClientRect()
-      const s = r.width / STAGE_W
+      const s = r.width / stage.w
       const host = (e.target as HTMLElement).closest?.('.item')
       const next: CtxState = {
-        x: Math.min((e.clientX - r.left) / s, STAGE_W - 240),
+        x: Math.min((e.clientX - r.left) / s, stage.w - 240),
         y: (e.clientY - r.top) / s,
         id: host?.getAttribute('data-id') ?? null,
       }
@@ -380,8 +399,7 @@ export const App = () => {
       <div id="pager" style={{ transform: `translateX(-${cur[modeKey] * PAGE_W}px)` }}>
         {pages[modeKey].map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
-            <div className="grid" ref={i === cur[modeKey] ? gridRef : undefined}
-              style={{ transform: `translateY(${verticalOffset(pg)}px)` }}>
+            <div className="grid" ref={i === cur[modeKey] ? gridRef : undefined}>
               {pg.map((it, idx) => (
                 <GridCard key={it.id} item={it} idx={idx} now={now} nick={settings.nick} encourage={encourage} playing={playing} weather={weather}
                   dragging={drag?.id === it.id ? drag : null}
@@ -437,7 +455,7 @@ export const App = () => {
         </div>
       )}
       {enginePanel && (
-        <div className="engine-panel show" id="enginePanel" style={{ left: (STAGE_W - settings.searchWidth) / 2 }}>
+        <div className="engine-panel show" id="enginePanel" style={{ left: (stage.w - settings.searchWidth) / 2 }}>
           {visibleEngines.map((e, i) => (
             <div key={e.id} className={`ep-row${e.id === settings.engineId ? ' on' : ''}`} data-act="eng-set" data-v={e.id}>
               <span className="ep-ico" style={{ background: e.color, fontSize: e.latin ? 9 : 11 }}>{e.glyph}</span>
