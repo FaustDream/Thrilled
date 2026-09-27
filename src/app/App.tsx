@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, WALLS, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
-import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_H, STAGE_W } from '../shared/grid'
+import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_H, STAGE_W, verticalOffset } from '../shared/grid'
 import { DOCK_APPS } from './layout'
 import { WidgetView, TileGlyph, cfg, str } from './widgets'
 import { siteUrlOf } from './brands'
@@ -376,7 +376,8 @@ export const App = () => {
       <div id="pager" style={{ transform: `translateX(-${cur[modeKey] * PAGE_W}px)` }}>
         {pages[modeKey].map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
-            <div className="grid" ref={i === cur[modeKey] ? gridRef : undefined}>
+            <div className="grid" ref={i === cur[modeKey] ? gridRef : undefined}
+              style={{ transform: `translateY(${verticalOffset(pg)}px)` }}>
               {pg.map((it, idx) => (
                 <GridCard key={it.id} item={it} idx={idx} now={now} nick={settings.nick} encourage={encourage} playing={playing} weather={weather}
                   dragging={drag?.id === it.id ? drag : null}
