@@ -647,3 +647,13 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 
 /* —— 页面网格垂直居中的平滑过渡（内容增删 / 拖拽后重对中） —— */
 .grid{transition:transform .35s var(--ease)}
+
+/* ============ 18. 全窗口壁纸层（消除缩放白边） ============ */
+/* 壁纸 / 遮罩 / 视频改为固定定位全窗口铺满：舞台等比缩放后上下（或左右）的白边由同一壁纸延续，不再出现色带 */
+.wall-layer{position:fixed;inset:0;z-index:0;
+  background-image:var(--wallpaper),repeating-linear-gradient(135deg,rgba(122,136,160,.028) 0 1px,transparent 1px 9px);
+  background-size:cover,auto;filter:blur(var(--wp-blur))}
+.wall-mask{position:fixed;inset:0;z-index:0;background:var(--mask-color);opacity:var(--wp-mask);pointer-events:none}
+.wall-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#stage{z-index:1}
+#stage::before,#stage::after{content:none}

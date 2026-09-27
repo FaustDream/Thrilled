@@ -362,15 +362,19 @@ export const App = () => {
   }, [drag])
 
   return (
-    <div id="stage" ref={stageRef} data-mode={settings.mode} data-labels={settings.labels ? '1' : '0'}
-      data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}
-      data-showtime={settings.showTime ? '1' : '0'} data-showdate={settings.showDate ? '1' : '0'}
-      data-showquote={settings.showQuote ? '1' : '0'}>
+    <>
+      {/* 全窗口壁纸层（固定定位，缩放白边不可见）+ 遮罩 */}
+      <div className="wall-layer">
+        {customWall !== null && customWall.type === 'video' && (
+          <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline />
+        )}
+      </div>
+      <div className="wall-mask" />
 
-      {/* 自定义视频壁纸层 */}
-      {customWall !== null && customWall.type === 'video' && (
-        <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline />
-      )}
+      <div id="stage" ref={stageRef} data-mode={settings.mode} data-labels={settings.labels ? '1' : '0'}
+        data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}
+        data-showtime={settings.showTime ? '1' : '0'} data-showdate={settings.showDate ? '1' : '0'}
+        data-showquote={settings.showQuote ? '1' : '0'}>
 
       {/* 翻页画布 */}
       <div id="pager" style={{ transform: `translateX(-${cur[modeKey] * PAGE_W}px)` }}>
@@ -512,6 +516,7 @@ export const App = () => {
       <Modal />
       <div className={`toast${toastMsg ? ' show' : ''}`}>{toastMsg}</div>
     </div>
+    </>
   )
 }
 
