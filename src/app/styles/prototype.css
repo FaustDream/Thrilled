@@ -588,3 +588,59 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .dw,.modal,.ctx,.ctx-sub,.search-panel,.engine-panel,.mode-tip,.dock-bar{backdrop-filter:blur(var(--blur-menu)) saturate(1.45)}
 .search-box{backdrop-filter:blur(var(--blur-search)) saturate(1.5)}
 .item{backdrop-filter:blur(var(--blur-card)) saturate(1.45)}
+
+/* ============ 17. 启动器风格（v4.3）：降噪 / 主次分明 ============ */
+/* 主次关系：搜索（唯一强焦点）> 小组件卡（内容）> 图标入口（无卡片）> Dock（单层磨砂） */
+
+/* —— 壁纸纹理降到几乎不可见（保留玻璃可感知的最低限度） —— */
+#stage::before{background-image:var(--wallpaper),repeating-linear-gradient(135deg,rgba(122,136,160,.028) 0 1px,transparent 1px 9px)}
+
+/* —— 图标入口去卡片化：品牌字形直接落在背景上 —— */
+.item[data-t='icon'],.item[data-t='folder']{
+  background:transparent;backdrop-filter:none;box-shadow:none;outline:none;border-radius:0}
+.item[data-t='icon']:hover,.item[data-t='folder']:hover{transform:translateY(-3px)}
+.item[data-t='group']{background:transparent;backdrop-filter:none;box-shadow:none;outline:none}
+.item[data-t='icon'] .item-acts{right:2px;bottom:-2px}
+.v-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;font-size:27px;border-radius:12px;transition:transform .2s var(--ease-spring)}
+.v-icon.lat{font-size:19px}
+.item[data-t='icon']:hover .v-icon{transform:scale(1.1)}
+.v-cell img.v-icon{border-radius:12px}
+.gtile{background:transparent;border:none;box-shadow:none;backdrop-filter:none}
+
+/* —— 搜索框：唯一强焦点（去描边、单投影、聚焦光环） —— */
+.search-box{border:1px solid transparent;border-radius:25px;
+  background:color-mix(in srgb,#ffffff calc(var(--g-alpha) * (var(--ga-search) + .28) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-search)) saturate(1.4);
+  box-shadow:0 10px 32px -14px rgba(15,23,42,.30)}
+.search-box:focus-within{border-color:transparent;box-shadow:var(--ring),0 14px 38px -14px rgba(15,23,42,.34)}
+.search-box.immersive{background:transparent;box-shadow:none}
+.search-box.line{border-radius:14px;background:transparent;border-color:transparent;box-shadow:none}
+
+/* —— 小组件内容卡：单一轻投影 + 统一 16px 圆角（无描边、无内高光） —— */
+.item{border-radius:16px;box-shadow:0 8px 24px -12px rgba(15,23,42,.22);outline:none;transition:transform .2s var(--ease-spring),box-shadow .2s var(--ease)}
+.item:hover{transform:translateY(-2px);box-shadow:0 14px 30px -12px rgba(15,23,42,.26)}
+.item-label{text-shadow:none;opacity:.9}
+.item:hover + .item-label{opacity:1}
+
+/* —— Dock：单层磨砂面板 + 无容器图标 —— */
+.dock-bar{border-radius:18px;padding:12px 14px;
+  box-shadow:0 14px 36px -16px rgba(15,23,42,.28)}
+.dock-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;
+  font-size:30px;transition:transform .22s var(--ease-spring)}
+.dock-icon svg{width:30px;height:30px}
+.dock-item:hover .dock-icon{transform:scale(1.16);box-shadow:none}
+.dock-sep{display:none}
+.dock-actions{margin-left:16px}
+.dock-name{box-shadow:0 6px 18px -8px rgba(15,23,42,.4)}
+
+/* —— 页点：极小淡化，胶囊只作轻提示 —— */
+.page-dot{width:5px;height:5px;opacity:.28}
+.page-dot.on{width:16px;opacity:.55}
+
+/* —— 模式胶囊：贴纸化（无投影） —— */
+.mode-pill{box-shadow:none;border-radius:12px}
+
+/* —— 浮层阴影收敛（统一单层柔和投影） —— */
+.ctx,.ctx-sub,.engine-panel,.search-panel,.mode-tip{box-shadow:0 18px 44px -16px rgba(15,23,42,.30)}
+.modal,.dw{box-shadow:0 24px 60px -20px rgba(15,23,42,.34)}
+.toast{box-shadow:0 10px 28px -12px rgba(15,23,42,.36)}

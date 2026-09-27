@@ -41,8 +41,8 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 
 export const WALLS: readonly { n: string; c: string; bg: string }[] = [
   {
-    n: '曜夜', c: '极简',
-    bg: 'radial-gradient(90% 70% at 82% 6%,rgba(120,160,255,.28),transparent 58%),radial-gradient(70% 60% at 12% 88%,rgba(70,120,220,.22),transparent 60%),radial-gradient(46% 40% at 62% 62%,rgba(150,110,255,.14),transparent 66%),linear-gradient(158deg,#1a2433 0%,#101825 46%,#0a0f18 100%)',
+    n: '雾蓝', c: '极简',
+    bg: 'radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.5),transparent 62%),linear-gradient(178deg,#eef2f8 0%,#e4eaf2 58%,#d8e1ec 100%)',
   },
   {
     n: '暮色', c: '风景',
