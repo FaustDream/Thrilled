@@ -143,7 +143,8 @@ interface AppState {
   placeMany: (entries: { label: string; url: string }[]) => number
   exportLayout: () => LayoutDoc
   importLayout: (data: unknown) => boolean
-  restoreDefault: () => void
+  /** 恢复出厂布局；keepIcons 时把现有网址图标（与出厂不重复的）追加到新页 */
+  restoreDefault: (opts?: { keepIcons?: boolean }) => void
   loadWeather: () => Promise<void>
   markBackedUp: () => void
   resetParts: (parts: { layout: boolean; skins: boolean; wallpaper: boolean }) => void
@@ -215,12 +216,12 @@ export const hydrate = async (): Promise<void> => {
   }
   let migrated: MigrationResult | null = null
   try {
-    migrated = await migrateV3()
+    migrated = await migrateV3(DEFAULT_PAGES.standard)
   } catch {
     migrated = null
   }
   const skins = cloneSkins(BUILTIN_SKINS)
-  if (migrated !== null && migrated.standard.length > 0) {
+  if (migrated !== null) {
     useApp.setState({
       settings: { ...DEFAULT_SETTINGS, ...migrated.settings },
       pages: { standard: migrated.standard, privacy: clonePages(DEFAULT_PAGES.privacy) },
@@ -229,6 +230,7 @@ export const hydrate = async (): Promise<void> => {
       history: migrated.history,
       hydrated: true,
     })
+    useApp.getState().showToast(`已从 v3 迁移：${migrated.appended} 个网站图标已放到出厂布局之后`)
   } else {
     useApp.setState({
       pages: { standard: clonePages(DEFAULT_PAGES.standard), privacy: clonePages(DEFAULT_PAGES.privacy) },
@@ -462,10 +464,43 @@ export const useApp = create<AppState>()((set, get) => ({
     set({ pages: { standard: doc.standard, privacy: doc.privacy }, cur: { standard: 0, privacy: 0 }, toast: '布局导入成功' })
     return true
   },
-  restoreDefault: () => set({
-    pages: { standard: clonePages(DEFAULT_PAGES.standard), privacy: clonePages(DEFAULT_PAGES.privacy) },
-    cur: { standard: 0, privacy: 0 },
-    toast: '已恢复为默认界面',
+  restoreDefault: (opts) => set((s) => {
+    const pages = { standard: clonePages(DEFAULT_PAGES.standard), privacy: clonePages(DEFAULT_PAGES.privacy) }
+    const next: Partial<AppState> = {
+      pages,
+      cur: { standard: 0, privacy: 0 },
+      toast: '已恢复为默认界面',
+    }
+    if (opts?.keepIcons) {
+      // 收集现有网址图标（与出厂布局不重复的），追加为新页（最多 5 页）
+      const factoryKeys = new Set(DEFAULT_PAGES.standard.flat()
+        .filter((it) => it.t === 'icon')
+        .map((it) => `${String(it.config['label'] ?? '')}|${String(it.config['url'] ?? '')}`))
+      const seen = new Set<string>()
+      let page: GridItem[] = []
+      let count = 0
+      let seq = 0
+      for (const it of [...s.pages.standard.flat(), ...s.pages.privacy.flat()]) {
+        if (it.t !== 'icon') continue
+        const key = `${String(it.config['label'] ?? '')}|${String(it.config['url'] ?? '')}`
+        if (factoryKeys.has(key) || seen.has(key)) continue
+        seen.add(key)
+        let slot = findSlot(page, 2, 2)
+        if (slot === null) {
+          if (pages.standard.length >= MAX_PAGES) break
+          page = []
+          pages.standard.push(page)
+          slot = { c: 0, r: 0 }
+        }
+        page.push({ ...it, id: `k${Date.now().toString(36)}${seq++}`, c: slot.c, r: slot.r })
+        count++
+      }
+      if (count > 0) {
+        if (page.length > 0) pages.standard.push(page)
+        next.toast = `已恢复默认界面，你的 ${count} 个网址图标保留在第 ${pages.standard.length} 页`
+      }
+    }
+    return next
   }),
 
   loadWeather: async () => {

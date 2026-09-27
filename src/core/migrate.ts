@@ -10,7 +10,7 @@
  */
 
 import { MIGRATED_KEY } from '../shared/constants';
-import { COLS, ROWS, findSlot } from '../shared/grid';
+import { COLS, MAX_PAGES, ROWS, findSlot } from '../shared/grid';
 import { BUILTIN_ENGINES, type AppSettings, type EngineDef, type GridItem, type ModePages } from '../shared/types';
 import { info, warn } from './logger';
 import { kvGetRaw, kvSetRaw } from './storage';
@@ -68,41 +68,69 @@ async function readOldKv(): Promise<Map<string, unknown>> {
   return out;
 }
 
-/** v3 磁贴数组 → v4 图标卡片（findSlot 逐个落位，放不下的丢弃） */
-function tilesToItems(tiles: unknown): GridItem[] {
-  if (!Array.isArray(tiles)) return [];
-  const out: GridItem[] = [];
-  let seq = 0;
-  for (const raw of tiles) {
-    if (typeof raw !== 'object' || raw === null) continue;
-    const t = raw as Record<string, unknown>;
-    const label = typeof t['label'] === 'string' ? t['label'] : '';
-    const url = typeof t['url'] === 'string' ? t['url'] : '';
-    if (label === '') continue;
-    const item: GridItem = {
-      id: `m${Date.now().toString(36)}${seq++}`,
-      c: 0, r: 0, w: 2, h: 2, t: 'icon',
-      config: { label, url },
-    };
-    const slot = findSlot(out, 2, 2);
-    if (slot === null) break;
-    item.c = slot.c;
-    item.r = slot.r;
-    out.push(item);
+/** v3 分页数组（TilePage[]）→ 网址图标条目（扁平，去重） */
+function toEntries(raw: unknown): { label: string; url: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { label: string; url: string }[] = [];
+  const seen = new Set<string>();
+  for (const page of raw) {
+    if (typeof page !== 'object' || page === null) continue;
+    const tiles = (page as Record<string, unknown>)['tiles'];
+    if (!Array.isArray(tiles)) continue;
+    for (const t of tiles) {
+      if (typeof t !== 'object' || t === null) continue;
+      const label = typeof (t as Record<string, unknown>)['label'] === 'string' ? (t as Record<string, unknown>)['label'] as string : '';
+      const url = typeof (t as Record<string, unknown>)['url'] === 'string' ? (t as Record<string, unknown>)['url'] as string : '';
+      if (label === '') continue;
+      const key = `${label}|${url}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ label, url });
+    }
   }
   return out;
 }
 
-/** v3 分页数组（TilePage[]）→ v4 页面集（最多 5 页，行数钳制由网格保证） */
-function toModePages(raw: unknown): ModePages {
-  if (!Array.isArray(raw)) return [];
-  const pages: ModePages = [];
-  for (const page of raw.slice(0, 5)) {
-    if (typeof page !== 'object' || page === null) continue;
-    const items = tilesToItems((page as Record<string, unknown>)['tiles']);
-    if (items.length > 0) pages.push(items);
+/**
+ * 出厂布局在前、迁移图标追加为后续新页（每页尽量装满 2×2 图标，最多 5 页）
+ * 纯函数：v3 用户保留完整出厂观感，自己的图标不丢。
+ */
+export function appendIconPages(
+  factoryStandard: ModePages,
+  entries: readonly { label: string; url: string }[],
+): { pages: ModePages; appended: number } {
+  const pages: ModePages = factoryStandard.map((pg) => pg.map((it) => ({ ...it, config: { ...it.config } })));
+  // 出厂已有的图标（label|url 相同）不重复追加
+  const factoryKeys = new Set(
+    factoryStandard.flat().filter((it) => it.t === 'icon').map((it) => `${String(it.config['label'] ?? '')}|${String(it.config['url'] ?? '')}`),
+  );
+  let appended = 0;
+  let page: GridItem[] = [];
+  let seq = 0;
+  const flush = (): void => {
+    if (page.length > 0) {
+      pages.push(page);
+      page = [];
+    }
+  };
+  for (const entry of entries) {
+    const key = `${entry.label}|${entry.url}`;
+    if (factoryKeys.has(key)) continue;
+    let slot = findSlot(page, 2, 2);
+    if (slot === null) {
+      flush();
+      if (pages.length >= MAX_PAGES) break;
+      slot = { c: 0, r: 0 };
+    }
+    page.push({
+      id: `m${Date.now().toString(36)}${seq++}`,
+      c: slot.c, r: slot.r, w: 2, h: 2, t: 'icon',
+      config: { label: entry.label, url: entry.url },
+    });
+    appended++;
   }
-  return pages;
+  flush();
+  return { pages, appended };
 }
 
 /** 迁移结果（由 app 层并入初始文档） */
@@ -111,6 +139,8 @@ export interface MigrationResult {
   engines: EngineDef[];
   settings: Partial<AppSettings>;
   history: string[];
+  /** 追加的迁移图标数量 */
+  appended: number;
 }
 
 /** v3 引擎顺序 + 当前引擎 → v4 引擎清单（内置表重排，未收录的引擎丢弃） */
@@ -130,8 +160,8 @@ function mapEngines(order: unknown, current: unknown): { engines: EngineDef[]; e
   return { engines: ordered, engineId: byId.has(cur) ? cur : 'baidu' };
 }
 
-/** 执行迁移（幂等：已迁移或无旧数据返回 null） */
-export async function migrateV3(): Promise<MigrationResult | null> {
+/** 执行迁移（幂等：已迁移或无旧数据返回 null；factoryStandard 由调用方提供出厂布局） */
+export async function migrateV3(factoryStandard: ModePages): Promise<MigrationResult | null> {
   if (kvGetRaw(MIGRATED_KEY) === '1') return null;
   let old: Map<string, unknown>;
   try {
@@ -146,7 +176,8 @@ export async function migrateV3(): Promise<MigrationResult | null> {
     return null;
   }
 
-  const standard = toModePages(old.get(OLD.PAGES));
+  const entries = toEntries(old.get(OLD.PAGES));
+  const { pages: standard, appended } = appendIconPages(factoryStandard, entries);
   const { engines, engineId } = mapEngines(old.get(OLD.ENGINE_ORDER), old.get(OLD.ENGINE));
   const nick = old.get(OLD.NICKNAME);
   const history = old.get(OLD.SEARCH_HISTORY);
@@ -159,11 +190,12 @@ export async function migrateV3(): Promise<MigrationResult | null> {
   };
 
   kvSetRaw(MIGRATED_KEY, '1');
-  info(MODULE, 'v3 数据迁移完成', { pages: standard.length, engines: engines.length });
+  info(MODULE, 'v3 数据迁移完成', { appended, pages: standard.length, engines: engines.length });
   return {
     standard: standard.map((pg) => pg.filter((it) => it.c + it.w <= COLS && it.r + it.h <= ROWS)),
     engines,
     settings,
     history: Array.isArray(history) ? history.filter((h): h is string => typeof h === 'string').slice(0, 8) : [],
+    appended,
   };
 }

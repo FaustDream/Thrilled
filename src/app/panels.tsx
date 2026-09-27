@@ -809,6 +809,7 @@ export const Modal = () => {
   const [engImg, setEngImg] = useState('')
   const [mail, setMail] = useState('')
   const [keepModes, setKeepModes] = useState(true)
+  const [keepIcons, setKeepIcons] = useState(true)
   const [resetSel, setResetSel] = useState({ layout: true, skins: true, wallpaper: false })
   const engImgFile = useRef<HTMLInputElement | null>(null)
   const key = settings.mode === 'privacy' ? 'privacy' : 'standard'
@@ -955,12 +956,13 @@ export const Modal = () => {
         return (
           <>
             <h2>恢复为默认界面</h2>
-            <p className="sub">恢复后将覆盖当前界面（布局与卡片内容回到出厂），设置与皮肤保留。</p>
+            <p className="sub">恢复后将覆盖当前布局（回到出厂卡片编排），设置与皮肤保留。</p>
             <SwitchRow l="保留极简和标准模式状态" d="恢复后停留在当前模式" on={keepModes} onToggle={() => setKeepModes(!keepModes)} />
+            <SwitchRow l="保留我的网址图标" d="与出厂不重复的图标会追加到最后一页" on={keepIcons} onToggle={() => setKeepIcons(!keepIcons)} />
             <div className="btn-row end" style={{ marginTop: 16 }}>
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
               <button className="btn" onClick={() => {
-                restoreDefault()
+                restoreDefault({ keepIcons })
                 if (!keepModes) useApp.getState().setSetting('mode', 'standard')
                 setModal(null)
               }}>确认恢复</button>
