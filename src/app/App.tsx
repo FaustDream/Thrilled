@@ -5,7 +5,7 @@
  * 平台行为：打开链接走 core/link-opener（打开方式设置），壁纸走 core/wallpaper（IndexedDB）。
  */
 import { useEffect, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, WALLS, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
 import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { stage } from './stage'
@@ -57,6 +57,28 @@ const runSearch = (): void => {
   if (!st.settings.searchKeep && el) el.value = ''
 }
 
+/** Dock 图标右键菜单动作（修改名称 / 移除 / 恢复默认）；返回是否已处理 */
+const dockMenuAct = (name: string, v: string): boolean => {
+  const st = useApp.getState()
+  const apps = st.settings.dockApps
+  const idx = Number(v)
+  if (name === 'dock-rename') {
+    const next = window.prompt('修改 Dock 快捷方式名称', apps[idx] ?? '')?.trim() ?? ''
+    if (next !== '') {
+      st.setSetting('dockApps', apps.map((a, i) => (i === idx ? next : a)))
+      st.showToast('已修改 Dock 快捷方式')
+    }
+  } else if (name === 'dock-remove') {
+    st.setSetting('dockApps', apps.filter((_, i) => i !== idx))
+    st.showToast('已从 Dock 移除，可在全局右键菜单恢复默认')
+  } else if (name === 'dock-reset') {
+    st.setSetting('dockApps', [...DOCK_APPS])
+    st.showToast('已恢复默认 Dock 应用')
+  } else return false
+  st.openCtx(null)
+  return true
+}
+
 /** 拖拽刚结束的这一次 click 不触发卡片打开 */
 let suppressItemClick = false
 
@@ -74,15 +96,35 @@ export const App = () => {
   const weather = useApp((s) => s.weather)
   const [now, setNow] = useState(() => new Date())
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [avatarOpen, setAvatarOpen] = useState(false)
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; c: number; r: number; moved: boolean } | null>(null)
   const [customWall, setCustomWall] = useState<BgData | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
+  const dockBarRef = useRef<HTMLDivElement | null>(null)
   const wheelAt = useRef(0)
 
   const modeKey = settings.mode === 'privacy' ? 'privacy' : 'standard'
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
+  const dockApps = settings.dockApps
+
+  /* ---------- Dock 苹果式悬停放大（指针接近度 → 余弦衰减缩放，图标原点贴底向上生长） ---------- */
+  const dockMagnify = (e: ReactMouseEvent) => {
+    const bar = dockBarRef.current
+    if (bar === null) return
+    const px = e.clientX
+    const radius = 130 * stage.scale
+    bar.querySelectorAll<HTMLElement>('.dock-item').forEach((it) => {
+      const r = it.getBoundingClientRect()
+      const k = Math.max(0, 1 - Math.abs(px - (r.left + r.width / 2)) / radius)
+      const icon = it.querySelector<HTMLElement>('.dock-icon')
+      if (icon !== null) icon.style.transform = k > 0 ? `scale(${(1 + 0.42 * Math.sin((k * Math.PI) / 2)).toFixed(3)})` : ''
+    })
+  }
+  const dockMagnifyReset = (): void => {
+    dockBarRef.current?.querySelectorAll<HTMLElement>('.dock-icon').forEach((el) => { el.style.transform = '' })
+  }
 
   /* ---------- 启动：持久化恢复 + 天气 + 首访欢迎 ---------- */
   useEffect(() => {
@@ -212,11 +254,15 @@ export const App = () => {
         case 'go-page': st.goPage(Number(v)); break
         case 'open-drawer': st.setDrawer((v || 'profile') as DrawerKey); break
         case 'dock-app': {
+          st.openCtx(null)
           const url = siteUrlOf(v)
           if (url !== null) openByMode(st, url, 'link')
           else st.showToast(`${v}：暂无站点地址`)
           break
         }
+        case 'dock-rename': case 'dock-remove': case 'dock-reset':
+          dockMenuAct(name, v)
+          break
         case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', square: 'square', setting: 'setting' } as const)[v] ?? 'setting'); break
         case 'open-modal': st.setModal(v as 'theme'); break
         case 'ctx-tog': {
@@ -269,6 +315,8 @@ export const App = () => {
       if (!inCtx) st.openCtx(null)
       const inSearch = (e.target as HTMLElement).closest?.('#searchBox') || (e.target as HTMLElement).closest?.('#searchPanel')
       if (!inSearch) setHistoryOpen(false)
+      const inAvatar = (e.target as HTMLElement).closest?.('#avatarWrap')
+      if (!inAvatar) setAvatarOpen(false)
       const inEngine = (e.target as HTMLElement).closest?.('#engineIco') || (e.target as HTMLElement).closest?.('#enginePanel')
       if (!inEngine) st.setEnginePanel(false)
       const grid = (e.target as HTMLElement).classList?.contains('grid')
@@ -281,17 +329,20 @@ export const App = () => {
       const r = el.getBoundingClientRect()
       const s = r.width / stage.w
       const host = (e.target as HTMLElement).closest?.('.item')
+      const dockHost = (e.target as HTMLElement).closest?.('.dock-apps .dock-item')
+      const dockIdx = dockHost?.getAttribute('data-idx') ?? null
       const next: CtxState = {
         x: Math.min((e.clientX - r.left) / s, stage.w - 240),
         y: (e.clientY - r.top) / s,
         id: host?.getAttribute('data-id') ?? null,
+        dock: dockIdx !== null ? Number(dockIdx) : null,
       }
       useApp.getState().openCtx(next)
     }
     const key = (e: KeyboardEvent) => {
       const st = useApp.getState()
       if (e.key === 'Escape') {
-        st.openCtx(null); st.setModal(null); st.setDrawer(null); st.setEnginePanel(false); setHistoryOpen(false)
+        st.openCtx(null); st.setModal(null); st.setDrawer(null); st.setEnginePanel(false); setHistoryOpen(false); setAvatarOpen(false)
         return
       }
       /* Ctrl+Shift+E 导出布局 / Ctrl+Shift+R 一键重置（重置走确认弹窗，满足二次确认约束） */
@@ -505,30 +556,39 @@ export const App = () => {
             </div>
           </div>
           <div className="mode-tip" id="modeTip" />
-          <div className="avatar" data-act="open-drawer" data-v="profile">{'T'}</div>
+          <div className="avatar-wrap" id="avatarWrap">
+            <div className="avatar" onClick={() => setAvatarOpen(!avatarOpen)} title="我的与设置">{'T'}</div>
+            {avatarOpen && (
+              <div className="avatar-menu">
+                {([['profile', '我的'], ['personal', '个性化'], ['square', '广场'], ['setting', '设置']] as const).map(([k, n]) => (
+                  <div key={k} className="ctx-item" data-act="open-drawer" data-v={k} onClick={() => setAvatarOpen(false)}>
+                    <span>{n}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </>
       )}
 
-      {/* Dock */}
+      {/* Dock（苹果式：图标右键可改/删，悬停邻近放大；个性化/广场/设置移入头像菜单） */}
       {settings.mascot && (
         <div className="dock">
-          <div className="dock-bar">
+          <div className="dock-bar" ref={dockBarRef} onMouseMove={dockMagnify} onMouseLeave={dockMagnifyReset}>
             <div className="dock-apps">
-              {DOCK_APPS.slice(0, settings.dockCount).map((n) => (
-                <div className="dock-item" key={n} data-act="dock-app" data-v={n}>
+              {dockApps.slice(0, settings.dockCount).map((n, i) => (
+                <div className="dock-item" key={`dock-${i}`} data-act="dock-app" data-v={n} data-idx={String(i)}>
                   <TileGlyph name={n} cls={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`} fs={24} />
+                  <div className="dock-name">{n}</div>
                 </div>
               ))}
             </div>
             <div className="dock-sep" />
             <div className="dock-actions">
-              {([['add', '添加', '#3b82f6'], ['personal', '个性化', '#8b5cf6'], ['square', '广场', '#0ea5e9'], ['setting', '设置', '#64748b']] as const).map(([k, n, c]) => (
-                <div className="dock-item" key={k} data-act="dock-act" data-v={k} title={n}>
-                  <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`} style={{ color: c }}>
-                    {k === 'add' ? Icon.plus() : k === 'personal' ? Icon.sliders() : k === 'square' ? Icon.grid() : Icon.gear()}
-                  </div>
-                </div>
-              ))}
+              <div className="dock-item" data-act="dock-act" data-v="add">
+                <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`}>{Icon.plus()}</div>
+                <div className="dock-name">添加</div>
+              </div>
             </div>
           </div>
         </div>

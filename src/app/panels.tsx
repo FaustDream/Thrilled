@@ -8,7 +8,8 @@ import { WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
 import { SKIN_FIELDS } from '../shared/defaults'
 import { Icon } from './icons'
-import { TileGlyph } from './widgets'
+import { SiteIcon } from './widgets'
+import { siteUrlOf } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks } from '../core/bookmark-importer'
@@ -130,7 +131,7 @@ const AddPanel = () => {
           <div className="nv-grid">
             {(NAVI[cat]?.l ?? []).map((n) => (
               <div className="nv-item" key={n} onClick={() => place('icon', { label: n })}>
-                <TileGlyph name={n} cls="nv-ico" fs={18} />
+                <SiteIcon url={siteUrlOf(n) ?? ''} name={n} cls="nv-ico" fs={15} size={40} />
                 <div className="nv-name">{n}</div>
               </div>
             ))}

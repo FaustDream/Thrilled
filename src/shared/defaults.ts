@@ -6,6 +6,9 @@
  */
 import type { AppSettings, SkinPack } from './types';
 
+/** Dock 出厂应用（品牌名；Dock 图标右键可修改 / 移除，可恢复默认） */
+export const DEFAULT_DOCK_APPS: readonly string[] = ['音乐', '哔哩哔哩', '淘宝', '抖音', '小红书', '头像', '影视', '百度网盘'];
+
 export const DEFAULT_SETTINGS: AppSettings = {
   mode: 'standard',
   labels: true,
@@ -23,6 +26,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   searchRadius: 25,
   dockCount: 8,
   dockIcon: 'rect',
+  dockApps: [...DEFAULT_DOCK_APPS],
   clockColor: '#1f2937',
   showTime: true,
   showDate: true,

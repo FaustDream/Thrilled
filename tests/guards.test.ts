@@ -33,6 +33,13 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(s.glass.menu).toBe(DEFAULT_SETTINGS.glass.menu)
     expect(s.skinId).toBe('dark')
   })
+
+  it('dockApps 保留合法品牌名清单，坏数据回退默认', () => {
+    const s = normalizeSettings({ dockApps: ['知乎', 42, 'GitHub', null] })
+    expect(s.dockApps).toEqual(['知乎', 'GitHub'])
+    expect(normalizeSettings({ dockApps: 'bad' }).dockApps).toEqual(DEFAULT_SETTINGS.dockApps)
+    expect(normalizeSettings(null).dockApps).toEqual(DEFAULT_SETTINGS.dockApps)
+  })
 })
 
 describe('引擎与皮肤归一化', () => {

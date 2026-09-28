@@ -1,9 +1,9 @@
 /**
  * 内容模型与网格算法单测（v4）
- * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化
+ * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, normPages, uid } from '../src/app/layout'
+import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, uid } from '../src/app/layout'
 import { COLS, ROWS, SIZES, findSlot, overlaps } from '../src/shared/grid'
 import type { GridItem } from '../src/shared/types'
 
@@ -94,5 +94,44 @@ describe('布局导入归一化（normPages）', () => {
     expect(normPages([{ w: 2, h: 2 }, { w: 0, h: 2, t: 'icon' }, null])).toEqual([])
     expect(normPages('bad')).toEqual([])
     expect(normPages([])).toEqual([])
+  })
+})
+
+describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', () => {
+  const icon = (label: string, w = 2, h = 2): GridItem => ({ id: uid(), c: 0, r: 0, w, h, t: 'icon', config: { label } })
+
+  it('全为图标页的多页合并为一页，保留 id 与配置、不重叠', () => {
+    const merged = mergeIconPages([[icon('A'), icon('B')], [icon('C')], [icon('D'), icon('E')]])
+    expect(merged).not.toBeNull()
+    expect(merged).toHaveLength(1)
+    const flat = (merged ?? []).flat()
+    expect(flat.map((it) => it.config['label'])).toEqual(['A', 'B', 'C', 'D', 'E'])
+    const ids = flat.map((it) => it.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    const clashes = flat.flatMap((a, i) => flat.slice(i + 1).filter((b) => overlaps(a, b)))
+    expect(clashes).toEqual([])
+  })
+
+  it('超出单页容量时拆成最少的若干页', () => {
+    const perPage = Math.floor((COLS / 2) * (ROWS / 2))
+    const src = Array.from({ length: perPage + 3 }, (_, i) => [icon(`S${i}`)])
+    const merged = mergeIconPages(src)
+    expect(merged).toHaveLength(2)
+    expect((merged ?? []).flat().map((it) => it.config['label'])).toHaveLength(perPage + 3)
+  })
+
+  it('含非图标卡（出厂小组件）的页集不合并', () => {
+    expect(mergeIconPages([[icon('A')], [{ ...icon('B'), t: 'clock' }]])).toBeNull()
+    expect(mergeIconPages([[{ ...icon('A'), t: 'news' }], [icon('B')]])).toBeNull()
+  })
+
+  it('单页或空页集不合并', () => {
+    expect(mergeIconPages([[icon('A')]])).toBeNull()
+    expect(mergeIconPages([])).toBeNull()
+  })
+
+  it('isIconOnlyPage：空页不算图标页', () => {
+    expect(isIconOnlyPage([])).toBe(false)
+    expect(isIconOnlyPage([icon('A')])).toBe(true)
   })
 })

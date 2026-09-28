@@ -6,15 +6,16 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { DEFAULT_PAGES, clonePages, readLayoutDoc } from './layout'
+import { DEFAULT_PAGES, clonePages, mergeIconPages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { ENCOURAGE_QUOTES } from '../core/quotes'
 import { getWeather, type WeatherData } from '../core/weather'
-import { initStorage, loadDoc, saveDoc } from '../core/storage'
+import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
 import { migrateV3, type MigrationResult } from '../core/migrate'
+import { LAYOUT_MERGE_KEY } from '../shared/constants'
 import type {
   AppSettings,
   EngineDef,
@@ -24,6 +25,7 @@ import type {
   ModePages,
   OpenMode,
   SkinPack,
+  StoredDoc,
   ViewMode,
   WidgetKind,
 } from '../shared/types'
@@ -86,6 +88,8 @@ export interface CtxState {
   y: number
   /** 卡片 id；null = 全局菜单 */
   id: string | null
+  /** Dock 应用下标；非 null = Dock 图标右键菜单（修改 / 移除 / 恢复默认） */
+  dock: number | null
 }
 
 interface AppState {
@@ -196,11 +200,21 @@ const scheduleSave = (): void => {
 /** 标记欢迎弹窗已展示（持久化） */
 export const markWelcomed = (): void => useApp.setState({ welcomed: true })
 
+/** 一次性布局修正：v4.1 迁移曾把每个 v3 分组各建一页 —— 存量文档全为图标页时合并回尽量少的新页 */
+const withLayoutMerge = (doc: StoredDoc): { doc: StoredDoc; merged: boolean } => {
+  if (kvGetRaw(LAYOUT_MERGE_KEY) === '1') return { doc, merged: false }
+  kvSetRaw(LAYOUT_MERGE_KEY, '1')
+  const merged = mergeIconPages(doc.pages.standard)
+  if (merged === null) return { doc, merged: false }
+  return { doc: { ...doc, pages: { ...doc.pages, standard: merged } }, merged: true }
+}
+
 /** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 开启持久化 */
 export const hydrate = async (): Promise<void> => {
   await initStorage()
-  const doc = loadDoc()
-  if (doc !== null) {
+  const loaded = loadDoc()
+  if (loaded !== null) {
+    const { doc, merged } = withLayoutMerge(loaded)
     useApp.setState({
       settings: doc.settings,
       pages: doc.pages,
@@ -211,6 +225,7 @@ export const hydrate = async (): Promise<void> => {
       backupTime: doc.backupTime,
       welcomed: doc.welcomed,
       hydrated: true,
+      ...(merged ? { toast: '已把原来的多个图标页合并为一页' } : {}),
     })
     return
   }

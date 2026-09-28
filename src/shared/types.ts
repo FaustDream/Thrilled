@@ -186,6 +186,8 @@ export interface AppSettings {
   searchRadius: number;
   dockCount: number;
   dockIcon: 'rect' | 'circle';
+  /** Dock 快捷应用（品牌名清单，Dock 图标右键可修改 / 移除 / 恢复默认） */
+  dockApps: string[];
   clockColor: string;
   showTime: boolean;
   showDate: boolean;

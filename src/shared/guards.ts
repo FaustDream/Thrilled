@@ -168,6 +168,9 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     searchRadius: numish(o['searchRadius'], d.searchRadius, 0, 25),
     dockCount: numish(o['dockCount'], d.dockCount, 4, 8),
     dockIcon: dockIcon === 'circle' ? 'circle' : 'rect',
+    dockApps: Array.isArray(o['dockApps'])
+      ? (o['dockApps'] as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [...d.dockApps],
     clockColor: strish(o['clockColor'], d.clockColor),
     showTime: boolish(o['showTime'], d.showTime),
     showDate: boolish(o['showDate'], d.showDate),

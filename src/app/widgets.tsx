@@ -40,8 +40,15 @@ export const TileGlyph = ({ name, cls, fs, size }: { name: string; cls: string; 
 /**
  * 站点图标：优先真实 favicon（IndexedDB 缓存 → SW 解析），失败回退品牌字形。
  * 缓存键为站点域名，同一站点只解析一次；非扩展环境（开发预览）直接走字形。
+ * cls / fs / size 可调（添加抽屉网址导航等小尺寸场景复用）；url 为空直接走字形。
  */
-const SiteIcon = ({ url, name }: { url: string; name: string }) => {
+export const SiteIcon = ({ url, name, cls = 'v-icon', fs = 31, size = 60 }: {
+  url: string
+  name: string
+  cls?: string
+  fs?: number
+  size?: number
+}) => {
   const [icon, setIcon] = useState<string | null>(null)
   useEffect(() => {
     let alive = true
@@ -54,9 +61,9 @@ const SiteIcon = ({ url, name }: { url: string; name: string }) => {
     return () => { alive = false }
   }, [url])
   if (icon !== null) {
-    return <img className="v-icon" src={icon} alt={name} style={{ width: 60, height: 60, objectFit: 'cover', fontSize: 0 }} />
+    return <img className={cls} src={icon} alt={name} style={{ width: size, height: size, objectFit: 'cover', fontSize: 0 }} />
   }
-  return <TileGlyph name={name} cls="v-icon" fs={31} size={60} />
+  return <TileGlyph name={name} cls={cls} fs={fs} size={size} />
 }
 
 const panda = () => (

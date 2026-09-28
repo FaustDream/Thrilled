@@ -573,7 +573,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .modal-mask{backdrop-filter:blur(3px)}
 
 /* —— 抽屉：圆角与滚动条 —— */
-.dw{border-radius:20px 0 0 20px;box-shadow:-24px 0 60px -18px rgba(4,10,22,.45)}
+.dw{border-radius:0;box-shadow:-24px 0 60px -18px rgba(4,10,22,.45)}
 .dw-body::-webkit-scrollbar,.engine-panel::-webkit-scrollbar,.modal::-webkit-scrollbar{width:6px}
 .dw-body::-webkit-scrollbar-thumb,.engine-panel::-webkit-scrollbar-thumb,.modal::-webkit-scrollbar-thumb{
   background:color-mix(in srgb,var(--panel-sub) 32%,transparent);border-radius:999px}
@@ -658,5 +658,14 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* ============ 19. 空页引导提示 ============ */
 .grid-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
   pointer-events:none;max-width:560px}
+
+/* ============ 20. Dock 苹果式放大 + 头像菜单（v4.3 补丁 7） ============ */
+/* 放大由 App.dockMagnify 按指针接近度内联写入 transform：原点贴底向上生长，短过渡跟手 */
+.dock-icon{transform-origin:50% 100%;transition:transform .13s ease-out;will-change:transform}
+.dock-name{display:block}
+.avatar-menu{position:absolute;top:66px;right:56px;width:148px;padding:6px;border-radius:12px;
+  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
+  backdrop-filter:blur(var(--blur-menu));box-shadow:0 18px 44px -16px rgba(15,23,42,.30);
+  z-index:var(--z-dropdown);color:var(--menu-text)}
 .grid-hint .gh-title{font-size:20px;font-weight:600;color:var(--label-color);opacity:.55}
 .grid-hint .gh-sub{font-size:13px;color:var(--label-color);opacity:.42;line-height:1.8;margin-top:10px}

@@ -7,7 +7,8 @@
  */
 import type { GridItem, LayoutDoc, ModePages, WidgetKind } from '../shared/types';
 import { WIDGET_KINDS } from '../shared/widget-defs';
-import { COLS, ROWS } from '../shared/grid';
+import { COLS, MAX_PAGES, ROWS, findSlot } from '../shared/grid';
+import { DEFAULT_DOCK_APPS } from '../shared/defaults';
 
 let seq = 0
 export const uid = (): string => `i${Date.now().toString(36)}${(seq++).toString(36)}`
@@ -17,7 +18,7 @@ export const G = (c: number, r: number, w: number, h: number, t: WidgetKind, con
   ({ id: uid(), c, r, w, h, t, config })
 
 /* ---------- 分区应用清单 ---------- */
-export const DOCK_APPS = ['音乐', '哔哩哔哩', '淘宝', '抖音', '小红书', '头像', '影视', '百度网盘']
+export const DOCK_APPS: readonly string[] = DEFAULT_DOCK_APPS
 const AI_APPS = ['豆包', 'Kimi', '秘塔AI搜索', '通义千问']
 const AI_EXTRA = ['智谱清言', '讯飞星火', 'DeepSeek', '文心一言', '即梦AI', '可灵AI', 'ChatGPT', 'Claude']
 const TOOL_APPS = ['翻译', '计算器', '截图', '二维码']
@@ -128,4 +129,32 @@ export const readLayoutDoc = (data: unknown): LayoutDoc | null => {
   const privacy = normPages(o['privacy'])
   if (standard.length === 0 || privacy.length === 0) return null
   return { v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), standard, privacy }
+}
+
+/* ---------- 图标页合并（v4.1 迁移「一分组一页」存量数据的一次性修正） ---------- */
+
+/** 整页是否只含网址图标卡 */
+export const isIconOnlyPage = (pg: GridItem[]): boolean => pg.length > 0 && pg.every((it) => it.t === 'icon')
+
+/**
+ * 把「全部为图标页」的多页合并成尽量少的新页（顺序不变、first-fit 落位、保留 id 与配置）。
+ * 含非图标卡（出厂小组件等）或仅一页时返回 null，表示无需 / 不应合并。
+ */
+export const mergeIconPages = (standard: ModePages): ModePages | null => {
+  if (standard.length <= 1 || !standard.every(isIconOnlyPage)) return null
+  const pages: ModePages = []
+  let page: GridItem[] = []
+  for (const it of standard.flat()) {
+    let slot = findSlot(page, it.w, it.h)
+    if (slot === null) {
+      if (pages.length >= MAX_PAGES) break
+      pages.push(page)
+      page = []
+      slot = findSlot(page, it.w, it.h)
+    }
+    if (slot === null) break
+    page.push({ ...it, c: slot.c, r: slot.r })
+  }
+  if (page.length > 0) pages.push(page)
+  return pages.length > 0 ? pages : null
 }
