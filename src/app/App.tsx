@@ -438,7 +438,8 @@ export const App = () => {
       {/* 搜索行 */}
       <div className="search-row">
         <div className={`search-box${settings.immersive ? ' immersive' : ''}${settings.simpleSearch ? ' line' : ''}`} id="searchBox"
-          style={{ width: settings.searchWidth, borderRadius: settings.searchRadius }}>
+          style={{ width: settings.searchWidth, borderRadius: settings.searchRadius }}
+          onClick={() => setHistoryOpen(true)}>
           <span className="engine-ico" id="engineIco" data-act="engine-open"
             style={{ background: engine?.color, fontSize: engine?.latin ? 10 : 11 }}>{engine?.glyph}</span>
           <input id="searchInput" ref={inputRef} placeholder={`${engine?.name ?? ''} 搜索`} autoComplete="off" spellCheck={false}
@@ -450,7 +451,7 @@ export const App = () => {
         </div>
       </div>
       {settings.searchHistory && historyOpen && history.length > 0 && (
-        <div className="search-panel show" id="searchPanel">
+        <div className="search-panel show" id="searchPanel" onMouseLeave={() => setHistoryOpen(false)}>
           <div className="sp-head">搜索历史</div>
           {history.map((h) => (
             <div className="sp-row" key={h} data-act="sp-pick" data-v={h}>

@@ -31,7 +31,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 #stage::after{content:'';position:absolute;inset:0;background:var(--mask-color);opacity:var(--wp-mask);
   pointer-events:none;z-index:1}
 
-/* ============ 2. 搜索栏（y=100 h=50） ============ */
+/* ============ 2. 搜索栏（行 y=44，框 h=54，底缘 98px） ============ */
 .search-row{position:absolute;left:0;top:44px;width:100%;height:50px;display:flex;
   justify-content:center;align-items:flex-start;z-index:var(--z-pop)}
 .search-box{width:var(--search-width);height:54px;border-radius:var(--search-radius);
@@ -50,7 +50,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   justify-content:center;color:var(--search-text);cursor:pointer;transition:background .16s}
 .search-go-btn:hover{background:rgba(255,255,255,.25)}
 .search-go-btn svg{width:16px;height:16px}
-.search-panel{position:absolute;left:50%;top:160px;transform:translateX(-50%);width:772px;
+.search-panel{position:absolute;left:50%;top:106px;transform:translateX(-50%);width:772px;
   background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
   backdrop-filter:blur(var(--blur-panel));
   border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);padding:6px 0;display:none;z-index:var(--z-pop)}
@@ -62,7 +62,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .sp-row span.t{flex:1;overflow:hidden;text-overflow:ellipsis}
 
 /* 搜索引擎下拉（点击搜索框左侧引擎图标展开；与搜索历史面板互斥） */
-.engine-panel{position:absolute;top:160px;width:242px;max-height:642px;overflow:auto;padding:6px;
+.engine-panel{position:absolute;top:106px;width:242px;max-height:642px;overflow:auto;padding:6px;
   background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
   backdrop-filter:blur(var(--blur-menu));border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);
   display:none;z-index:var(--z-dropdown);color:var(--panel-text)}
