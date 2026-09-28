@@ -415,6 +415,12 @@ export const App = () => {
                     })
                   }} />
               ))}
+              {pg.length === 0 && (
+                <div className="grid-hint">
+                  <div className="gh-title">这里可以放小组件和网站</div>
+                  <div className="gh-sub">点击底部 Dock 的「+」→ 小组件页签有 18 类可选（时钟 / 日历 / 待办 / 天气 / 新闻热点…），网址导航与自定义网站也在那里</div>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -509,19 +515,17 @@ export const App = () => {
             <div className="dock-apps">
               {DOCK_APPS.slice(0, settings.dockCount).map((n) => (
                 <div className="dock-item" key={n} data-act="dock-app" data-v={n}>
-                  <TileGlyph name={n} cls={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`} fs={30} />
-                  <div className="dock-name">{n}</div>
+                  <TileGlyph name={n} cls={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`} fs={24} />
                 </div>
               ))}
             </div>
             <div className="dock-sep" />
             <div className="dock-actions">
               {([['add', '添加', '#3b82f6'], ['personal', '个性化', '#8b5cf6'], ['square', '广场', '#0ea5e9'], ['setting', '设置', '#64748b']] as const).map(([k, n, c]) => (
-                <div className="dock-item" key={k} data-act="dock-act" data-v={k}>
+                <div className="dock-item" key={k} data-act="dock-act" data-v={k} title={n}>
                   <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`} style={{ color: c }}>
                     {k === 'add' ? Icon.plus() : k === 'personal' ? Icon.sliders() : k === 'square' ? Icon.grid() : Icon.gear()}
                   </div>
-                  <div className="dock-name">{n}</div>
                 </div>
               ))}
             </div>
@@ -567,7 +571,8 @@ const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging,
           <div className="ia" data-act="item-del" title="删除">{Icon.trash()}</div>
         </div>
       </div>
-      {label !== '' ? <div className="item-label" style={parseBox(labelBox(item))}>{label}</div> : null}
+      {/* 应用类卡片不显示名称标签（只显图标）；分区/内容卡保留 */}
+      {label !== '' && item.t !== 'icon' && item.t !== 'folder' ? <div className="item-label" style={parseBox(labelBox(item))}>{label}</div> : null}
     </>
   )
 }

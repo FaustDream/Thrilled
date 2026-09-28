@@ -4,10 +4,12 @@
  * 定义表在 shared/widget-defs.ts（唯一来源）；本文件只负责「kind → 卡片内部结构」。
  * 卡片外框、名称标签、悬浮按钮由 App.tsx 的 GridCard 负责。
  */
+import { useEffect, useState } from 'react'
 import { CheckIcon, Icon } from './icons'
 import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
 import { getGreetingByHour } from '../core/utils'
+import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
 import { weatherText } from '../core/weather'
 import type { GridItem, WidgetKind } from '../shared/types'
@@ -33,6 +35,28 @@ export const TileGlyph = ({ name, cls, fs, size }: { name: string; cls: string; 
       {b.glyph}
     </div>
   )
+}
+
+/**
+ * 站点图标：优先真实 favicon（IndexedDB 缓存 → SW 解析），失败回退品牌字形。
+ * 缓存键为站点域名，同一站点只解析一次；非扩展环境（开发预览）直接走字形。
+ */
+const SiteIcon = ({ url, name }: { url: string; name: string }) => {
+  const [icon, setIcon] = useState<string | null>(null)
+  useEffect(() => {
+    let alive = true
+    if (url === '') return
+    void resolveFavicon(url)
+      .then((d) => {
+        if (alive) setIcon(d)
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [url])
+  if (icon !== null) {
+    return <img className="v-icon" src={icon} alt={name} style={{ width: 60, height: 60, objectFit: 'cover', fontSize: 0 }} />
+  }
+  return <TileGlyph name={name} cls="v-icon" fs={31} size={60} />
 }
 
 const panda = () => (
@@ -256,19 +280,19 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       return <div className="w-folder" style={{ position: 'absolute', inset: 0 }}>{Icon.folder()}</div>
     case 'icon':
     default: {
-      // 自定义图标（上传的 dataURL / 图片地址）优先，其余走品牌字形占位（真 Logo 后续替换）
-      const icon = str(c['icon'])
+      // 真实 favicon（缓存优先）→ 品牌字形占位；自定义上传图标（dataURL）最优先
       const name = str(c['label']) || '网站'
-      if (icon !== '') {
+      const custom = str(c['icon'])
+      if (custom !== '') {
         return (
           <div className="v-cell" style={{ position: 'absolute', inset: 0 }}>
-            <img className="v-icon" src={icon} alt={name} style={{ width: 46, height: 46, objectFit: 'cover', fontSize: 0 }} />
+            <img className="v-icon" src={custom} alt={name} style={{ width: 60, height: 60, objectFit: 'cover', fontSize: 0 }} />
           </div>
         )
       }
       return (
         <div className="v-cell" style={{ position: 'absolute', inset: 0 }}>
-          <TileGlyph name={name} cls="v-icon" fs={31} size={60} />
+          <SiteIcon url={str(c['url'])} name={name} />
         </div>
       )
     }

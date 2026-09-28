@@ -219,23 +219,23 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .w-folder svg{width:34px;height:34px}
 
 /* ============ 6. Dock（悬浮圆角栏 + 分隔线 + 4 功能按钮） ============ */
-.dock{position:absolute;left:0;bottom:0;width:100%;height:122px;display:flex;align-items:center;
+.dock{position:absolute;left:0;bottom:0;width:100%;height:75px;display:flex;align-items:center;
   justify-content:center;z-index:var(--z-float)}
-.dock-bar{display:flex;align-items:center;padding:14px 10px;border-radius:24px;
+.dock-bar{display:flex;align-items:center;padding:7px 10px;border-radius:16px;
   background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-dock)));backdrop-filter:blur(var(--blur-dock));
   box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 12px 34px rgba(6,12,24,.24)}
 #stage[data-mode='minimal'] .dock-bar{background:rgba(255,255,255,calc(var(--g-alpha) * (var(--ga-dock) + .12)))}
 .dock-apps,.dock-actions{display:flex}
-.dock-sep{width:1px;height:52px;margin:0 22px;background:var(--label-color);opacity:.28;flex:0 0 auto}
-.dock-item{width:98px;height:98px;display:flex;align-items:center;justify-content:center;
+.dock-sep{width:1px;height:32px;margin:0 16px;background:var(--label-color);opacity:.28;flex:0 0 auto}
+.dock-item{width:61px;height:61px;display:flex;align-items:center;justify-content:center;
   position:relative;cursor:pointer}
-.dock-icon{width:var(--dock-icon);height:var(--dock-icon);border-radius:20px;font-size:26px;flex:0 0 auto;
+.dock-icon{width:44px;height:44px;border-radius:14px;font-size:22px;flex:0 0 auto;
   box-shadow:0 4px 12px rgba(6,12,24,.14);
   transition:transform .16s var(--ease)}
 .dock-icon.circle{border-radius:50%}
-.dock-icon svg{width:32px;height:32px}
-.dock-item:hover .dock-icon{transform:scale(1.22)}
-.dock-name{position:absolute;top:4px;left:50%;transform:translate(-50%,-100%) scale(.92);
+.dock-icon svg{width:24px;height:24px}
+.dock-item:hover .dock-icon{transform:scale(1.16)}
+.dock-name{display:none;position:absolute;top:4px;left:50%;transform:translate(-50%,-100%) scale(.92);
   background:rgba(15,23,42,.86);color:#fff;font-size:12px;padding:4px 10px;border-radius:8px;
   white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .16s,transform .16s}
 .dock-item:hover .dock-name{opacity:1;transform:translate(-50%,-100%) scale(1)}
@@ -493,7 +493,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .ia:hover{background:rgba(15,23,42,.85)}
 .ia svg{width:12px;height:12px}
 .item.dragging{opacity:.45}
-.page-dots{position:absolute;left:50%;bottom:132px;transform:translateX(-50%);display:flex;gap:8px;
+.page-dots{position:absolute;left:50%;bottom:74px;transform:translateX(-50%);display:flex;gap:8px;
   z-index:var(--z-float)}
 .page-dot{width:8px;height:8px;border-radius:50%;background:var(--label-color);opacity:.45;cursor:pointer;
   transition:opacity .18s,transform .18s}
@@ -549,7 +549,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
   box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 24px 56px -14px rgba(6,12,24,.42);
   backdrop-filter:blur(var(--blur-dock)) saturate(1.5)}
 .dock-icon{transition:transform .26s var(--ease-spring),box-shadow .26s}
-.dock-item:hover .dock-icon{transform:scale(1.24) translateY(-2px);box-shadow:0 14px 30px -8px rgba(6,12,24,.4)}
+.dock-item:hover .dock-icon{transform:scale(1.16) translateY(-1px)}
 .dock-sep{opacity:.22}
 
 /* —— 模式胶囊 —— */
@@ -623,7 +623,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .item:hover + .item-label{opacity:1}
 
 /* —— Dock：单层磨砂面板 + 无容器图标 —— */
-.dock-bar{border-radius:18px;padding:12px 14px;
+.dock-bar{border-radius:16px;padding:7px 10px;
   box-shadow:0 14px 36px -16px rgba(15,23,42,.28)}
 .dock-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;
   font-size:30px;transition:transform .22s var(--ease-spring)}
@@ -631,7 +631,6 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .dock-item:hover .dock-icon{transform:scale(1.16);box-shadow:none}
 .dock-sep{display:none}
 .dock-actions{margin-left:16px}
-.dock-name{box-shadow:0 6px 18px -8px rgba(15,23,42,.4)}
 
 /* —— 页点：极小淡化，胶囊只作轻提示 —— */
 .page-dot{width:5px;height:5px;opacity:.28}
@@ -655,3 +654,9 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .wall-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 #stage{z-index:1}
 #stage::before,#stage::after{content:none}
+
+/* ============ 19. 空页引导提示 ============ */
+.grid-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
+  pointer-events:none;max-width:560px}
+.grid-hint .gh-title{font-size:20px;font-weight:600;color:var(--label-color);opacity:.55}
+.grid-hint .gh-sub{font-size:13px;color:var(--label-color);opacity:.42;line-height:1.8;margin-top:10px}
