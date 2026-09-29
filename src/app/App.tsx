@@ -26,11 +26,9 @@ import type { GridItem } from '../shared/types'
 const MODE_TIPS: Record<string, string> = {
   minimal: '简单可靠的网络访问',
   standard: '灵活的拖拽&极致的响应交互',
-  privacy: '链接都将从隐私窗口打开',
 }
 
-const allItems = (pages: { standard: GridItem[][]; privacy: GridItem[][] }): GridItem[] =>
-  [...pages.standard, ...pages.privacy].flat()
+const allItems = (pages: GridItem[][]): GridItem[] => pages.flat()
 
 /** 解析要打开的 URL：显式 url → 站点注册表 → null（提示补充） */
 const resolveSiteUrl = (item: GridItem): string | null => {
@@ -104,7 +102,6 @@ export const App = () => {
   const dockBarRef = useRef<HTMLDivElement | null>(null)
   const wheelAt = useRef(0)
 
-  const modeKey = settings.mode === 'privacy' ? 'privacy' : 'standard'
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
@@ -250,9 +247,9 @@ export const App = () => {
         case 'search-go': runSearch(); setHistoryOpen(false); break
         case 'sp-pick': if (inputRef.current) inputRef.current.value = v; runSearch(); setHistoryOpen(false); break
         case 'sp-del': useApp.setState({ history: st.history.filter((h) => h !== v) }); break
-        case 'set-mode': st.setMode(v as 'minimal' | 'standard' | 'privacy'); break
+        case 'set-mode': st.setMode(v as 'minimal' | 'standard'); break
         case 'go-page': st.goPage(Number(v)); break
-        case 'open-drawer': st.setDrawer((v || 'profile') as DrawerKey); break
+        case 'open-drawer': st.setDrawer((v || 'personal') as DrawerKey); break
         case 'dock-app': {
           st.openCtx(null)
           const url = siteUrlOf(v)
@@ -351,7 +348,7 @@ export const App = () => {
       if (e.ctrlKey && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
         e.preventDefault()
         const doc = st.exportLayout()
-        downloadJson('thrilled-layout.json', buildLayoutDoc(doc.standard, doc.privacy))
+        downloadJson('thrilled-layout.json', buildLayoutDoc(doc.pages))
         st.showToast('已导出 thrilled-layout.json')
         return
       }
@@ -368,8 +365,8 @@ export const App = () => {
         if (target) { st.setEngine(target.id); st.showToast(`已切换到：${target.name}`) }
         return
       }
-      if (e.key === 'ArrowLeft') st.goPage(st.cur[modeKey] - 1)
-      if (e.key === 'ArrowRight') st.goPage(st.cur[modeKey] + 1)
+      if (e.key === 'ArrowLeft') st.goPage(st.cur - 1)
+      if (e.key === 'ArrowRight') st.goPage(st.cur + 1)
     }
     /* 滚轮横向翻页（带冷却，原型同参数） */
     const wheel = (e: WheelEvent) => {
@@ -380,7 +377,7 @@ export const App = () => {
       if (Math.abs(d) < WHEEL_MIN_DELTA) return
       wheelAt.current = t
       const st = useApp.getState()
-      st.goPage(st.cur[st.settings.mode === 'privacy' ? 'privacy' : 'standard'] + (d > 0 ? 1 : -1))
+      st.goPage(st.cur + (d > 0 ? 1 : -1))
     }
     document.addEventListener('click', click)
     document.addEventListener('contextmenu', cm)
@@ -392,7 +389,7 @@ export const App = () => {
       document.removeEventListener('keydown', key)
       document.removeEventListener('wheel', wheel)
     }
-  }, [modeKey])
+  }, [])
 
   /* ---------- 拖拽换位（指针 + 网格吸附） ---------- */
   const gridRef = useRef<HTMLDivElement | null>(null)
@@ -449,10 +446,10 @@ export const App = () => {
         data-showquote={settings.showQuote ? '1' : '0'}>
 
       {/* 翻页画布 */}
-      <div id="pager" style={{ transform: `translateX(-${cur[modeKey] * PAGE_W}px)` }}>
-        {pages[modeKey].map((pg, i) => (
+      <div id="pager" style={{ transform: `translateX(-${cur * PAGE_W}px)` }}>
+        {pages.map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
-            <div className="grid" ref={i === cur[modeKey] ? gridRef : undefined}>
+            <div className="grid" ref={i === cur ? gridRef : undefined}>
               {pg.map((it, idx) => (
                 <GridCard key={it.id} item={it} idx={idx} now={now} nick={settings.nick} encourage={encourage} playing={playing} weather={weather}
                   dragging={drag?.id === it.id ? drag : null}
@@ -480,10 +477,10 @@ export const App = () => {
       </div>
 
       {/* 页点 */}
-      {pages[modeKey].length > 1 && (
+      {pages.length > 1 && (
         <div className="page-dots">
-          {pages[modeKey].map((_, i) => (
-            <div key={i} className={`page-dot${i === cur[modeKey] ? ' on' : ''}`} data-act="go-page" data-v={String(i)} />
+          {pages.map((_, i) => (
+            <div key={i} className={`page-dot${i === cur ? ' on' : ''}`} data-act="go-page" data-v={String(i)} />
           ))}
         </div>
       )}
@@ -543,7 +540,7 @@ export const App = () => {
           <div className="mode-pill">
             <span className="pill-ico">{Icon.modeStd()}</span>
             <div className="pill-opts">
-              {([['minimal', '极简'], ['standard', '标准'], ['privacy', '隐私']] as const).map(([k, n]) => (
+              {([['minimal', '极简'], ['standard', '标准']] as const).map(([k, n]) => (
                 <div key={k} className={`pill-btn${settings.mode === k ? ' active' : ''}`} data-act="set-mode" data-v={k}
                   onMouseEnter={() => {
                     const tip = document.getElementById('modeTip')
@@ -562,7 +559,7 @@ export const App = () => {
             <div className="avatar" onClick={() => setAvatarOpen(!avatarOpen)} title="我的与设置">{'T'}</div>
             {avatarOpen && (
               <div className="avatar-menu">
-                {([['profile', '我的'], ['personal', '个性化'], ['square', '广场'], ['setting', '设置']] as const).map(([k, n]) => (
+                {([['personal', '个性化'], ['square', '广场'], ['setting', '设置']] as const).map(([k, n]) => (
                   <div key={k} className="ctx-item" data-act="open-drawer" data-v={k} onClick={() => setAvatarOpen(false)}>
                     <span>{n}</span>
                   </div>

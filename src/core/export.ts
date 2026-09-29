@@ -1,7 +1,7 @@
 /**
  * 导出中心（v4）
  *
- * - 布局导出文件 = 云快照的布局部分：{ v, app, exportedAt, standard, privacy }（01 §5.1）
+ * - 布局导出文件 = 单套页面：{ v, app, exportedAt, pages }（01 §5.1 的单套化版本）
  * - 本地目录同步快照 = 整份 StoredDoc + 导出时间（file-config 写盘 / 恢复共用）
  * - 布局导入的归一化复用 app/layout.ts 的 readLayoutDoc（坏数据丢弃），本模块不重复实现
  */
@@ -28,8 +28,8 @@ export function downloadJson(filename: string, data: unknown): void {
 }
 
 /** 由当前页面集构造布局导出文档 */
-export const buildLayoutDoc = (standard: ModePages, privacy: ModePages): LayoutDoc =>
-  ({ v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), standard, privacy });
+export const buildLayoutDoc = (pages: ModePages): LayoutDoc =>
+  ({ v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), pages });
 
 /** 本地目录同步快照形状 */
 export interface V4Snapshot {

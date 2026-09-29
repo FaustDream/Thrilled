@@ -9,20 +9,20 @@ import { DEFAULT_PAGES } from '../src/app/layout'
 
 describe('appendIconPages', () => {
   it('出厂布局在前，迁移图标追加为新页', () => {
-    const { pages, appended } = appendIconPages(DEFAULT_PAGES.standard, [
+    const { pages, appended } = appendIconPages(DEFAULT_PAGES, [
       { label: 'Codex', url: 'https://codex.example.com' },
       { label: '云笺', url: 'https://yunjian.example.com' },
     ])
-    expect(pages.slice(0, 2)).toEqual(DEFAULT_PAGES.standard)
-    expect(pages).toHaveLength(3)
+    expect(pages.slice(0, 3)).toEqual(DEFAULT_PAGES)
+    expect(pages).toHaveLength(4) // 出厂 3 页 + 迁移图标 1 页
     expect(appended).toBe(2)
-    const last = pages[2] ?? []
+    const last = pages[pages.length - 1] ?? []
     expect(last.map((it) => it.config['label'])).toEqual(['Codex', '云笺'])
     expect(last[0]).toMatchObject({ t: 'icon', w: 2, h: 2, c: 0, r: 0 })
   })
 
   it('与出厂已有的网址图标去重（label|url 相同不追加）', () => {
-    const { pages, appended } = appendIconPages(DEFAULT_PAGES.standard, [
+    const { pages, appended } = appendIconPages(DEFAULT_PAGES, [
       { label: 'GitHub', url: 'https://github.com' },
       { label: '我的站点', url: 'https://mine.example.com' },
     ])
@@ -34,9 +34,9 @@ describe('appendIconPages', () => {
   it('最多 5 页：放不下的迁移图标丢弃', () => {
     // 一页 240 格可放 60 个 2×2 图标；4 页余量 = 240 个；给 500 个应封顶
     const many = Array.from({ length: 500 }, (_, i) => ({ label: `站${i}`, url: `https://s${i}.example.com` }))
-    const { pages, appended } = appendIconPages(DEFAULT_PAGES.standard, many)
+    const { pages, appended } = appendIconPages(DEFAULT_PAGES, many)
     expect(pages).toHaveLength(5)
-    expect(appended).toBe(3 * 60)
+    expect(appended).toBe(2 * 60)
   })
 })
 

@@ -505,7 +505,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .wall-video{position:absolute;inset:-40px;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;z-index:0;pointer-events:none}
 .search-box.immersive{background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
 /* 线框样式仅极简模式生效（02 §11） */
-#stage[data-mode='standard'] .search-box.line,#stage[data-mode='privacy'] .search-box.line{border-radius:var(--search-radius);background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-search)));border:2px solid rgba(255,255,255,.72);backdrop-filter:blur(var(--blur-search))}
+#stage[data-mode='standard'] .search-box.line{border-radius:var(--search-radius);background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-search)));border:2px solid rgba(255,255,255,.72);backdrop-filter:blur(var(--blur-search))}
 
 /* ============ 16. v4.2 视觉升级：光影 / 动效 / 形状体系 ============ */
 

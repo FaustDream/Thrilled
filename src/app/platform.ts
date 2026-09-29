@@ -23,7 +23,6 @@ export const reloadDocIntoStore = (): void => {
     engines: doc.engines.length > 0 ? doc.engines : useApp.getState().engines,
     skins: doc.skins,
     history: doc.history,
-    user: doc.user,
     backupTime: doc.backupTime,
   })
   useApp.getState().showToast('本地目录数据已恢复')

@@ -3,7 +3,7 @@
  *
  * 布局规则冻结在 docs/v4/02-UI规格.md §12.1（常量与算法在 shared/grid.ts）：
  * 用户改动只影响实例，出厂数据（DEFAULT_PAGES）只作为种入与「恢复默认」的来源。
- * 内容编排按任务分区重排（02 §12.3）：一服务一入口，Dock 常驻服务不进网格。
+ * 单套页面（隐私模式已并入标准模式）：出厂以原隐私页为第 1 页，原标准两页依次并入。
  */
 import type { GridItem, LayoutDoc, ModePages, WidgetKind } from '../shared/types';
 import { WIDGET_KINDS } from '../shared/widget-defs';
@@ -37,8 +37,23 @@ const CLOUD_APPS = ['OneDrive', 'Dropbox', '印象笔记', '坚果云']
 const EFFI_APPS = ['便签', '快递', '记账', '汇率']
 const VIDEO2_APPS = ['优酷', '芒果TV', '咪咕视频', '西瓜视频', '快手']
 
-/** 出厂布局：标准模式两页（资讯与日程 / AI 与工具 / 娱乐与电商 / 时间与纪念 / 开发与效率）+ 隐私模式一页 */
-const SEED: ModePages = [
+/** 出厂布局（原隐私页在前为基准 + 原标准两页依次并入） */
+const PRIVACY_SEED: ModePages = [
+  [
+    G(0, 0, 4, 2, 'clock', { label: '时钟' }), G(4, 0, 4, 2, 'weather', { label: '天气' }),
+    G(8, 0, 4, 2, 'todo', { label: '待办清单' }), G(12, 0, 4, 2, 'fav', { label: '收藏夹' }),
+    G(16, 0, 4, 2, 'countday', { label: '倒数日' }), G(20, 0, 4, 2, 'cal', { label: '日历' }),
+    G(0, 2, 4, 4, 'news'), G(4, 2, 4, 4, 'music'), G(8, 2, 8, 4, 'countdown', { label: '下班倒计时' }),
+    G(16, 2, 4, 4, 'ai'), G(20, 2, 4, 4, 'group', { apps: ['微信', 'QQ', '钉钉', '飞书', 'Gmail', 'Discord', 'Telegram', '语雀', 'Notion', 'DeepSeek', 'Claude', 'ChatGPT'] }),
+    G(0, 6, 8, 4, 'group', { apps: ['淘宝', '京东', '小红书', '豆瓣', '知乎', '微博', '哔哩哔哩', '快手', 'Spotify', 'YouTube', 'GitHub', 'Figma', 'Medium', 'Reddit', 'V2EX', 'Notion', '语雀', '掘金', 'CSDN', '少数派', 'Product Hunt', 'Dribbble', 'Stack Overflow', 'Netflix'] }),
+    G(8, 6, 8, 2, 'quote', { label: '' }), G(8, 8, 8, 2, 'woodfish', { label: '木鱼' }),
+    G(16, 6, 4, 2, 'calc', { label: '计算器' }), G(20, 6, 4, 2, 'trans', { label: '翻译' }),
+    G(16, 8, 8, 2, 'group', { apps: ['百度', '必应', '知乎', '豆瓣', 'V2EX', 'Medium', 'Dribbble', 'Spotify'], cols: 8 }),
+  ],
+]
+
+/** 出厂标准两页（资讯与日程 / 时间与纪念+开发与效率），并入出厂页集 */
+const STANDARD_SEED: ModePages = [
   [
     G(0, 0, 8, 4, 'news'), G(8, 0, 4, 2, 'weather', { label: '天气' }),
     G(8, 2, 4, 2, 'todo', { label: '待办' }), G(12, 0, 4, 2, 'cal', { label: '日历' }),
@@ -75,25 +90,8 @@ const SEED: ModePages = [
   ],
 ]
 
-const PRIVACY_SEED: ModePages = [
-  [
-    G(0, 0, 4, 2, 'clock', { label: '时钟' }), G(4, 0, 4, 2, 'weather', { label: '天气' }),
-    G(8, 0, 4, 2, 'todo', { label: '待办清单' }), G(12, 0, 4, 2, 'fav', { label: '收藏夹' }),
-    G(16, 0, 4, 2, 'countday', { label: '倒数日' }), G(20, 0, 4, 2, 'cal', { label: '日历' }),
-    G(0, 2, 4, 4, 'news'), G(4, 2, 4, 4, 'music'), G(8, 2, 8, 4, 'countdown', { label: '下班倒计时' }),
-    G(16, 2, 4, 4, 'ai'), G(20, 2, 4, 4, 'group', { apps: ['微信', 'QQ', '钉钉', '飞书', 'Gmail', 'Discord', 'Telegram', '语雀', 'Notion', 'DeepSeek', 'Claude', 'ChatGPT'] }),
-    G(0, 6, 8, 4, 'group', { apps: ['淘宝', '京东', '小红书', '豆瓣', '知乎', '微博', '哔哩哔哩', '快手', 'Spotify', 'YouTube', 'GitHub', 'Figma', 'Medium', 'Reddit', 'V2EX', 'Notion', '语雀', '掘金', 'CSDN', '少数派', 'Product Hunt', 'Dribbble', 'Stack Overflow', 'Netflix'] }),
-    G(8, 6, 8, 2, 'quote', { label: '' }), G(8, 8, 8, 2, 'woodfish', { label: '木鱼' }),
-    G(16, 6, 4, 2, 'calc', { label: '计算器' }), G(20, 6, 4, 2, 'trans', { label: '翻译' }),
-    G(16, 8, 8, 2, 'group', { apps: ['百度', '必应', '知乎', '豆瓣', 'V2EX', 'Medium', 'Dribbble', 'Spotify'], cols: 8 }),
-  ],
-]
-
-/** 出厂布局（深拷贝，避免用户改动污染出厂数据） */
-export const DEFAULT_PAGES: { standard: ModePages; privacy: ModePages } = {
-  standard: SEED,
-  privacy: PRIVACY_SEED,
-}
+/** 出厂布局（深拷贝，避免用户改动污染出厂数据）：原隐私页在前为基准 + 原标准两页并入 */
+export const DEFAULT_PAGES: ModePages = [...PRIVACY_SEED, ...STANDARD_SEED]
 
 export const clonePages = (pages: ModePages): ModePages => JSON.parse(JSON.stringify(pages)) as ModePages
 
@@ -121,14 +119,16 @@ export const normPages: (arr: unknown) => ModePages = (arr) => {
     .filter((pg) => pg.length > 0)
 }
 
-/** 校验导入文档：标准与隐私必须有页 */
+/** 校验导入文档：单套 pages（新格式）；旧双套 {standard, privacy} 合并（隐私页在前为基准） */
 export const readLayoutDoc = (data: unknown): LayoutDoc | null => {
   if (typeof data !== 'object' || data === null) return null
   const o = data as Record<string, unknown>
+  const single = normPages(o['pages'])
   const standard = normPages(o['standard'])
   const privacy = normPages(o['privacy'])
-  if (standard.length === 0 || privacy.length === 0) return null
-  return { v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), standard, privacy }
+  const pages = single.length > 0 ? single : [...privacy, ...standard]
+  if (pages.length === 0) return null
+  return { v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), pages }
 }
 
 /* ---------- 图标页合并（v4.1 迁移「一分组一页」存量数据的一次性修正） ---------- */

@@ -25,7 +25,7 @@ describe('设置归一化（normalizeSettings）', () => {
       glass: { card: 2 },         // 超上限 → 钳制 1，其余回退默认
       skinId: 'dark',
     })
-    expect(s.mode).toBe('privacy')
+    expect(s.mode).toBe('standard') // privacy 已移除，归位 standard
     expect(s.searchWidth).toBe(1400)
     expect(s.dockCount).toBe(DEFAULT_SETTINGS.dockCount)
     expect(s.gAlpha).toBe(0.5)
@@ -59,13 +59,12 @@ describe('引擎与皮肤归一化', () => {
 
 describe('持久化文档解析（parseStoredDoc）', () => {
   const doc = () => ({
-    v: 2,
+    v: 3 as const,
     settings: DEFAULT_SETTINGS,
-    pages: { standard: DEFAULT_PAGES.standard, privacy: DEFAULT_PAGES.privacy },
+    pages: DEFAULT_PAGES,
     engines: BUILTIN_ENGINES,
     skins: BUILTIN_SKINS,
     history: ['a', 'b'],
-    user: { email: 'me@thrilled.dev' },
     welcomed: true,
     backupTime: null,
   })
@@ -73,9 +72,32 @@ describe('持久化文档解析（parseStoredDoc）', () => {
   it('完整文档解析后字段保留', () => {
     const out = parseStoredDoc(doc(), WIDGET_KINDS)
     expect(out).not.toBeNull()
-    expect(out?.user?.email).toBe('me@thrilled.dev')
+    expect(out?.v).toBe(3)
     expect(out?.welcomed).toBe(true)
-    expect(out?.pages.standard).toHaveLength(2)
+    expect(out?.pages).toHaveLength(DEFAULT_PAGES.length)
+  })
+
+  it('v2 双套旧文档自动合并：隐私页在前为基准，标准页卡片追加', () => {
+    const old = {
+      v: 2,
+      settings: { ...DEFAULT_SETTINGS, mode: 'privacy' as const },
+      pages: {
+        standard: [[{ id: 's1', c: 0, r: 0, w: 2, h: 2, t: 'icon', config: { label: '标准图标' } }]],
+        privacy: [[{ id: 'p1', c: 0, r: 0, w: 2, h: 2, t: 'clock', config: { label: '隐私时钟' } }]],
+      },
+      engines: BUILTIN_ENGINES,
+      skins: BUILTIN_SKINS,
+      history: [],
+      user: { email: 'me@thrilled.dev' },
+      welcomed: true,
+      backupTime: null,
+    }
+    const out = parseStoredDoc(old, WIDGET_KINDS)
+    expect(out?.v).toBe(3)
+    expect(out?.pages).toHaveLength(2)
+    expect(out?.pages[0]?.[0]?.id).toBe('p1')
+    expect(out?.pages[1]?.[0]?.id).toBe('s1')
+    expect(out?.settings.mode).toBe('standard')
   })
 
   it('缺布局 / 缺 pages 返回 null（调用方重新种入）', () => {
@@ -86,46 +108,39 @@ describe('持久化文档解析（parseStoredDoc）', () => {
 
   it('卡片未知类型被丢弃，同页合法卡片保留', () => {
     const d = doc()
-    d.pages = {
-      standard: [[
-        { id: 'a', c: 0, r: 0, w: 2, h: 2, t: 'hacker' as unknown as 'icon', config: {} },
-        { id: 'b', c: 2, r: 0, w: 2, h: 2, t: 'icon', config: {} },
-      ]],
-      privacy: [[{ id: 'c', c: 0, r: 0, w: 2, h: 2, t: 'icon', config: {} }]],
-    }
+    d.pages = [[
+      { id: 'a', c: 0, r: 0, w: 2, h: 2, t: 'hacker' as unknown as 'icon', config: {} },
+      { id: 'b', c: 2, r: 0, w: 2, h: 2, t: 'icon', config: {} },
+    ]]
     const out = parseStoredDoc(d, WIDGET_KINDS)
-    expect(out?.pages.standard[0]).toHaveLength(1)
-    expect(out?.pages.standard[0]?.[0]?.id).toBe('b')
-    expect(out?.pages.privacy[0]).toHaveLength(1)
+    expect(out?.pages[0]).toHaveLength(1)
+    expect(out?.pages[0]?.[0]?.id).toBe('b')
   })
 
-  it('整份标准布局全坏 → 返回 null（调用方重新种入出厂布局）', () => {
+  it('整份布局全坏 → 返回 null（调用方重新种入出厂布局）', () => {
     const d = doc()
-    d.pages = {
-      standard: [[{ id: 'a', c: 0, r: 0, w: 2, h: 2, t: 'hacker' as unknown as 'icon', config: {} }]],
-      privacy: [[{ id: 'c', c: 0, r: 0, w: 2, h: 2, t: 'icon', config: {} }]],
-    }
+    d.pages = [[{ id: 'a', c: 0, r: 0, w: 2, h: 2, t: 'hacker' as unknown as 'icon', config: {} }]]
     expect(parseStoredDoc(d, WIDGET_KINDS)).toBeNull()
   })
 })
 
 describe('导出 / 快照（core/export）', () => {
-  it('布局导出文档形状符合 01 §5.1', () => {
-    const doc = buildLayoutDoc(DEFAULT_PAGES.standard, DEFAULT_PAGES.privacy)
-    expect(Object.keys(doc).sort()).toEqual(['app', 'exportedAt', 'privacy', 'standard', 'v'])
+  it('布局导出文档形状符合 01 §5.1（单套 pages）', () => {
+    const doc = buildLayoutDoc(DEFAULT_PAGES)
+    expect(Object.keys(doc).sort()).toEqual(['app', 'exportedAt', 'pages', 'v'])
     expect(doc.v).toBe(4)
     expect(doc.app).toBe('Thrilled')
+    expect(doc.pages).toHaveLength(DEFAULT_PAGES.length)
   })
 
   it('快照收集 → 恢复往返无损', () => {
     const stored = {
-      v: 2 as const,
+      v: 3 as const,
       settings: DEFAULT_SETTINGS,
-      pages: { standard: DEFAULT_PAGES.standard, privacy: DEFAULT_PAGES.privacy },
+      pages: DEFAULT_PAGES,
       engines: [...BUILTIN_ENGINES],
       skins: [...BUILTIN_SKINS],
       history: ['x'],
-      user: null,
       welcomed: true,
       backupTime: '2026-09-27 12:00',
     }
@@ -134,7 +149,7 @@ describe('导出 / 快照（core/export）', () => {
     const out = restoreSnapshot(snap)
     expect(out).not.toBeNull()
     expect(out?.backupTime).toBe('2026-09-27 12:00')
-    expect(out?.pages.standard).toHaveLength(2)
+    expect(out?.pages).toHaveLength(DEFAULT_PAGES.length)
   })
 
   it('恢复非快照 / 坏结构返回 null', () => {

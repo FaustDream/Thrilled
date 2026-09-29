@@ -93,8 +93,7 @@ export interface LayoutDoc {
   v: number;
   app: string;
   exportedAt: string;
-  standard: ModePages;
-  privacy: ModePages;
+  pages: ModePages;
 }
 
 /* ==========================================================================
@@ -162,8 +161,8 @@ export interface SkinPack {
 export type GlassKey = 'card' | 'tile' | 'dock' | 'search' | 'panel' | 'menu';
 export type GlassSettings = Record<GlassKey, number>;
 
-/** 模式（标准 / 隐私各自独立页面集，极简只留搜索 + 时钟 + Dock） */
-export type ViewMode = 'minimal' | 'standard' | 'privacy';
+/** 模式（单套页面集；极简只留搜索 + 时钟 + Dock） */
+export type ViewMode = 'minimal' | 'standard';
 
 /** 链接打开方式（link-opener 统一入口） */
 export type OpenMode = 'link' | 'tab' | 'search';
@@ -210,16 +209,15 @@ export interface AppSettings {
   wallpaperRef: string | null;
 }
 
-/** 本地持久化文档（chrome.storage 单键整存整取；快照式备份复用同一形状，01 §5.1） */
+/** 本地持久化文档（chrome.storage 单键整存整取；快照式备份复用同一形状，01 §5.1）
+ *  v3：单套页面（隐私模式已并入标准模式）；v2 旧文档（standard + privacy 双套）读取时自动合并迁移 */
 export interface StoredDoc {
-  v: 2;
+  v: 3;
   settings: AppSettings;
-  pages: { standard: ModePages; privacy: ModePages };
+  pages: ModePages;
   engines: EngineDef[];
   skins: SkinPack[];
   history: string[];
-  /** 本地演示账号（真实鉴权见 01 §4，thrilled-server 接入后替换） */
-  user: { email: string } | null;
   /** 首次访问欢迎弹窗已展示 */
   welcomed: boolean;
   /** 上次备份时间（本地记录） */

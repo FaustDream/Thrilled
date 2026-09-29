@@ -151,8 +151,10 @@ export const normalizeSettings = (v: unknown): AppSettings => {
   const mode = o['mode'];
   const openMode = o['openMode'];
   const dockIcon = o['dockIcon'];
+  // privacy 模式已移除：旧值归位为 standard
+  const normalizedMode = mode === 'minimal' || mode === 'standard' ? mode : d.mode;
   return {
-    mode: mode === 'minimal' || mode === 'standard' || mode === 'privacy' ? mode : d.mode,
+    mode: normalizedMode,
     labels: boolish(o['labels'], d.labels),
     hideTop: boolish(o['hideTop'], d.hideTop),
     hideSearch: boolish(o['hideSearch'], d.hideSearch),
@@ -191,7 +193,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
 const gridNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : -1);
 
 /** 卡片实例归一化：未知类型丢弃（坏数据不进布局） */
-export const normalizeGridItem = (v: unknown, kinds: ReadonlySet<string>): StoredDoc['pages']['standard'][number][number] | null => {
+export const normalizeGridItem = (v: unknown, kinds: ReadonlySet<string>): StoredDoc['pages'][number][number] | null => {
   if (typeof v !== 'object' || v === null) return null;
   const o = v as Record<string, unknown>;
   const t = typeof o['t'] === 'string' && kinds.has(o['t']) ? o['t'] : null;
@@ -205,7 +207,7 @@ export const normalizeGridItem = (v: unknown, kinds: ReadonlySet<string>): Store
     r: Math.max(0, gridNum(o['r'])),
     w,
     h,
-    t: t as StoredDoc['pages']['standard'][number][number]['t'],
+    t: t as StoredDoc['pages'][number][number]['t'],
     config,
   };
 };
@@ -220,7 +222,8 @@ export const normalizeModePages = (v: unknown, kinds: ReadonlySet<string>): Mode
 };
 
 /**
- * 持久化文档归一化：任何一部分坏数据只丢该部分（布局空则回退 null 由调用方种入出厂布局）
+ * 持久化文档归一化：任何一部分坏数据只丢该部分（布局空则回退 null 由调用方种入出厂布局）。
+ * v2 旧文档（standard + privacy 双套）自动合并为单套：隐私页在前为基准，标准页卡片追加其后。
  */
 export const parseStoredDoc = (v: unknown, kinds: ReadonlySet<string>): StoredDoc | null => {
   if (typeof v !== 'object' || v === null) return null;
@@ -228,23 +231,19 @@ export const parseStoredDoc = (v: unknown, kinds: ReadonlySet<string>): StoredDo
   const pages = o['pages'];
   if (typeof pages !== 'object' || pages === null) return null;
   const po = pages as Record<string, unknown>;
+  const single = normalizeModePages(pages, kinds);
   const standard = normalizeModePages(po['standard'], kinds);
   const privacy = normalizeModePages(po['privacy'], kinds);
-  if (standard.length === 0 || privacy.length === 0) return null;
-  const user = o['user'];
+  // v3 单套直读；v2 双套合并（隐私页在前为基准）；两者皆空判为坏数据
+  const merged = single.length > 0 ? single : [...privacy, ...standard];
+  if (merged.length === 0) return null;
   return {
-    v: 2,
+    v: 3,
     settings: normalizeSettings(o['settings']),
-    pages: {
-      standard,
-      privacy: privacy.length > 0 ? privacy : standard,
-    },
+    pages: merged,
     engines: normalizeEngines(o['engines']),
     skins: normalizeSkins(o['skins']),
     history: Array.isArray(o['history']) ? o['history'].filter((h): h is string => typeof h === 'string').slice(0, 20) : [],
-    user: typeof user === 'object' && user !== null && typeof (user as Record<string, unknown>)['email'] === 'string'
-      ? { email: (user as Record<string, unknown>)['email'] as string }
-      : null,
     welcomed: boolish(o['welcomed'], false),
     backupTime: typeof o['backupTime'] === 'string' ? o['backupTime'] : null,
   };

@@ -15,6 +15,7 @@ import { uploadWallpaper } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks } from '../core/bookmark-importer'
 import { resetAllData } from '../core/reset'
 import { saveDoc } from '../core/storage'
+import { getCloudConfig, setCloudConfig, type CloudConfig } from '../core/cloud'
 import type { GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
@@ -22,7 +23,6 @@ const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
   personal: ['个性化', '在这里进行个性化配置'],
   square: ['广场', '在这里查看别人分享的壁纸'],
   setting: ['设置', '在这里进行网站的设置'],
-  profile: ['我的', '登录后查看个人信息'],
 }
 
 const Sec = ({ t }: { t: string }) => <div className="sec-title">{t}</div>
@@ -379,9 +379,7 @@ const PzCard = ({ t, a, l, b }: { t: string; a: string; l: number; b: string }) 
 }
 
 const SquarePanel = () => {
-  const user = useApp((s) => s.user)
   const showToast = useApp((s) => s.showToast)
-  const setModal = useApp((s) => s.setModal)
   const [tab, setTab] = useState(0)
   const [mineTab, setMineTab] = useState(0)
   const [page, setPage] = useState(1)
@@ -435,33 +433,22 @@ const SquarePanel = () => {
               <div key={t} className={`sub-tab${i === mineTab ? ' active' : ''}`} onClick={() => setMineTab(i)}>{t}</div>
             ))}
           </div>
-          {user ? (
-            <>
-              <div className="pz-grid" style={{ marginTop: 12 }}>
-                {PZ_SEED.slice(4).map((p) => (
-                  <div className="pz-card" key={p.t}>
-                    <div className="pz-prev" style={{ background: p.b }} />
-                    <div className="pz-body">
-                      <div className="pz-title">{p.t}</div>
-                      <div className="pz-sub">发布于 09-20</div>
-                      <div className="pz-acts">
-                        <button className="btn sm ghost" onClick={() => showToast('应用成功，恢复后将覆盖当前界面')}>应用之前的界面</button>
-                        <button className="btn sm ghost" onClick={() => showToast('确定删除作品')}>删除作品</button>
-                      </div>
-                    </div>
+          <div className="pz-grid" style={{ marginTop: 12 }}>
+            {PZ_SEED.slice(4).map((p) => (
+              <div className="pz-card" key={p.t}>
+                <div className="pz-prev" style={{ background: p.b }} />
+                <div className="pz-body">
+                  <div className="pz-title">{p.t}</div>
+                  <div className="pz-sub">发布于 09-20</div>
+                  <div className="pz-acts">
+                    <button className="btn sm ghost" onClick={() => showToast('应用成功，恢复后将覆盖当前界面')}>应用之前的界面</button>
+                    <button className="btn sm ghost" onClick={() => showToast('确定删除作品')}>删除作品</button>
                   </div>
-                ))}
+                </div>
               </div>
-              <Hint>应用记录仅保存在本地；恢复后将覆盖当前界面。</Hint>
-            </>
-          ) : (
-            <>
-              <div className="empty-box">{Icon.user()}<div>登录查看我的作品</div></div>
-              <div className="btn-row" style={{ justifyContent: 'center' }}>
-                <button className="btn" onClick={() => setModal('login')}>现在登录</button>
-              </div>
-            </>
-          )}
+            ))}
+          </div>
+          <Hint>应用记录仅保存在本地；恢复后将覆盖当前界面。</Hint>
         </>
       )}
     </>
@@ -531,14 +518,12 @@ const SettingPanel = () => {
   const exportLayout = useApp((st) => st.exportLayout)
   const importLayout = useApp((st) => st.importLayout)
   const showToast = useApp((st) => st.showToast)
-  const user = useApp((st) => st.user)
-  const setUser = useApp((st) => st.setUser)
   const file = useRef<HTMLInputElement | null>(null)
   const bkFile = useRef<HTMLInputElement | null>(null)
 
   const download = (): void => {
     const doc = exportLayout()
-    downloadJson('thrilled-layout.json', buildLayoutDoc(doc.standard, doc.privacy))
+    downloadJson('thrilled-layout.json', buildLayoutDoc(doc.pages))
     showToast('已导出 thrilled-layout.json')
   }
 
@@ -584,7 +569,7 @@ const SettingPanel = () => {
       <Sec t="数据与备份" />
       <div className="btn-row">
         <button className="btn" onClick={() => setModal('backup')}>备份当前界面</button>
-        <button className="btn ghost" onClick={() => showToast(user ? '云端备份依赖 thrilled-server（后续接入）' : '请先登录')}>云端备份</button>
+        <button className="btn ghost" onClick={() => void useApp.getState().cloudUpload()}>上传到云端</button>
         <button className="btn ghost" onClick={() => setModal('restore')}>恢复为默认界面</button>
         <button className="btn ghost" onClick={() => void clearLocal()}>清除本地数据</button>
         <button className="btn danger" onClick={() => setModal('reset')}>一键重置</button>
@@ -602,7 +587,7 @@ const SettingPanel = () => {
           const rd = new FileReader()
           rd.onload = () => {
             try {
-              showToast(importLayout(JSON.parse(String(rd.result))) ? '布局导入成功' : '布局导入失败：standard / privacy 不能为空')
+              showToast(importLayout(JSON.parse(String(rd.result))) ? '布局导入成功' : '布局导入失败：没有有效的页面数据')
             } catch {
               showToast('布局导入失败：不是合法的 JSON 文件')
             }
@@ -628,22 +613,13 @@ const SettingPanel = () => {
           rd.readAsText(f)
           e.target.value = ''
         }} />
-      <Hint>导出内容 = 标准 / 隐私两套页面的全部卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来。已配置同步目录时，改动会自动写入本地目录。</Hint>
+      <Hint>导出内容 = 全部页面的卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来。已配置同步目录时，改动会自动写入本地目录。</Hint>
 
-      <Sec t="账号" />
-      {user
-        ? <div className="eng-row">
-            <div className="er-ico" style={{ background: 'linear-gradient(160deg,#f5c58a,#e08a4a)' }}>{user.email.slice(0, 1).toUpperCase()}</div>
-            <div style={{ flex: 1 }}>
-              <div>{user.email}</div>
-              <div style={{ color: 'var(--panel-sub)', fontSize: 11 }}>已登录 · 个性签名：这个人很懒</div>
-            </div>
-            <button className="btn sm ghost" onClick={() => { setUser(null); showToast('退出成功') }}>退出登录</button>
-          </div>
-        : <div className="btn-row"><button className="btn" onClick={() => setModal('login')}>现在登录</button></div>}
+      <Sec t="云端同步" />
+      <CloudSyncSection />
 
       <Sec t="关于" />
-      <div className="eng-row"><span style={{ flex: 1 }}>版本</span><span style={{ color: 'var(--panel-sub)' }}>4.1（v4 重构版）</span></div>
+      <div className="eng-row"><span style={{ flex: 1 }}>版本</span><span style={{ color: 'var(--panel-sub)' }}>4.3（v4 重构版）</span></div>
       <div className="btn-row">
         <button className="btn sm ghost" onClick={() => setModal('log')}>更新记录</button>
         <button className="btn sm ghost" onClick={() => setModal('about')}>关于我们</button>
@@ -659,56 +635,46 @@ const SettingPanel = () => {
   )
 }
 
-/* ============================== 我的 ============================== */
+/* ============================== 云端同步（配置仅存本机，不入代码仓库） ============================== */
 
-const ProfilePanel = () => {
-  const user = useApp((s) => s.user)
-  const showToast = useApp((s) => s.showToast)
-  const setModal = useApp((s) => s.setModal)
-  const setUser = useApp((s) => s.setUser)
-  const [tab, setTab] = useState(0)
-  if (!user) {
-    return (
-      <>
-        <div className="empty-box">{Icon.user()}<div>登录后查看个人信息</div></div>
-        <div className="btn-row" style={{ justifyContent: 'center' }}>
-          <button className="btn" onClick={() => setModal('login')}>现在登录</button>
-        </div>
-        <Hint>登录后才能进入隐私模式；换绑或再次登录时出于安全考虑会清空隐私数据。</Hint>
-      </>
-    )
+const CloudSyncSection = () => {
+  const cloudUpload = useApp((st) => st.cloudUpload)
+  const cloudRestore = useApp((st) => st.cloudRestore)
+  const showToast = useApp((st) => st.showToast)
+  const [cfg, setCfg] = useState<CloudConfig>(() => getCloudConfig())
+  const configured = cfg.url.trim() !== ''
+  const save = (): void => {
+    if (cfg.url.trim() !== '' && !/^https?:\/\//.test(cfg.url.trim())) {
+      showToast('服务器地址需以 http(s):// 开头')
+      return
+    }
+    setCloudConfig(cfg)
+    showToast('云端连接配置已保存（仅保存在本机）')
   }
   return (
     <>
-      <div className="eng-row">
-        <div className="er-ico" style={{ width: 44, height: 44, borderRadius: '50%', fontSize: 16, background: 'linear-gradient(160deg,#f5c58a,#e08a4a)' }}>{user.email.slice(0, 1).toUpperCase()}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15 }}>{user.email}</div>
-          <div style={{ color: 'var(--panel-sub)', fontSize: 12 }}>已登录 · 个性签名：这个人很懒</div>
-        </div>
+      <div className="f-row"><label className="f-label">服务器地址</label>
+        <input className="f-input" placeholder="例如 https://your-server.example.com" value={cfg.url}
+          onChange={(e) => setCfg({ ...cfg, url: e.target.value })} /></div>
+      <div className="f-row"><label className="f-label">访问令牌</label>
+        <input className="f-input" type="password" placeholder="与服务端 TOKEN 一致，留空则不鉴权" value={cfg.token}
+          onChange={(e) => setCfg({ ...cfg, token: e.target.value })} /></div>
+      <div className="btn-row">
+        <button className="btn sm" onClick={save}>保存配置</button>
+        <button className="btn sm ghost" onClick={() => void cloudUpload()}>上传到云端</button>
+        <button className="btn sm ghost" onClick={() => void cloudRestore()}>从云端恢复</button>
       </div>
-      <div className="btn-row" style={{ margin: '14px 0' }}>
-        <button className="btn sm ghost" onClick={() => showToast('绑定邮箱：请输入旧邮箱 / 新邮箱')}>绑定邮箱</button>
-        <button className="btn sm ghost" onClick={() => showToast('修改密码：请输入旧密码 / 新密码')}>修改密码</button>
-        <button className="btn sm ghost" onClick={() => showToast('我的个性签名')}>我的个性签名</button>
-      </div>
-      <Sec t="我的内容" />
-      <div className="sub-tabs">
-        {['我的作品', '我的收藏', '最近删除'].map((t, i) => (
-          <div key={t} className={`sub-tab${i === tab ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</div>
-        ))}
-      </div>
-      <Hint>应用记录仅保存在本地；登录后可进入隐私模式、备份与恢复界面。</Hint>
-      <div className="btn-row" style={{ marginTop: 14 }}>
-        <button className="btn ghost" onClick={() => { setUser(null); showToast('退出成功') }}>退出登录</button>
-        <button className="btn ghost" onClick={() => showToast('注销账号：将彻底删除选中的账号数据')}>注销账号</button>
-      </div>
+      <Hint>
+        {configured ? '已配置：改动自动上传云端，云端为唯一权威数据源；换设备时填同一配置即可「从云端恢复」一键还原。'
+          : '未配置：数据仅存本机。配置服务器地址后，本地数据将统一上传云端，其他设备可一键恢复（以云端最新版本为准）。'}
+        服务器地址与令牌只保存在本机浏览器存储，不进入代码仓库。
+      </Hint>
     </>
   )
 }
 
 const PANELS: Record<DrawerKey, () => React.ReactElement> = {
-  add: AddPanel, personal: PersonalPanel, square: SquarePanel, setting: SettingPanel, profile: ProfilePanel,
+  add: AddPanel, personal: PersonalPanel, square: SquarePanel, setting: SettingPanel,
 }
 
 export const Drawer = () => {
@@ -736,6 +702,7 @@ export const Drawer = () => {
 /* ============================== 弹窗 ============================== */
 
 const CHANGELOG: readonly { v: string; d: string; l: readonly string[] }[] = [
+  { v: '4.3', d: '2026-09-29', l: ['移除登录与账号体系，隐私模式并入标准模式（单套页面）', '新增云端同步：配置注入式连接（地址 / 令牌仅存本机），本地改动自动上传、新环境一键恢复，云端为唯一权威数据源', 'Dock 可编辑 + 苹果式放大、头像菜单、搜索引擎恢复 v3 设置、搜索历史贴框与自动关闭'] },
   { v: '4.1', d: '2026-09-27', l: ['按 v4 原型补全五面板与九弹窗（含风格皮肤编辑器、广场三页签）', '设置 / 布局 / 皮肤接通本地持久化，支持 v3 数据一次性迁移', '壁纸支持本地上传与外链（图片压缩 + 视频壁纸，IndexedDB 存储）', '天气卡接入 Open-Meteo 实况数据；搜索 / 卡片 / Dock 真实打开链接', '新增收藏夹导入、布局导出导入、备份 / 恢复 / 一键重置确认弹窗'] },
   { v: '4.0', d: '2026-09-26', l: ['仓库重组为 app / core / background / shared 四层', 'React 18 + Vite 重写视图层，落地 v4 内容模型（18 类小组件引用）'] },
 ]
@@ -798,8 +765,6 @@ export const Modal = () => {
   const restoreDefault = useApp((s) => s.restoreDefault)
   const resetParts = useApp((s) => s.resetParts)
   const backupTime = useApp((s) => s.backupTime)
-  const setUser = useApp((s) => s.setUser)
-  const setMode = useApp((s) => s.setMode)
   const pages = useApp((s) => s.pages)
   const cur = useApp((s) => s.cur)
   const itemId = useApp((s) => s.itemId)
@@ -807,13 +772,10 @@ export const Modal = () => {
   const [engName, setEngName] = useState('')
   const [engBase, setEngBase] = useState('')
   const [engImg, setEngImg] = useState('')
-  const [mail, setMail] = useState('')
-  const [keepModes, setKeepModes] = useState(true)
   const [keepIcons, setKeepIcons] = useState(true)
   const [resetSel, setResetSel] = useState({ layout: true, skins: true, wallpaper: false })
   const engImgFile = useRef<HTMLInputElement | null>(null)
-  const key = settings.mode === 'privacy' ? 'privacy' : 'standard'
-  const item = pages[key][cur[key]]?.find((x) => x.id === itemId) ?? null
+  const item = pages[cur]?.find((x) => x.id === itemId) ?? null
   if (!modal) return null
   const narrow = modal === 'log' || modal === 'about' || modal === 'engine' || modal === 'backup' || modal === 'restore' || modal === 'reset'
   const body = () => {
@@ -896,7 +858,7 @@ export const Modal = () => {
       case 'log':
         return (
           <>
-            <h2>更新记录</h2><p className="sub">当前版本 4.1（v4 重构版）</p>
+            <h2>更新记录</h2><p className="sub">当前版本 4.3（v4 重构版）</p>
             {CHANGELOG.map((c) => (
               <div className="log-item" key={c.v}>
                 <b>{c.v}<div style={{ fontSize: 11, color: '#9aa4b2', fontWeight: 400 }}>{c.d}</div></b>
@@ -919,26 +881,6 @@ export const Modal = () => {
             <div className="btn-row end" style={{ marginTop: 16 }}><button className="btn" onClick={() => setModal(null)}>关闭</button></div>
           </>
         )
-      case 'login':
-        return (
-          <>
-            <h2>现在登录</h2><p className="sub">登录后才能进入隐私模式；云端账号体系将接入云笺集（thrilled-server）。</p>
-            <div className="f-row"><label className="f-label">邮箱</label>
-              <input className="f-input" placeholder="请输入邮箱" value={mail} onChange={(e) => setMail(e.target.value)} /></div>
-            <div className="f-row"><label className="f-label">密码</label>
-              <input className="f-input" type="password" placeholder="请输入密码" /></div>
-            <div className="btn-row end">
-              <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
-              <button className="btn" onClick={() => {
-                setUser({ email: mail || 'me@thrilled.dev' })
-                setModal(null)
-                useApp.getState().showToast('登录成功，已进入隐私模式')
-                setMode('privacy')
-              }}>登录</button>
-            </div>
-            <Hint>本地演示：点击「登录」即模拟登录成功，随后自动进入隐私模式。</Hint>
-          </>
-        )
       case 'backup':
         return (
           <>
@@ -957,13 +899,12 @@ export const Modal = () => {
           <>
             <h2>恢复为默认界面</h2>
             <p className="sub">恢复后将覆盖当前布局（回到出厂卡片编排），设置与皮肤保留。</p>
-            <SwitchRow l="保留极简和标准模式状态" d="恢复后停留在当前模式" on={keepModes} onToggle={() => setKeepModes(!keepModes)} />
+
             <SwitchRow l="保留我的网址图标" d="与出厂不重复的图标会追加到最后一页" on={keepIcons} onToggle={() => setKeepIcons(!keepIcons)} />
             <div className="btn-row end" style={{ marginTop: 16 }}>
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
               <button className="btn" onClick={() => {
                 restoreDefault({ keepIcons })
-                if (!keepModes) useApp.getState().setSetting('mode', 'standard')
                 setModal(null)
               }}>确认恢复</button>
             </div>

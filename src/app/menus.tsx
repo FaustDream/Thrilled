@@ -64,10 +64,8 @@ const GlobalMenu = () => {
 
 const CardMenu = ({ id }: { id: string }) => {
   const pages = useApp((s) => s.pages)
-  const mode = useApp((s) => s.settings.mode)
   const cur = useApp((s) => s.cur)
-  const key = mode === 'privacy' ? 'privacy' : 'standard'
-  const page = pages[key][cur[key]] ?? []
+  const page = pages[cur] ?? []
   const item = page.find((x) => x.id === id)
   if (!item) return null
   const label = cfg(item)['label'] ?? cfg(item)['name'] ?? '链接'

@@ -15,6 +15,7 @@ import { ENCOURAGE_QUOTES } from '../core/quotes'
 import { getWeather, type WeatherData } from '../core/weather'
 import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
+import { cloudConfigured, cloudPull, cloudPush } from '../core/cloud'
 import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import type {
   AppSettings,
@@ -80,8 +81,8 @@ export const WALLS: readonly { n: string; c: string; bg: string }[] = [
   },
 ]
 
-export type DrawerKey = 'add' | 'square' | 'personal' | 'setting' | 'profile'
-export type ModalKey = 'theme' | 'engine' | 'addEngine' | 'log' | 'about' | 'login' | 'editItem' | 'backup' | 'restore' | 'reset'
+export type DrawerKey = 'add' | 'square' | 'personal' | 'setting'
+export type ModalKey = 'theme' | 'engine' | 'addEngine' | 'log' | 'about' | 'editItem' | 'backup' | 'restore' | 'reset'
 
 export interface CtxState {
   x: number
@@ -97,16 +98,15 @@ interface AppState {
   /** 首次访问欢迎弹窗已展示（持久化） */
   welcomed: boolean
   settings: AppSettings
-  pages: { standard: ModePages; privacy: ModePages }
-  cur: { standard: number; privacy: number }
+  /** 单套页面（隐私模式已并入标准模式） */
+  pages: ModePages
+  cur: number
   engines: EngineDef[]
   skins: SkinPack[]
   history: string[]
   encourage: string
   playing: boolean
   weather: WeatherData | null
-  /** 已登录账号（隐私模式前置条件；真实鉴权见 01 §4） */
-  user: { email: string } | null
   /** 上次备份时间 */
   backupTime: string | null
   /** 编辑中的卡片（弹窗 / 悬浮操作共用） */
@@ -120,7 +120,6 @@ interface AppState {
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
   toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'showTime' | 'showDate' | 'showQuote' | 'immersive' | 'simpleSearch') => void
   setMode: (m: ViewMode) => void
-  setUser: (u: { email: string } | null) => void
   goPage: (i: number) => void
   setEngine: (id: string) => void
   toggleEngineHidden: (id: string) => void
@@ -149,6 +148,10 @@ interface AppState {
   importLayout: (data: unknown) => boolean
   /** 恢复出厂布局；keepIcons 时把现有网址图标（与出厂不重复的）追加到新页 */
   restoreDefault: (opts?: { keepIcons?: boolean }) => void
+  /** 把当前全部数据立即上传到云端（需已在设置中配置云端连接） */
+  cloudUpload: () => Promise<void>
+  /** 从云端拉取最新数据覆盖本地（云端为权威数据源） */
+  cloudRestore: () => Promise<void>
   loadWeather: () => Promise<void>
   markBackedUp: () => void
   resetParts: (parts: { layout: boolean; skins: boolean; wallpaper: boolean }) => void
@@ -163,11 +166,8 @@ interface AppState {
   rollEncourage: () => void
 }
 
-/** 当前模式的当前页 */
-const curPageOf = (s: AppState): GridItem[] => {
-  const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
-  return s.pages[mode][s.cur[mode]] ?? []
-}
+/** 当前页 */
+const curPageOf = (s: AppState): GridItem[] => s.pages[s.cur] ?? []
 
 const cloneSkins = (skins: readonly SkinPack[]): SkinPack[] => skins.map((s) => ({ ...s, tokens: { ...s.tokens } }))
 
@@ -176,13 +176,12 @@ const cloneSkins = (skins: readonly SkinPack[]): SkinPack[] => skins.map((s) => 
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 
 const buildDoc = (s: AppState) => ({
-  v: 2 as const,
+  v: 3 as const,
   settings: s.settings,
   pages: s.pages,
   engines: s.engines,
   skins: s.skins,
   history: s.history,
-  user: s.user,
   welcomed: s.welcomed,
   backupTime: s.backupTime,
 })
@@ -193,7 +192,10 @@ const scheduleSave = (): void => {
     saveTimer = null
     const s = useApp.getState()
     if (!s.hydrated) return
-    saveDoc(buildDoc(s))
+    const doc = buildDoc(s)
+    saveDoc(doc)
+    /* 云端为权威数据源：改动自动上传（失败已在 cloud 层 warn，不打断本地流程） */
+    void cloudPush(doc).catch(() => {})
   }, 300)
 }
 
@@ -204,9 +206,9 @@ export const markWelcomed = (): void => useApp.setState({ welcomed: true })
 const withLayoutMerge = (doc: StoredDoc): { doc: StoredDoc; merged: boolean } => {
   if (kvGetRaw(LAYOUT_MERGE_KEY) === '1') return { doc, merged: false }
   kvSetRaw(LAYOUT_MERGE_KEY, '1')
-  const merged = mergeIconPages(doc.pages.standard)
+  const merged = mergeIconPages(doc.pages)
   if (merged === null) return { doc, merged: false }
-  return { doc: { ...doc, pages: { ...doc.pages, standard: merged } }, merged: true }
+  return { doc: { ...doc, pages: merged }, merged: true }
 }
 
 /** 单飞锁：StrictMode 双挂载 / 并发调用共享同一次 hydrate，防止二次执行用陈旧缓存覆盖已合并状态 */
@@ -234,7 +236,20 @@ const withEngineRestore = async (doc: StoredDoc): Promise<{ doc: StoredDoc; rest
   }
 }
 
-/** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 开启持久化 */
+/** 云端权威协调：已配置云端时以云端文档为准；云端为空则把本地文档首推上去；连接失败回退本地 */
+const reconcileWithCloud = async (localDoc: StoredDoc): Promise<{ doc: StoredDoc; msg: string }> => {
+  if (!cloudConfigured()) return { doc: localDoc, msg: '' }
+  try {
+    const remote = await cloudPull()
+    if (remote !== null) return { doc: remote, msg: '已从云端恢复最新数据' }
+    await cloudPush(localDoc)
+    return { doc: localDoc, msg: '本地数据已上传云端' }
+  } catch {
+    return { doc: localDoc, msg: '云端连接失败，已使用本地数据' }
+  }
+}
+
+/** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 云端协调 → 开启持久化 */
 export const hydrate = (): Promise<void> => {
   if (hydrating !== null) return hydrating
   hydrating = doHydrate()
@@ -244,66 +259,74 @@ export const hydrate = (): Promise<void> => {
 const doHydrate = async (): Promise<void> => {
   await initStorage()
   const loaded = loadDoc()
+  const toasts: string[] = []
+  let doc: StoredDoc
   if (loaded !== null) {
-    const { doc, merged } = withLayoutMerge(loaded)
-    const { doc: fixed, restored } = await withEngineRestore(doc)
-    const toastBits = [
-      merged ? '已把原来的多个图标页合并为一页' : '',
-      restored ? '已恢复 v3 的搜索引擎设置' : '',
-    ].filter(Boolean)
-    useApp.setState({
-      settings: fixed.settings,
-      pages: fixed.pages,
-      engines: fixed.engines.length > 0 ? fixed.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
-      skins: fixed.skins,
-      history: fixed.history,
-      user: fixed.user,
-      backupTime: fixed.backupTime,
-      welcomed: fixed.welcomed,
-      hydrated: true,
-      ...(toastBits.length > 0 ? { toast: toastBits.join('；') } : {}),
-    })
-    return
-  }
-  let migrated: MigrationResult | null = null
-  try {
-    migrated = await migrateV3(DEFAULT_PAGES.standard)
-  } catch {
-    migrated = null
-  }
-  const skins = cloneSkins(BUILTIN_SKINS)
-  if (migrated !== null) {
-    useApp.setState({
-      settings: { ...DEFAULT_SETTINGS, ...migrated.settings },
-      pages: { standard: migrated.standard, privacy: clonePages(DEFAULT_PAGES.privacy) },
-      engines: migrated.engines,
-      skins,
-      history: migrated.history,
-      hydrated: true,
-    })
-    useApp.getState().showToast(`已从 v3 迁移：${migrated.appended} 个网站图标已放到出厂布局之后`)
+    const { doc: mergedDoc, merged } = withLayoutMerge(loaded)
+    const { doc: fixed, restored } = await withEngineRestore(mergedDoc)
+    doc = fixed
+    if (merged) toasts.push('已把原来的多个图标页合并为一页')
+    if (restored) toasts.push('已恢复 v3 的搜索引擎设置')
   } else {
-    useApp.setState({
-      pages: { standard: clonePages(DEFAULT_PAGES.standard), privacy: clonePages(DEFAULT_PAGES.privacy) },
-      skins,
-      hydrated: true,
-    })
+    let migrated: MigrationResult | null = null
+    try {
+      migrated = await migrateV3(DEFAULT_PAGES)
+    } catch {
+      migrated = null
+    }
+    const skins = cloneSkins(BUILTIN_SKINS)
+    if (migrated !== null) {
+      doc = {
+        v: 3,
+        settings: { ...DEFAULT_SETTINGS, ...migrated.settings },
+        pages: [...clonePages(DEFAULT_PAGES), ...migrated.standard],
+        engines: migrated.engines,
+        skins,
+        history: migrated.history,
+        welcomed: false,
+        backupTime: null,
+      }
+      toasts.push(`已从 v3 迁移：${migrated.appended} 个网站图标已放到出厂布局之后`)
+    } else {
+      doc = {
+        v: 3,
+        settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass } },
+        pages: clonePages(DEFAULT_PAGES),
+        engines: BUILTIN_ENGINES.map((e) => ({ ...e })),
+        skins,
+        history: [],
+        welcomed: false,
+        backupTime: null,
+      }
+    }
   }
+  const { doc: finalDoc, msg } = await reconcileWithCloud(doc)
+  if (msg !== '') toasts.push(msg)
+  useApp.setState({
+    settings: finalDoc.settings,
+    pages: finalDoc.pages,
+    engines: finalDoc.engines.length > 0 ? finalDoc.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
+    skins: finalDoc.skins,
+    history: finalDoc.history,
+    backupTime: finalDoc.backupTime,
+    welcomed: finalDoc.welcomed,
+    hydrated: true,
+    ...(toasts.length > 0 ? { toast: toasts.join('；') } : {}),
+  })
 }
 
 export const useApp = create<AppState>()((set, get) => ({
   hydrated: false,
   welcomed: false,
   settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass } },
-  pages: { standard: clonePages(DEFAULT_PAGES.standard), privacy: clonePages(DEFAULT_PAGES.privacy) },
-  cur: { standard: 0, privacy: 0 },
+  pages: clonePages(DEFAULT_PAGES),
+  cur: 0,
   engines: BUILTIN_ENGINES.map((e) => ({ ...e })),
   skins: cloneSkins(BUILTIN_SKINS),
   history: [],
   encourage: ENCOURAGE_QUOTES[0] ?? '',
   playing: true,
   weather: null,
-  user: null,
   backupTime: null,
   itemId: null,
   drawer: null,
@@ -316,22 +339,14 @@ export const useApp = create<AppState>()((set, get) => ({
 
   setSetting: (k, v) => set((s) => ({ settings: { ...s.settings, [k]: v } })),
   toggle: (k) => set((s) => ({ settings: { ...s.settings, [k]: !s.settings[k] } })),
-  /* 隐私模式需登录（UiTab 实测行为，见 04 §5.1）；未登录时弹登录框且不切换 */
   setMode: (m) => {
     const s = get()
-    if (m === 'privacy' && s.user === null) {
-      set({ toast: '登录后才能进入隐私模式', modal: 'login', ctx: null })
-      return
-    }
-    const tip = m === 'minimal' ? '已进入极简模式' : m === 'privacy' ? '已进入隐私模式' : '已回到标准模式'
+    const tip = m === 'minimal' ? '已进入极简模式' : '已回到标准模式'
     set({ settings: { ...s.settings, mode: m }, ctx: null, toast: tip })
   },
-  setUser: (u) => set({ user: u }),
   goPage: (i) => set((s) => {
-    const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
-    const total = s.pages[mode].length
-    const next = Math.max(0, Math.min(total - 1, i))
-    return { cur: { ...s.cur, [mode]: next } }
+    const next = Math.max(0, Math.min(s.pages.length - 1, i))
+    return { cur: next }
   }),
 
   setEngine: (id) => set((s) => ({ settings: { ...s.settings, engineId: id }, enginePanel: false, ctx: null })),
@@ -399,10 +414,9 @@ export const useApp = create<AppState>()((set, get) => ({
   }),
 
   place: (kind, config = {}) => set((s) => {
-    const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
-    const list = [...s.pages[mode]]
+    const list = [...s.pages]
     const def = WIDGET_DEFS[kind]
-    const curIdx = s.cur[mode] ?? 0
+    const curIdx = s.cur
     const page = [...(list[curIdx] ?? [])]
     const item: GridItem = {
       id: `i${Date.now().toString(36)}`, c: 0, r: 0, w: def.units.w, h: def.units.h, t: kind,
@@ -414,21 +428,20 @@ export const useApp = create<AppState>()((set, get) => ({
       item.r = slot.r
       page.push(item)
       list[curIdx] = page
-      return { pages: { ...s.pages, [mode]: list }, toast: `已添加${def.n}` }
+      return { pages: list, toast: `已添加${def.n}` }
     }
     if (list.length < MAX_PAGES) {
       list.push([item])
-      return { pages: { ...s.pages, [mode]: list }, cur: { ...s.cur, [mode]: list.length - 1 }, toast: `当前页已满，已新建第 ${list.length} 页放入${def.n}` }
+      return { pages: list, cur: list.length - 1, toast: `当前页已满，已新建第 ${list.length} 页放入${def.n}` }
     }
-    return { toast: '每种模式最多 5 页，已没有位置可放' }
+    return { toast: '最多 5 页，已没有位置可放' }
   }),
 
   placeMany: (entries) => {
     let placed = 0
     set((s) => {
-      const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
-      const list = s.pages[mode].map((pg) => [...pg])
-      let curIdx = s.cur[mode] ?? 0
+      const list = s.pages.map((pg) => [...pg])
+      let curIdx = s.cur
       let seq = 0
       for (const entry of entries) {
         let page = list[curIdx] ?? []
@@ -444,21 +457,19 @@ export const useApp = create<AppState>()((set, get) => ({
         list[curIdx] = page
         placed++
       }
-      return { pages: { ...s.pages, [mode]: list }, cur: { ...s.cur, [mode]: curIdx } }
+      return { pages: list, cur: curIdx }
     })
     return placed
   },
 
   updateConfig: (id, patch) => set((s) => {
-    const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
     const map = (pg: GridItem[]): GridItem[] => pg.map((it) => (it.id === id ? { ...it, config: { ...it.config, ...patch } } : it))
-    return { pages: { ...s.pages, [mode]: s.pages[mode].map(map) } }
+    return { pages: s.pages.map(map) }
   }),
 
   resize: (id, w, h) => set((s) => {
     if (!isLegalSize(w, h)) return { toast: '仅支持六档尺寸' }
-    const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
-    const list = s.pages[mode].map((pg) => [...pg])
+    const list = s.pages.map((pg) => [...pg])
     const idx = list.findIndex((pg) => pg.some((it) => it.id === id))
     const page = list[idx]
     if (idx < 0 || !page) return {}
@@ -470,89 +481,128 @@ export const useApp = create<AppState>()((set, get) => ({
     if (!slot) return { toast: '没有足够空间修改尺寸' }
     const next = { ...it, ...slot, w, h }
     list[idx] = [...rest, next]
-    return { pages: { ...s.pages, [mode]: list }, toast: `尺寸已更新为 ${w}×${h}` }
+    return { pages: list, toast: `尺寸已更新为 ${w}×${h}` }
   }),
 
   move: (id, c, r) => {
     const s = get()
-    const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
     const page = curPageOf(s)
     const it = page.find((x) => x.id === id)
     if (!it) return false
     const target = { ...it, c, r }
     if (page.some((x) => x.id !== id && overlaps(target, x))) return false
     set((st) => {
-      const list = st.pages[mode].map((pg) => pg.map((x) => (x.id === id ? target : x)))
-      return { pages: { ...st.pages, [mode]: list } }
+      const list = st.pages.map((pg) => pg.map((x) => (x.id === id ? target : x)))
+      return { pages: list }
     })
     return true
   },
 
   remove: (id) => set((s) => {
-    const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
-    const list = s.pages[mode].map((pg) => pg.filter((x) => x.id !== id))
-    return { pages: { ...s.pages, [mode]: list }, ctx: null, itemId: null, toast: '删除成功' }
+    const list = s.pages.map((pg) => pg.filter((x) => x.id !== id))
+    return { pages: list, ctx: null, itemId: null, toast: '删除成功' }
   }),
 
   swapKind: (id, kind) => set((s) => {
-    const mode = s.settings.mode === 'privacy' ? 'privacy' : 'standard'
-    const list = s.pages[mode].map((pg) => pg.map((it) => {
+    const list = s.pages.map((pg) => pg.map((it) => {
       if (it.id !== id) return it
       const label = cfgOf(it)['label']
       const base = { ...WIDGET_DEFS[kind].def }
       return { ...it, t: kind, config: typeof label === 'string' ? { ...base, label } : base }
     }))
-    return { pages: { ...s.pages, [mode]: list }, ctx: null, toast: `已更换为：${WIDGET_DEFS[kind].n}` }
+    return { pages: list, ctx: null, toast: `已更换为：${WIDGET_DEFS[kind].n}` }
   }),
 
   exportLayout: () => {
     const s = get()
-    return { v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), standard: s.pages.standard, privacy: s.pages.privacy }
+    return { v: 4, app: 'Thrilled', exportedAt: new Date().toISOString(), pages: s.pages }
   },
   importLayout: (data) => {
     const doc = readLayoutDoc(data)
     if (!doc) return false
-    set({ pages: { standard: doc.standard, privacy: doc.privacy }, cur: { standard: 0, privacy: 0 }, toast: '布局导入成功' })
+    set({ pages: doc.pages, cur: 0, toast: '布局导入成功' })
     return true
   },
   restoreDefault: (opts) => set((s) => {
-    const pages = { standard: clonePages(DEFAULT_PAGES.standard), privacy: clonePages(DEFAULT_PAGES.privacy) }
+    const pages = clonePages(DEFAULT_PAGES)
     const next: Partial<AppState> = {
       pages,
-      cur: { standard: 0, privacy: 0 },
+      cur: 0,
       toast: '已恢复为默认界面',
     }
     if (opts?.keepIcons) {
       // 收集现有网址图标（与出厂布局不重复的），追加为新页（最多 5 页）
-      const factoryKeys = new Set(DEFAULT_PAGES.standard.flat()
+      const factoryKeys = new Set(DEFAULT_PAGES.flat()
         .filter((it) => it.t === 'icon')
         .map((it) => `${String(it.config['label'] ?? '')}|${String(it.config['url'] ?? '')}`))
       const seen = new Set<string>()
       let page: GridItem[] = []
       let count = 0
       let seq = 0
-      for (const it of [...s.pages.standard.flat(), ...s.pages.privacy.flat()]) {
+      for (const it of s.pages.flat()) {
         if (it.t !== 'icon') continue
         const key = `${String(it.config['label'] ?? '')}|${String(it.config['url'] ?? '')}`
         if (factoryKeys.has(key) || seen.has(key)) continue
         seen.add(key)
         let slot = findSlot(page, 2, 2)
         if (slot === null) {
-          if (pages.standard.length >= MAX_PAGES) break
+          if (pages.length >= MAX_PAGES) break
           page = []
-          pages.standard.push(page)
+          pages.push(page)
           slot = { c: 0, r: 0 }
         }
         page.push({ ...it, id: `k${Date.now().toString(36)}${seq++}`, c: slot.c, r: slot.r })
         count++
       }
       if (count > 0) {
-        if (page.length > 0) pages.standard.push(page)
-        next.toast = `已恢复默认界面，你的 ${count} 个网址图标保留在第 ${pages.standard.length} 页`
+        if (page.length > 0) pages.push(page)
+        next.toast = `已恢复默认界面，你的 ${count} 个网址图标保留在第 ${pages.length} 页`
       }
     }
     return next
   }),
+
+  /** 把当前全部数据立即上传到云端（需已在设置中配置云端连接） */
+  cloudUpload: async () => {
+    const s = get()
+    if (!cloudConfigured()) {
+      set({ toast: '请先在设置中配置云端连接' })
+      return
+    }
+    try {
+      await cloudPush(buildDoc(s))
+      set({ toast: '已上传到云端' })
+    } catch {
+      set({ toast: '上传失败，请检查云端连接配置' })
+    }
+  },
+
+  /** 从云端拉取最新数据覆盖本地（云端为权威数据源） */
+  cloudRestore: async () => {
+    if (!cloudConfigured()) {
+      set({ toast: '请先在设置中配置云端连接' })
+      return
+    }
+    try {
+      const remote = await cloudPull()
+      if (remote === null) {
+        set({ toast: '云端还没有数据，可先「上传到云端」' })
+        return
+      }
+      set({
+        settings: remote.settings,
+        pages: remote.pages,
+        engines: remote.engines.length > 0 ? remote.engines : get().engines,
+        skins: remote.skins,
+        history: remote.history,
+        backupTime: remote.backupTime,
+        cur: 0,
+        toast: '已从云端恢复最新数据',
+      })
+    } catch {
+      set({ toast: '恢复失败，请检查云端连接配置' })
+    }
+  },
 
   loadWeather: async () => {
     const data = await getWeather()
@@ -564,8 +614,8 @@ export const useApp = create<AppState>()((set, get) => ({
   resetParts: ({ layout, skins, wallpaper }) => set((s) => {
     const next: Partial<AppState> = { toast: '已重置选中数据' }
     if (layout) {
-      next.pages = { standard: clonePages(DEFAULT_PAGES.standard), privacy: clonePages(DEFAULT_PAGES.privacy) }
-      next.cur = { standard: 0, privacy: 0 }
+      next.pages = clonePages(DEFAULT_PAGES)
+      next.cur = 0
     }
     if (skins) {
       next.skins = cloneSkins(BUILTIN_SKINS)
@@ -601,7 +651,6 @@ useApp.subscribe((state, prev) => {
     state.engines !== prev.engines ||
     state.skins !== prev.skins ||
     state.history !== prev.history ||
-    state.user !== prev.user ||
     state.backupTime !== prev.backupTime
   ) {
     scheduleSave()

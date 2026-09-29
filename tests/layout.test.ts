@@ -7,11 +7,7 @@ import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, uid } from '.
 import { COLS, ROWS, SIZES, findSlot, overlaps } from '../src/shared/grid'
 import type { GridItem } from '../src/shared/types'
 
-const PAGES = [
-  { name: '标准第 1 页', items: DEFAULT_PAGES.standard[0] ?? [] },
-  { name: '标准第 2 页', items: DEFAULT_PAGES.standard[1] ?? [] },
-  { name: '隐私第 1 页', items: DEFAULT_PAGES.privacy[0] ?? [] },
-]
+const PAGES = DEFAULT_PAGES.map((items, i) => ({ name: `出厂第 ${i + 1} 页`, items }))
 
 describe('出厂布局（冻结规范：六档尺寸 / 24×10 网格 / 100% 填满）', () => {
   it('每张卡片都用合法的六档尺寸', () => {

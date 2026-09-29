@@ -9,3 +9,4 @@ releases/
 docs/*
 !docs/v4/
 !docs/memory/
+server/data/
