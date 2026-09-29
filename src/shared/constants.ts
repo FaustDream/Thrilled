@@ -12,6 +12,8 @@ export const DOC_KEY = 'thrilled:v4:doc' as const;
 export const MIGRATED_KEY = 'thrilled:v4:migrated' as const;
 /** 一次性布局修正标记键（v4.1 迁移的多图标页合并，store/hydrate） */
 export const LAYOUT_MERGE_KEY = 'thrilled:v4:layout-merged' as const;
+/** 一次性引擎修正标记键（v4.1 迁移补齐了未设置的内置引擎，恢复 v3 引擎清单） */
+export const ENGINE_RESTORE_KEY = 'thrilled:v4:engine-restored' as const;
 
 /** ===== 本地目录同步（File System Access，core/file-config.ts） ===== */
 /** FileConfig IndexedDB 数据库名 */

@@ -34,10 +34,8 @@ const OLD = {
   SEARCH_HIDE_BTN: 'search_hide_btn',
 } as const;
 
-/** v3 EngineId → v4 引擎 id（v3 独有引擎无对应项，丢弃） */
-const ENGINE_ID_MAP: Readonly<Record<string, string>> = {
-  google: 'google', bing: 'bing', baidu: 'baidu', zhihu: 'zhihu', weibo: 'weibo', duckduckgo: 'duckduckgo',
-};
+/** v3 引擎注册表的 id 与 v4 内置表同名同 id（google/bing/baidu/zhihu/weibo/duckduckgo）直接映射；
+ * v3 独有的 github/bilibili/yandex/gamer520/linuxdo 见 V3_EXTRA_ENGINES */
 
 /** 读取旧 IndexedDB 全部键值 */
 async function readOldKv(): Promise<Map<string, unknown>> {
@@ -143,21 +141,96 @@ export interface MigrationResult {
   appended: number;
 }
 
-/** v3 引擎顺序 + 当前引擎 → v4 引擎清单（内置表重排，未收录的引擎丢弃） */
-function mapEngines(order: unknown, current: unknown): { engines: EngineDef[]; engineId: string } {
-  const byId = new Map(BUILTIN_ENGINES.map((e) => [e.id, e]));
+/** v3 引擎偏好（旧 IndexedDB 的 engine_order / engine） */
+export interface V3EnginePrefs {
+  order: string[];
+  current: string;
+}
+
+/** 读取 v3 引擎偏好；无旧数据 / 无有效顺序记录返回 null（不阻塞调用方） */
+export async function readV3EnginePrefs(): Promise<V3EnginePrefs | null> {
+  let old: Map<string, unknown>;
+  try {
+    old = await readOldKv();
+  } catch {
+    return null;
+  }
+  const raw = old.get(OLD.ENGINE_ORDER);
+  if (!Array.isArray(raw)) return null;
+  const order = raw.filter((id): id is string => typeof id === 'string');
+  if (order.length === 0) return null;
+  const current = old.get(OLD.ENGINE);
+  return { order, current: typeof current === 'string' ? current : '' };
+}
+
+/**
+ * 存量修正：把已迁移的引擎清单裁剪回 v3 设置的那套（v4.1 迁移曾把全部内置引擎补进清单）。
+ * v3 独有引擎按 v3 定义注入；v4 里用户新加的自定义引擎保留在末尾；当前引擎优先恢复 v3 的选择。
+ */
+export function applyV3EngineSet(
+  engines: readonly EngineDef[],
+  engineId: string,
+  prefs: V3EnginePrefs,
+): { engines: EngineDef[]; engineId: string } {
+  const builtinIds = new Set(BUILTIN_ENGINES.map((e) => e.id));
   const ordered: EngineDef[] = [];
-  if (Array.isArray(order)) {
-    for (const id of order) {
-      const mapped = typeof id === 'string' ? byId.get(ENGINE_ID_MAP[id] ?? '') : undefined;
-      if (mapped && !ordered.some((x) => x.id === mapped.id)) ordered.push({ ...mapped });
-    }
+  for (const id of prefs.order) {
+    if (ordered.some((x) => x.id === id)) continue;
+    const def = v3EngineDef(id);
+    if (def !== null) ordered.push(def);
   }
-  for (const e of BUILTIN_ENGINES) {
-    if (!ordered.some((x) => x.id === e.id)) ordered.push({ ...e });
+  for (const e of engines) {
+    if (ordered.some((x) => x.id === e.id)) continue;
+    if (builtinIds.has(e.id)) continue;
+    ordered.push({ ...e });
   }
-  const cur = ENGINE_ID_MAP[typeof current === 'string' ? current : ''] ?? 'baidu';
-  return { engines: ordered, engineId: byId.has(cur) ? cur : 'baidu' };
+  if (ordered.length === 0) return { engines: [...engines], engineId };
+  const v3Cur = v3EngineDef(prefs.current);
+  const nextId = v3Cur !== null && ordered.some((x) => x.id === v3Cur.id)
+    ? v3Cur.id
+    : (ordered.some((x) => x.id === engineId) ? engineId : (ordered[0]?.id ?? engineId));
+  return { engines: ordered, engineId: nextId };
+}
+
+/** v3 引擎注册表（v3 shared/types ENGINES，11 个）中 v4 内置表没有的引擎——迁移 / 恢复时按 v3 定义注入为自定义引擎 */
+const V3_EXTRA_ENGINES: readonly EngineDef[] = [
+  { id: 'github', name: 'GitHub', color: '#24292F', glyph: 'G', latin: true, base: 'https://github.com/search?q=' },
+  { id: 'bilibili', name: '哔哩哔哩', color: '#00A1D6', glyph: '哔', base: 'https://search.bilibili.com/all?keyword=' },
+  { id: 'yandex', name: 'Yandex', color: '#FC3F1D', glyph: 'Y', latin: true, base: 'https://ya.ru/search/?text=' },
+  { id: 'gamer520', name: 'Gamer520', color: '#64748B', glyph: 'G', latin: true, base: 'https://www.gamer520.com/?s=' },
+  { id: 'linuxdo', name: 'Linux.do', color: '#64748B', glyph: 'L', latin: true, base: 'https://linux.do/search?q=' },
+];
+
+/** v3 引擎注册表顺序（v3 全部 11 个；前 6 个与 v4 内置同 id） */
+const V3_REGISTRY_ORDER: readonly string[] = [
+  'google', 'bing', 'baidu', 'zhihu', 'weibo', 'duckduckgo', 'github', 'bilibili', 'yandex', 'gamer520', 'linuxdo',
+];
+
+/** v3 引擎 id → v4 定义（v4 内置同 id 用内置，独有用 v3 定义） */
+function v3EngineDef(id: string): EngineDef | null {
+  const builtin = BUILTIN_ENGINES.find((e) => e.id === id);
+  if (builtin !== undefined) return { ...builtin };
+  return V3_EXTRA_ENGINES.find((e) => e.id === id) ?? null;
+}
+
+/** v3 引擎顺序落成 v4 清单：只保留 v3 设置的那套，不补齐未设置的内置引擎；order 缺失按 v3 注册表全量回退 */
+function buildV3EngineList(order: readonly string[]): EngineDef[] {
+  const ids = order.length > 0 ? order : V3_REGISTRY_ORDER;
+  const out: EngineDef[] = [];
+  for (const id of ids) {
+    if (out.some((x) => x.id === id)) continue;
+    const def = v3EngineDef(id);
+    if (def !== null) out.push(def);
+  }
+  return out;
+}
+
+/** v3 引擎顺序 + 当前引擎 → v4 引擎清单（未来迁移用） */
+function mapEngines(order: unknown, current: unknown): { engines: EngineDef[]; engineId: string } {
+  const ids = Array.isArray(order) ? order.filter((id): id is string => typeof id === 'string') : [];
+  const engines = buildV3EngineList(ids);
+  const cur = typeof current === 'string' ? current : '';
+  return { engines, engineId: engines.some((e) => e.id === cur) ? cur : (engines[0]?.id ?? 'baidu') };
 }
 
 /** 执行迁移（幂等：已迁移或无旧数据返回 null；factoryStandard 由调用方提供出厂布局） */

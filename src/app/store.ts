@@ -14,8 +14,8 @@ import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { ENCOURAGE_QUOTES } from '../core/quotes'
 import { getWeather, type WeatherData } from '../core/weather'
 import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
-import { migrateV3, type MigrationResult } from '../core/migrate'
-import { LAYOUT_MERGE_KEY } from '../shared/constants'
+import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
+import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import type {
   AppSettings,
   EngineDef,
@@ -212,6 +212,28 @@ const withLayoutMerge = (doc: StoredDoc): { doc: StoredDoc; merged: boolean } =>
 /** 单飞锁：StrictMode 双挂载 / 并发调用共享同一次 hydrate，防止二次执行用陈旧缓存覆盖已合并状态 */
 let hydrating: Promise<void> | null = null
 
+/** 一次性引擎修正：v4.1 迁移把 v3 未设置的内置引擎补进了清单——按 v3 引擎偏好裁剪回用户设置的那套 */
+const withEngineRestore = async (doc: StoredDoc): Promise<{ doc: StoredDoc; restored: boolean }> => {
+  if (kvGetRaw(ENGINE_RESTORE_KEY) === '1') return { doc, restored: false }
+  kvSetRaw(ENGINE_RESTORE_KEY, '1')
+  let prefs: Awaited<ReturnType<typeof readV3EnginePrefs>> = null
+  try {
+    prefs = await readV3EnginePrefs()
+  } catch {
+    prefs = null
+  }
+  if (prefs === null) return { doc, restored: false }
+  const next = applyV3EngineSet(doc.engines, doc.settings.engineId, prefs)
+  const unchanged = next.engineId === doc.settings.engineId
+    && next.engines.length === doc.engines.length
+    && next.engines.every((e, i) => e.id === doc.engines[i]?.id)
+  if (unchanged) return { doc, restored: false }
+  return {
+    doc: { ...doc, engines: next.engines, settings: { ...doc.settings, engineId: next.engineId } },
+    restored: true,
+  }
+}
+
 /** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 开启持久化 */
 export const hydrate = (): Promise<void> => {
   if (hydrating !== null) return hydrating
@@ -224,17 +246,22 @@ const doHydrate = async (): Promise<void> => {
   const loaded = loadDoc()
   if (loaded !== null) {
     const { doc, merged } = withLayoutMerge(loaded)
+    const { doc: fixed, restored } = await withEngineRestore(doc)
+    const toastBits = [
+      merged ? '已把原来的多个图标页合并为一页' : '',
+      restored ? '已恢复 v3 的搜索引擎设置' : '',
+    ].filter(Boolean)
     useApp.setState({
-      settings: doc.settings,
-      pages: doc.pages,
-      engines: doc.engines.length > 0 ? doc.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
-      skins: doc.skins,
-      history: doc.history,
-      user: doc.user,
-      backupTime: doc.backupTime,
-      welcomed: doc.welcomed,
+      settings: fixed.settings,
+      pages: fixed.pages,
+      engines: fixed.engines.length > 0 ? fixed.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
+      skins: fixed.skins,
+      history: fixed.history,
+      user: fixed.user,
+      backupTime: fixed.backupTime,
+      welcomed: fixed.welcomed,
       hydrated: true,
-      ...(merged ? { toast: '已把原来的多个图标页合并为一页' } : {}),
+      ...(toastBits.length > 0 ? { toast: toastBits.join('；') } : {}),
     })
     return
   }
