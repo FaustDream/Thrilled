@@ -209,8 +209,17 @@ const withLayoutMerge = (doc: StoredDoc): { doc: StoredDoc; merged: boolean } =>
   return { doc: { ...doc, pages: { ...doc.pages, standard: merged } }, merged: true }
 }
 
+/** 单飞锁：StrictMode 双挂载 / 并发调用共享同一次 hydrate，防止二次执行用陈旧缓存覆盖已合并状态 */
+let hydrating: Promise<void> | null = null
+
 /** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 开启持久化 */
-export const hydrate = async (): Promise<void> => {
+export const hydrate = (): Promise<void> => {
+  if (hydrating !== null) return hydrating
+  hydrating = doHydrate()
+  return hydrating
+}
+
+const doHydrate = async (): Promise<void> => {
   await initStorage()
   const loaded = loadDoc()
   if (loaded !== null) {
