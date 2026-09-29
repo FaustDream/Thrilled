@@ -323,8 +323,6 @@ export const App = () => {
       if (!inAvatar) setAvatarOpen(false)
       const inEngine = (e.target as HTMLElement).closest?.('#engineIco') || (e.target as HTMLElement).closest?.('#enginePanel')
       if (!inEngine) st.setEnginePanel(false)
-      const grid = (e.target as HTMLElement).classList?.contains('grid')
-      if (grid) { setHistoryOpen(true); inputRef.current?.focus() }
     }
     const cm = (e: MouseEvent) => {
       e.preventDefault()
