@@ -314,7 +314,11 @@ export const App = () => {
       const inCtx = (e.target as HTMLElement).closest?.('#ctx')
       if (!inCtx) st.openCtx(null)
       const inSearch = (e.target as HTMLElement).closest?.('#searchBox') || (e.target as HTMLElement).closest?.('#searchPanel')
-      if (!inSearch) setHistoryOpen(false)
+      if (!inSearch) {
+        setHistoryOpen(false)
+        /* 点击非可聚焦区域不会自动转移焦点，必须主动 blur，否则输入框永久保持聚焦态 */
+        inputRef.current?.blur()
+      }
       const inAvatar = (e.target as HTMLElement).closest?.('#avatarWrap')
       if (!inAvatar) setAvatarOpen(false)
       const inEngine = (e.target as HTMLElement).closest?.('#engineIco') || (e.target as HTMLElement).closest?.('#enginePanel')
