@@ -559,7 +559,6 @@ const SettingPanel = () => {
   return (
     <>
       <Sec t="搜索引擎" />
-      <Hint>内置 12 个主流引擎：百度 / 必应 / 谷歌 / 搜狗 / 360 / 神马 / 夸克 / 头条 / 知乎 / 微博 / DuckDuckGo / Brave；拖动 `⋮⋮` 排序、可隐藏，启用上限 {ENGINE_LIMIT} 个。序号即数字键映射。</Hint>
       <EngineRows modalMode={false} />
 
       <Sec t="搜索框设置" />
