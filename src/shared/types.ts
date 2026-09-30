@@ -217,7 +217,7 @@ export interface AppSettings {
 export interface WallpaperSource {
   id: string;
   /** 协议适配器（同构 API 可换镜像基址） */
-  kind: 'wallhaven' | 'picsum' | 'bing' | 'wg061129';
+  kind: 'wallhaven' | 'picsum' | 'bing' | 'wg061129' | 'zhefeng';
   name: string;
   /** API 基址（如 https://wallhaven.cc/api/v1） */
   apiBase: string;

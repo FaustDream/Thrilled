@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp, ENGINE_LIMIT, type DrawerKey } from './store'
-import { WALL_SOURCE_TEMPLATES, fetchCategories, fetchWallPage, type WallCategory, type WallPage } from '../core/wallsource'
+import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage } from '../core/wallsource'
 import { saveRemoteWallpaper } from '../core/wallpaper'
 import type { WallpaperSource } from '../shared/types'
 import { WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
@@ -200,18 +200,18 @@ const useWallCategories = (src: WallpaperSource | undefined): { cats: WallCatego
 }
 
 /** 拉取一页外部壁纸（源 / 分类 / 页码变化时刷新） */
-const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number): { data: WallPage | null; state: 'loading' | 'ok' | 'error' } => {
+const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number, query: string): { data: WallPage | null; state: 'loading' | 'ok' | 'error' } => {
   const [data, setData] = useState<WallPage | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
   useEffect(() => {
     if (!src) return
     let alive = true
     setState('loading')
-    fetchWallPage(src, cat, page)
+    fetchWallPage(src, cat, page, query)
       .then((res) => { if (alive) { setData(res); setState('ok') } })
       .catch(() => { if (alive) setState('error') })
     return () => { alive = false }
-  }, [src, cat, page])
+  }, [src, cat, page, query])
   return { data, state }
 }
 
@@ -252,7 +252,9 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
   const cat = cats.some((c) => c.key === catKey) ? catKey : (cats[0]?.key ?? 'all')
   const [page, setPage] = useState(1)
   const [busy, setBusy] = useState('')
-  const { data, state } = useWallPage(src, cat, page)
+  const [query, setQuery] = useState('')
+  const [qInput, setQInput] = useState('')
+  const { data, state } = useWallPage(src, cat, page, query)
 
   const apply = async (full: string): Promise<void> => {
     if (busy !== '') return
@@ -267,14 +269,24 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
     }
   }
 
+  const unavailable = src ? WALL_SOURCE_UNAVAILABLE[src.kind] : undefined
+  const searchable = src ? sourceSearchable(src.kind) : false
   return (
     <>
       <div className="sub-tabs" style={{ marginTop: 10 }}>
         {sources.map((x) => (
           <div key={x.id} className={`sub-tab${x.id === src?.id ? ' active' : ''}`}
-            onClick={() => { setSrcId(x.id); setPage(1); setCatKey('') }}>{x.name}</div>
+            onClick={() => { setSrcId(x.id); setPage(1); setCatKey(''); setQuery(''); setQInput('') }}>{x.name}</div>
         ))}
       </div>
+      {unavailable !== undefined && <div className="empty-box">当前不可用：{unavailable}</div>}
+      {searchable && unavailable === undefined && (
+        <div className="f-row" style={{ marginTop: 10, marginBottom: 4 }}>
+          <input className="f-input" placeholder="输入关键词搜索，回车确认" value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { setQuery(qInput.trim()); setPage(1) } }} />
+        </div>
+      )}
       <div className="cats">
         {catState === 'loading' && <div className="cat active">分类加载中…</div>}
         {catState === 'error' && <div className="cat">分类获取失败</div>}
@@ -361,18 +373,23 @@ const PersonalPanel = () => {
       <Sec t="壁纸来源" />
       <Hint>系统不内置壁纸；添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸。API 地址可改为可达的镜像服务。</Hint>
       <div className="btn-row" style={{ marginTop: 10, marginBottom: 8 }}>
-        {WALL_SOURCE_TEMPLATES.map((t) => (
-          <button key={t.kind} className="btn sm ghost" onClick={() => addWallSource({ id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase, enabled: true })}>
-            添加 {t.name}
-          </button>
-        ))}
+        {WALL_SOURCE_TEMPLATES.map((t) => {
+          const un = WALL_SOURCE_UNAVAILABLE[t.kind]
+          return (
+            <button key={t.kind} className="btn sm ghost" style={un ? { opacity: 0.55 } : undefined}
+              title={un ? `实测不可接入：${un}` : undefined}
+              onClick={() => { addWallSource({ id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase, enabled: true }); if (un) showToast(`已添加（当前不可用：${un}）`) }}>
+              添加 {t.name}{un ? '（不可用）' : ''}
+            </button>
+          )
+        })}
       </div>
       {s.wallSources.map((ws) => (
         <div className="eng-row" key={ws.id}>
           <div className="er-ico" style={{ background: 'var(--menu-hover)', color: 'var(--panel-sub)', fontSize: 11 }}>{ws.name.slice(0, 2)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div>{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }}>{ws.enabled ? '已启用' : '已禁用'}</span></div>
-            <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{ws.apiBase}</div>
+            <div>{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ?? (ws.enabled ? '已启用' : '已禁用')}</span></div>
+            <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ?? ws.apiBase}</div>
           </div>
           <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
           <button className="btn sm ghost" onClick={() => {

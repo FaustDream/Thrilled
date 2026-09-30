@@ -40,13 +40,22 @@ export interface WallPage {
   hasMore: boolean;
 }
 
-/** 添加来源的协议模板（一键加入，基址可后续编辑为镜像地址；仅收录实测可用的来源） */
+/** 添加来源的协议模板（一键加入，基址可后续编辑为镜像地址；可用性以实测结果标注） */
 export const WALL_SOURCE_TEMPLATES: readonly { kind: WallpaperSource['kind']; name: string; apiBase: string }[] = [
   { kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1' },
   { kind: 'picsum', name: 'Picsum', apiBase: 'https://picsum.photos' },
   { kind: 'bing', name: '必应每日', apiBase: 'https://www.bing.com' },
   { kind: 'wg061129', name: '061129 精选', apiBase: 'https://wallpaper.061129.xyz/data' },
+  { kind: 'zhefeng', name: '哲风壁纸', apiBase: 'https://haowallpaper.com/link' },
 ];
+
+/** 实测存在无法合法解决的访问限制的来源（保留为可配置源，但明确标记为当前不可用；不做破解或伪造） */
+export const WALL_SOURCE_UNAVAILABLE: Partial<Record<WallpaperSource['kind'], string>> = {
+  zhefeng: '接口报文为站方加密保护（请求参数经对称加密），不做破解，当前无法合法接入',
+};
+
+/** 来源是否支持关键词搜索（由适配器声明） */
+export const sourceSearchable = (kind: WallpaperSource['kind']): boolean => kind === 'wallhaven' || kind === 'wg061129';
 
 const PICSUM_PAGE_SIZE = 30 as const;
 const WG061129_PAGE_SIZE = 30 as const;
@@ -90,6 +99,8 @@ export const parse061129Categories = (text: string): WallCategory[] => {
 
 /** 获取来源的分类清单（保持外部网站原有分类结构；061129 从数据目录拉取并缓存） */
 export const fetchCategories = async (src: WallpaperSource): Promise<WallCategory[]> => {
+  const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind];
+  if (unavailable) throw new Error(`当前不可用：${unavailable}`);
   if (src.kind !== 'wg061129') return staticCategories(src.kind);
   const base = cleanBase(src.apiBase);
   const cached = wgCategoryCache.get(base);
@@ -101,8 +112,8 @@ export const fetchCategories = async (src: WallpaperSource): Promise<WallCategor
 
 /* ================= 列表 ================= */
 
-/** 列表 API 地址（纯函数） */
-export const buildListUrl = (src: WallpaperSource, cat: string, page: number): string => {
+/** 列表 API 地址（纯函数；query 为搜索关键词） */
+export const buildListUrl = (src: WallpaperSource, cat: string, page: number, query = ''): string => {
   const base = cleanBase(src.apiBase);
   if (src.kind === 'picsum') return `${base}/v2/list?page=${page}&limit=${PICSUM_PAGE_SIZE}`;
   if (src.kind === 'bing') {
@@ -111,7 +122,8 @@ export const buildListUrl = (src: WallpaperSource, cat: string, page: number): s
   }
   if (src.kind === 'wg061129') return `${base}/desktop/${encodeURIComponent(cat)}.json`;
   const bits = WH_CATEGORY_BITS[cat];
-  return `${base}/search?purity=100&page=${page}${bits ? `&categories=${bits}` : ''}`;
+  const q = query.trim() !== '' ? `&q=${encodeURIComponent(query)}` : '';
+  return `${base}/search?purity=100&page=${page}${bits ? `&categories=${bits}` : ''}${q}`;
 };
 
 /** 解析 wallhaven 响应（纯函数） */
@@ -169,11 +181,17 @@ const parseBing = (base: string, page: number, text: string): WallPage => {
   return { photos, page, hasMore: rows.length >= BING_PAGE_SIZE };
 };
 
-/** 解析 061129 分类清单响应（纯函数；分类 JSON 为全量数组，客户端按 30/页切片分页） */
-export const parse061129List = (page: number, text: string): WallPage => {
+/** 解析 061129 分类清单响应（纯函数；全量数组按关键词过滤后 30/页切片分页） */
+export const parse061129List = (page: number, text: string, query = ''): WallPage => {
   let data: unknown;
   try { data = JSON.parse(decodeBlob(String(itemOf(JSON.parse(text))['blob']))); } catch { return { photos: [], page, hasMore: false }; }
-  const rows = Array.isArray(data) ? data : [];
+  const kw = query.trim().toLowerCase();
+  const rows = (Array.isArray(data) ? data : []).filter((x) => {
+    if (kw === '') return true;
+    const it = itemOf(x);
+    return [it['keywords'], it['tags'], it['displayTitle'], it['description'], it['filename'], it['subcategory']]
+      .some((v) => JSON.stringify(v ?? '').toLowerCase().includes(kw));
+  });
   const all = rows.map((x) => {
     const it = itemOf(x);
     const path = String(it['path'] ?? '');
@@ -185,14 +203,17 @@ export const parse061129List = (page: number, text: string): WallPage => {
 };
 
 /** 解析列表响应（纯函数；坏数据返回空页不抛错） */
-export const parseList = (src: WallpaperSource, page: number, text: string): WallPage => {
+export const parseList = (src: WallpaperSource, page: number, text: string, query = ''): WallPage => {
   const base = cleanBase(src.apiBase);
   if (src.kind === 'picsum') return parsePicsum(base, page, text);
   if (src.kind === 'bing') return parseBing(base, page, text);
-  if (src.kind === 'wg061129') return parse061129List(page, text);
+  if (src.kind === 'wg061129') return parse061129List(page, text, query);
   return parseWallhaven(page, text);
 };
 
-/** 拉取一页壁纸（分类 + 页码） */
-export const fetchWallPage = async (src: WallpaperSource, cat: string, page: number): Promise<WallPage> =>
-  parseList(src, page, await fetchText(buildListUrl(src, cat, page)));
+/** 拉取一页壁纸（分类 + 页码 + 可选搜索关键词） */
+export const fetchWallPage = async (src: WallpaperSource, cat: string, page: number, query = ''): Promise<WallPage> => {
+  const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind];
+  if (unavailable) throw new Error(`当前不可用：${unavailable}`);
+  return parseList(src, page, await fetchText(buildListUrl(src, cat, page, query)), query);
+};

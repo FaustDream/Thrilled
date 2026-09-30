@@ -152,7 +152,7 @@ const normWallSource = (v: unknown): WallpaperSource | null => {
   const kind = o['kind'];
   const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
   const apiBase = typeof o['apiBase'] === 'string' ? o['apiBase'].trim().replace(/\/+$/, '') : '';
-  if ((kind !== 'wallhaven' && kind !== 'picsum' && kind !== 'bing' && kind !== 'wg061129') || name === '' || !/^https?:\/\//.test(apiBase)) return null;
+  if ((kind !== 'wallhaven' && kind !== 'picsum' && kind !== 'bing' && kind !== 'wg061129' && kind !== 'zhefeng') || name === '' || !/^https?:\/\//.test(apiBase)) return null;
   return {
     id: typeof o['id'] === 'string' && o['id'] !== '' ? o['id'] : `ws${Date.now().toString(36)}`,
     kind,
