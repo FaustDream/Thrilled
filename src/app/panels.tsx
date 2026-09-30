@@ -388,8 +388,8 @@ const PersonalPanel = () => {
         <div className="eng-row" key={ws.id}>
           <div className="er-ico" style={{ background: 'var(--menu-hover)', color: 'var(--panel-sub)', fontSize: 11 }}>{ws.name.slice(0, 2)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div>{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ?? (ws.enabled ? '已启用' : '已禁用')}</span></div>
-            <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ?? ws.apiBase}</div>
+            <div>{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ? '当前不可用' : (ws.enabled ? '已启用' : '已禁用')}</span></div>
+            <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{ws.apiBase}</div>
           </div>
           <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
           <button className="btn sm ghost" onClick={() => {
