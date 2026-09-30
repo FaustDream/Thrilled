@@ -329,7 +329,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 
 /* ============ 11. 表单与通用控件 ============ */
 .f-row{margin-bottom:14px}
-.f-label{display:block;font-size:12px;color:var(--panel-sub);margin-bottom:6px}
+.f-label{display:block;font-size:13px;font-weight:400;color:var(--panel-text);margin-bottom:6px}
 .f-input{width:100%;height:38px;border-radius:10px;border:1px solid var(--line);background:transparent;
   color:var(--panel-text);padding:0 12px;font-size:13px;outline:none;font-family:inherit}
 .f-input:focus{border-color:var(--accent)}
@@ -343,14 +343,17 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .btn.wide{width:100%}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn-row.end{justify-content:flex-end}
-.sec-title{font-size:13px;font-weight:600;margin:0 0 10px}
+.sec-title{font-size:14px;font-weight:500;margin:24px 0 10px}
 .sec{margin-bottom:22px}
+.sec-card{border:0.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.sec-card .sec-title{margin:0 0 12px}
+.dw{width:360px}
 .sec.plain{margin-bottom:0}
 .sub-tabs{display:flex;gap:8px;margin-bottom:12px}
 .sub-tab{font-size:12px;padding:5px 10px;border-radius:8px;background:var(--line);color:var(--panel-sub);cursor:pointer}
 .sub-tab.active{background:var(--accent);color:#fff}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;
-  padding:11px 0;border-bottom:1px solid var(--line)}
+  min-height:56px;padding:0;border-bottom:1px solid var(--line)}
 .switch-row .sr-desc{display:block;font-size:11px;color:var(--panel-sub);margin-top:3px}
 .switch{width:38px;height:20px;border-radius:10px;background:rgba(148,163,184,.55);position:relative;
   cursor:pointer;flex:0 0 auto}
@@ -700,3 +703,39 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 #stage[data-mode='minimal'] .search-panel,#stage[data-mode='minimal'] .engine-panel{top:216px}
 /* 极简模式无网格卡片，页点隐藏 */
 #stage[data-mode='minimal'] .page-dots{display:none}
+
+/* ============ 22. 个性化面板改版（v4.4）：页签导航 / 分组卡片 / 统一颜色控件 ============ */
+/* 作用域说明：缩进 12px + 「作用于：」前缀，距所属滑块 6px、距下一项 20px（归属可读） */
+.glass-scope{display:block;font-size:11px;color:var(--panel-sub);margin:6px 0 20px;padding-left:12px}
+/* 统一颜色控件：标签 + 8px + 24px 色点 + hex 文本（三处颜色设置共用） */
+.color-field{display:flex;align-items:center;gap:8px;min-height:40px}
+.color-field .cf-label{font-size:13px;color:var(--panel-text)}
+.color-field .cf-dot{position:relative;width:24px;height:24px;border-radius:50%;cursor:pointer;
+  border:0.5px solid var(--line);flex:0 0 auto;overflow:hidden}
+.color-field .cf-dot input[type='color']{position:absolute;inset:0;opacity:0;cursor:pointer;padding:0;border:none}
+.color-field .cf-hex{font-size:12px;color:var(--panel-sub);font-family:ui-monospace,Consolas,monospace}
+/* 皮肤迷你预览：等比例 搜索条 + 双卡片 + Dock 条；0.5px 描边（var(--line) 深浅色自适应） */
+.theme-thumb{position:relative;height:90px;border-radius:8px;overflow:hidden;border:0.5px solid var(--line)}
+.theme-thumb i{position:absolute;display:block;border-radius:3px}
+.theme-thumb .tp-search{left:10%;top:10%;width:52%;height:14%;border-radius:999px}
+.theme-thumb .tp-card{left:8%;top:32%;width:38%;height:36%}
+.theme-thumb .tp-card2{left:54%;top:32%;width:38%;height:36%}
+.theme-thumb .tp-dock{left:26%;bottom:8%;width:48%;height:13%;border-radius:999px}
+/* 壁纸来源添加按钮：2 列等宽网格（面板 360px - padding 32 = 328px 内两列各 140px） */
+.wall-source-grid{display:grid;grid-template-columns:repeat(2,140px);gap:8px;margin:10px 0 8px}
+.wall-source-grid .btn{width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 当前壁纸：标签与值两行，值超长省略（不被右侧按钮挤压换行） */
+.wp-head{display:flex;align-items:center;gap:10px}
+.wp-head>span:first-child{flex:1;min-width:0}
+.wp-label{display:block;font-size:11px;color:var(--panel-sub)}
+.wp-value{display:block;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.eng-row>div{min-width:0}
+.eng-row>div>div:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 来源行：头部（名称+标记 / 启停+移除）+ 地址行 + 改地址按钮，互不挤压 */
+.wall-source-row{padding:10px 0;border-bottom:1px solid var(--line)}
+.wall-source-row .ws-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.wall-source-row .ws-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wall-source-row .ws-acts{display:flex;gap:6px;flex:0 0 auto}
+.wall-source-row .ws-actions{margin-top:6px}
+.wall-source-row .ws-actions .btn{padding:0 10px}

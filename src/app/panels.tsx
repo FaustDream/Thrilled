@@ -181,6 +181,38 @@ const AddPanel = () => {
 
 /* ============================== 个性化 ============================== */
 
+/** 分组卡片：0.5px 描边容器，把标题与其设置项圈在同一视觉边界内 */
+const SecCard = ({ t, children }: { t: string; children: React.ReactNode }) => (
+  <section className="sec-card">
+    <div className="sec-title">{t}</div>
+    {children}
+  </section>
+)
+
+/** 统一颜色控件：标签 + 24px 圆形色点（内置取色器）+ 十六进制值文本 */
+const ColorField = ({ label, value, auto, onAuto, onChange }: {
+  label: string; value: string; auto?: string; onAuto?: () => void; onChange: (hex: string) => void
+}) => (
+  <div className="color-field">
+    <span className="cf-label">{label}</span>
+    <label className="cf-dot" style={{ background: auto !== undefined && value === '' ? 'linear-gradient(135deg,#fff 50%,#94a3b8 50%)' : value }}>
+      <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+    <span className="cf-hex">{value === '' && auto !== undefined ? auto : value.toUpperCase()}</span>
+    {onAuto !== undefined && value !== '' && <button className="btn sm ghost" style={{ marginLeft: 'auto' }} onClick={onAuto}>跟随风格</button>}
+  </div>
+)
+
+/** 皮肤迷你预览：按令牌等比例渲染 搜索条 + 双卡片 + Dock 条（浅色主题靠 0.5px 描边显形，深浅色自适应） */
+const MiniSkinPreview = ({ tokens }: { tokens: Record<string, string> }) => (
+  <div className="theme-thumb" style={{ background: tokens['--mask-color'] }}>
+    <i className="tp-search" style={{ background: tokens['--card-bg'] }} />
+    <i className="tp-card" style={{ background: tokens['--card-bg'] }} />
+    <i className="tp-card tp-card2" style={{ background: tokens['--card-bg'] }} />
+    <i className="tp-dock" style={{ background: tokens['--card-bg'] }} />
+  </div>
+)
+
 /* ---------- 外部壁纸浏览（来源切换 + 分类 + 分页 + 一键设为壁纸） ---------- */
 
 /** 拉取来源分类清单（061129 需在线解析数据目录，其余为静态结构） */
@@ -318,6 +350,9 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
   )
 }
 
+/** 个性化面板导航页签（分组导航，避免单页堆全部设置） */
+const PANEL_TABS: readonly (readonly [string])[] = [['壁纸'], ['背景效果'], ['显示'], ['搜索与 Dock'], ['主题']];
+
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
   const setSetting = useApp((st) => st.setSetting)
@@ -336,6 +371,7 @@ const PersonalPanel = () => {
   const toggleWallSource = useApp((st) => st.toggleWallSource)
   const updateWallSource = useApp((st) => st.updateWallSource)
   const showToast = useApp((st) => st.showToast)
+  const [tab, setTab] = useState(0)
   const [prevWallRef, setPrevWallRef] = useState<string | null>(null)
   const wallFile = useRef<HTMLInputElement | null>(null)
   const GLASS: readonly [keyof typeof s.glass, string, string][] = [
@@ -369,31 +405,42 @@ const PersonalPanel = () => {
 
   return (
     <>
-      <Sec t="壁纸" />
-      <div className="wp-head">
-        <span className="hint-text" style={{ margin: 0 }}>当前壁纸：{s.wallpaperRef !== null ? '自定义壁纸' : '未设置'}</span>
-        <span className="btn-row">
-          <button className="btn sm ghost" onClick={() => wallFile.current?.click()}>本地上传</button>
-          <button className="btn sm ghost" onClick={useLinkWall}>外链上传</button>
+      <div className="dw-tabs">
+        {PANEL_TABS.map(([label], i) => (
+          <div key={label} className={`dw-tab${i === tab ? ' active' : ''}`} onClick={() => setTab(i)}>{label}</div>
+        ))}
+      </div>
+      {tab === 0 && (
+      <>
+      <SecCard t="壁纸">
+        <div className="wp-head">
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span className="wp-label">当前壁纸</span>
+            <span className="wp-value">{s.wallpaperRef !== null ? '自定义壁纸' : '未设置'}</span>
+          </div>
           {s.wallpaperRef !== null && (
             <button className="btn sm ghost" onClick={() => {
               if (prevWallRef !== null) setWallpaperRef(prevWallRef)
               else setWallpaperRef(null)
-            }}>移除自定义</button>
+            }}>移除</button>
           )}
-        </span>
-      </div>
-      <input ref={wallFile} type="file" accept="image/*,video/mp4,video/webm" style={{ display: 'none' }}
-        onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = '' }} />
-      <Hint>图片压缩到 1920px 宽，最大 5MB；视频壁纸（mp4 / webm）只存本地 IndexedDB，不参与云同步。</Hint>
+        </div>
+        <div className="btn-row" style={{ marginBottom: 4 }}>
+          <button className="btn sm ghost" onClick={() => wallFile.current?.click()}>本地上传</button>
+          <button className="btn sm ghost" onClick={useLinkWall}>外链上传</button>
+        </div>
+        <input ref={wallFile} type="file" accept="image/*,video/mp4,video/webm" style={{ display: 'none' }}
+          onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = '' }} />
+        <Hint>支持本地上传 / 外链，图片最大 5MB；外部网站壁纸在下方来源中获取。</Hint>
+      </SecCard>
 
-      <Sec t="壁纸来源" />
-      <Hint>系统不内置壁纸；添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸。API 地址可改为可达的镜像服务。扩展环境的请求经后台转发并自动遵循系统代理设置。</Hint>
-      <div className="btn-row" style={{ marginTop: 10, marginBottom: 8 }}>
+      <SecCard t="壁纸来源">
+      <Hint>添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸；API 地址可改为镜像服务，扩展环境自动走系统代理。</Hint>
+      <div className="wall-source-grid">
         {WALL_SOURCE_TEMPLATES.map((t) => {
           const un = WALL_SOURCE_UNAVAILABLE[t.kind]
           return (
-            <button key={t.kind} className="btn sm ghost" style={un ? { opacity: 0.55 } : undefined}
+            <button key={t.kind} className="btn sm ghost" style={un ? { opacity: 0.5 } : undefined}
               title={un ? `实测不可接入：${un}` : undefined}
               onClick={() => { addWallSource({ id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase, enabled: true }); if (un) showToast(`已添加（当前不可用：${un}）`) }}>
               添加 {t.name}{un ? '（不可用）' : ''}
@@ -402,111 +449,124 @@ const PersonalPanel = () => {
         })}
       </div>
       {s.wallSources.map((ws) => (
-        <div className="eng-row" key={ws.id}>
-          <div className="er-ico" style={{ background: 'var(--menu-hover)', color: 'var(--panel-sub)', fontSize: 11 }}>{ws.name.slice(0, 2)}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div>{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ? '当前不可用' : (ws.enabled ? '已启用' : '已禁用')}</span></div>
-            <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{ws.apiBase}</div>
+        <div className="wall-source-row" key={ws.id}>
+          <div className="ws-head">
+            <span className="ws-name">{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ? '当前不可用' : (ws.enabled ? '已启用' : '已禁用')}</span></span>
+            <span className="ws-acts">
+              <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
+              <button className="btn sm ghost" onClick={() => removeWallSource(ws.id)}>移除</button>
+            </span>
           </div>
-          <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
-          <button className="btn sm ghost" onClick={() => {
-            const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
-            if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
-            else if (next !== '') showToast('地址需以 http(s):// 开头')
-          }}>改地址</button>
-          <button className="btn sm ghost" onClick={() => removeWallSource(ws.id)}>移除</button>
+          <div className="ws-actions">
+            <button className="btn sm ghost" onClick={() => {
+              const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
+              if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
+              else if (next !== '') showToast('地址需以 http(s):// 开头')
+            }}>改地址</button>
+          </div>
+        </div>
+      ))}
+      {s.wallSources.map((ws) => (
+        <div className="wall-source-row" key={ws.id}>
+          <div className="ws-head">
+            <span className="ws-name">{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ? '当前不可用' : (ws.enabled ? '已启用' : '已禁用')}</span></span>
+            <span className="ws-acts">
+              <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
+              <button className="btn sm ghost" onClick={() => removeWallSource(ws.id)}>移除</button>
+            </span>
+          </div>
+          <div className="ws-actions">
+            <button className="btn sm ghost" onClick={() => {
+              const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
+              if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
+              else if (next !== '') showToast('地址需以 http(s):// 开头')
+            }}>改地址</button>
+          </div>
         </div>
       ))}
       {s.wallSources.some((ws) => ws.enabled) && <WallBrowser sources={s.wallSources.filter((ws) => ws.enabled)} />}
-
-      <Sec t="透明度（全局）" />
-      <SliderRow l="全局透明度" min={20} max={100} value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}
-        onInput={(v) => setSetting('gAlpha', v / 100)} />
-      <Hint>一个总开关，同时缩放所有面的背景透明；文字与图标始终不透明。</Hint>
-
-      <Sec t="玻璃质感（分功能）" />
-      {GLASS.map(([k, l, d]) => (
-        <div key={k}>
-          <SliderRow l={l} min={0} max={100} value={Math.round(s.glass[k] * 100)} display={`${Math.round(s.glass[k] * 100)}%`}
-            onInput={(v) => setGlass(k, v / 100)} />
-          <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11, margin: '-10px 0 8px' }}>{d}</div>
-        </div>
-      ))}
-      <Hint>每条滑杆同时决定该区域的「透」与「糊」；0% = 该面回到不透明纯色平面。</Hint>
-
-      <Sec t="遮罩与字体" />
-      <SliderRow l="遮罩" min={0} max={100} value={Math.round(s.cover * 100)} display={`${Math.round(s.cover * 100)}%`}
-        onInput={(v) => setSetting('cover', v / 100)} />
-      <div className="slider-row">
-        <div className="sl-head"><span>字体颜色</span></div>
-        <div className="color-ball">
-          {['', '#ffffff', '#1f2937', '#3b82f6', '#f97316', '#ec4899', '#22c55e'].map((c) => (
-            <div key={c || 'auto'} className={`cb${s.fontColor === c ? ' on' : ''}`}
-              style={{ background: c === '' ? 'linear-gradient(135deg,#fff 50%,#94a3b8 50%)' : c }}
-              title={c === '' ? '跟随风格' : c}
-              onClick={() => setSetting('fontColor', c)} />
-          ))}
-        </div>
-      </div>
-
-      <Sec t="时间与日期" />
-      <SwitchRow l="展示时间" d="时钟以 24 小时制显示" on={s.showTime} onToggle={() => toggle('showTime')} />
-      <SwitchRow l="展示日期" d="显示公历与星期" on={s.showDate} onToggle={() => toggle('showDate')} />
-      <SwitchRow l="展示每日一言" on={s.showQuote} onToggle={() => toggle('showQuote')} />
-      <div className="f-row" style={{ marginTop: 12 }}><label className="f-label">时间颜色</label>
-        <input type="color" className="f-input" value={s.clockColor} onChange={(e) => setSetting('clockColor', e.target.value)} /></div>
-
-      <Sec t="显隐" />
-      <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
-      <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
-      <SwitchRow l="隐藏图标标签" d="只保留图标，不显示名称" on={!s.labels} onToggle={() => toggle('labels')} />
-      <SwitchRow l="吉祥物" on={s.mascot} onToggle={() => toggle('mascot')} />
-
-      <Sec t="搜索框" />
-      <SliderRow l="搜索框宽度" min={400} max={1400} value={s.searchWidth} display={`${s.searchWidth}px`} onInput={(v) => setSetting('searchWidth', v)} />
-      <SliderRow l="搜索框圆角" min={0} max={25} value={s.searchRadius} display={`${s.searchRadius}px`} onInput={(v) => setSetting('searchRadius', v)} />
-      <SwitchRow l="沉浸式搜索框" d="与壁纸融合的透明样式" on={s.immersive} onToggle={() => toggle('immersive')} />
-      <SwitchRow l="简洁模式搜索框改为线框样式" d="仅极简模式生效" on={s.simpleSearch} onToggle={() => toggle('simpleSearch')} />
-
-      <Sec t="Dock 栏" />
-      <SliderRow l="Dock栏应用数量" min={4} max={8} value={s.dockCount} display={`${s.dockCount} 个`} onInput={(v) => setSetting('dockCount', v)} />
-      <SwitchRow l="栏图标" d="开启后 Dock 图标改为圆形" on={s.dockIcon === 'circle'}
-        onToggle={() => setSetting('dockIcon', s.dockIcon === 'circle' ? 'rect' : 'circle')} />
-
-      <Sec t="主题与风格" />
-      <div className="theme-grid">
-        {skins.map((k) => (
-          <div key={k.id} className={`theme-btn${k.id === s.skinId ? ' sel' : ''}`} onClick={() => applySkin(k.id)}>
-            <div className="tb-prev" style={{ background: k.tokens['--mask-color'] }}>
-              <i style={{ background: k.tokens['--card-bg'] }} />
-            </div>
-            <div className="tb-name">{k.name}{k.builtin ? <span className="tb-tag">出厂</span> : null}</div>
+      </SecCard>
+      </>
+      )}
+      {tab === 1 && (
+      <SecCard t="背景效果">
+        <SliderRow l="全局透明度" min={20} max={100} value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}
+          onInput={(v) => setSetting('gAlpha', v / 100)} />
+        <div style={{ height: 12 }} />
+        {GLASS.map(([k, l, d]) => (
+          <div key={k}>
+            <SliderRow l={l} min={0} max={100} value={Math.round(s.glass[k] * 100)} display={`${Math.round(s.glass[k] * 100)}%`}
+              onInput={(v) => setGlass(k, v / 100)} />
+            <div className="sr-desc glass-scope">作用于：{d}</div>
           </div>
         ))}
-      </div>
-      <Hint>点击卡片即切换风格并带出配套壁纸；六套内置只是出厂初始值。</Hint>
+        <div style={{ height: 12 }} />
+        <SliderRow l="壁纸遮罩" min={0} max={100} value={Math.round(s.cover * 100)} display={`${Math.round(s.cover * 100)}%`}
+          onInput={(v) => setSetting('cover', v / 100)} />
+        <div style={{ height: 12 }} />
+        <ColorField label="字体颜色" value={s.fontColor === '' ? '#1f2937' : s.fontColor} auto="跟随风格"
+          onAuto={() => setSetting('fontColor', '')} onChange={(hex) => setSetting('fontColor', hex)} />
+      </SecCard>
+      )
+      }
+      {tab === 2 && (
+      <SecCard t="显示">
+        <SwitchRow l="展示时间" d="时钟以 24 小时制显示" on={s.showTime} onToggle={() => toggle('showTime')} />
+        <SwitchRow l="展示日期" d="显示公历与星期" on={s.showDate} onToggle={() => toggle('showDate')} />
+        <SwitchRow l="展示每日一言" on={s.showQuote} onToggle={() => toggle('showQuote')} />
+        <ColorField label="时间颜色" value={s.clockColor} onChange={(hex) => setSetting('clockColor', hex)} />
+        <div style={{ height: 10 }} />
+        <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
+        <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
+        <SwitchRow l="隐藏图标标签" d="只保留图标" on={!s.labels} onToggle={() => toggle('labels')} />
+        <SwitchRow l="吉祥物" on={s.mascot} onToggle={() => toggle('mascot')} />
+      </SecCard>
+      )
+      }
+      {tab === 3 && (
+      <SecCard t="搜索与 Dock">
+        <SliderRow l="搜索框宽度" min={400} max={1400} value={s.searchWidth} display={`${s.searchWidth}px`} onInput={(v) => setSetting('searchWidth', v)} />
+        <SliderRow l="搜索框圆角" min={0} max={25} value={s.searchRadius} display={`${s.searchRadius}px`} onInput={(v) => setSetting('searchRadius', v)} />
+        <SwitchRow l="沉浸式搜索框" d="与壁纸融合的透明样式" on={s.immersive} onToggle={() => toggle('immersive')} />
+        <SwitchRow l="极简模式用线框样式" on={s.simpleSearch} onToggle={() => toggle('simpleSearch')} />
+        <div style={{ height: 10 }} />
+        <SliderRow l="Dock 应用数量" min={4} max={8} value={s.dockCount} display={`${s.dockCount} 个`} onInput={(v) => setSetting('dockCount', v)} />
+        <SwitchRow l="圆形 Dock 图标" on={s.dockIcon === 'circle'}
+          onToggle={() => setSetting('dockIcon', s.dockIcon === 'circle' ? 'rect' : 'circle')} />
+      </SecCard>
+      )
+      }
 
-      <Sec t="风格皮肤编辑器（可自定义）" />
-      <div className="f-row"><label className="f-label">皮肤名称</label>
-        <input className="f-input" value={skin?.name ?? ''} onChange={(e) => skinRename(e.target.value)} /></div>
-      <div className="color-grid">
-        {SKIN_FIELDS.map(([token, label]) => {
-          const raw = skin?.tokens[token] ?? '#ffffff'
-          const hex = raw.startsWith('#') ? raw : '#ffffff'
-          return (
-            <div className="color-row" key={token}>
-              <span>{label}</span>
-              <input type="color" value={hex} title={raw} onChange={(e) => skinToken(token, e.target.value)} />
+      {tab === 4 && (
+      <>
+      <SecCard t="主题与风格">
+        <div className="theme-grid">
+          {skins.map((k) => (
+            <div key={k.id} className={`theme-btn${k.id === s.skinId ? ' sel' : ''}`} onClick={() => applySkin(k.id)}>
+              <MiniSkinPreview tokens={k.tokens} />
+              <div className="tb-name">{k.name}{k.builtin ? <span className="tb-tag">出厂</span> : null}</div>
             </div>
-          )
-        })}
-      </div>
-      <div className="btn-row" style={{ marginTop: 12 }}>
-        <button className="btn sm" onClick={skinNew}>新建皮肤</button>
-        <button className="btn sm ghost" onClick={skinRestore}>还原内置</button>
-        <button className="btn sm danger" onClick={skinDelete}>删除皮肤</button>
-      </div>
-      <Hint>改动即时生效并保存到当前风格；rgba 令牌取色后会写成十六进制色值。</Hint>
+          ))}
+        </div>
+      </SecCard>
+      <SecCard t="风格编辑器">
+        <div className="f-row"><label className="f-label">皮肤名称</label>
+          <input className="f-input" value={skin?.name ?? ''} onChange={(e) => skinRename(e.target.value)} /></div>
+        <div className="color-grid">
+          {SKIN_FIELDS.map(([token, label]) => {
+            const raw = skin?.tokens[token] ?? '#ffffff'
+            const hex = raw.startsWith('#') ? raw : '#ffffff'
+            return <ColorField key={token} label={label} value={hex} onChange={(v) => skinToken(token, v)} />
+          })}
+        </div>
+        <div className="btn-row" style={{ marginTop: 12 }}>
+          <button className="btn sm" onClick={skinNew}>新建皮肤</button>
+          <button className="btn sm ghost" onClick={skinRestore}>还原内置</button>
+          <button className="btn sm danger" onClick={skinDelete}>删除皮肤</button>
+        </div>
+      </SecCard>
+      </>
+      )}
     </>
   )
 }
