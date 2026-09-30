@@ -16,6 +16,7 @@ import { getWeather, type WeatherData } from '../core/weather'
 import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
 import { cloudConfigured, cloudPull, cloudPush } from '../core/cloud'
+import { warn } from '../core/logger'
 import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import type {
   AppSettings,
@@ -204,17 +205,18 @@ const withEngineRestore = async (doc: StoredDoc): Promise<{ doc: StoredDoc; rest
   }
 }
 
-/** 云端权威协调：已配置云端时以云端文档为准；云端为空则把本地文档首推上去；连接失败回退本地 */
-const reconcileWithCloud = async (localDoc: StoredDoc): Promise<{ doc: StoredDoc; msg: string }> => {
-  if (!cloudConfigured()) return { doc: localDoc, msg: '' }
+/** 云端权威协调：已配置云端时以云端文档为准；云端为空则把本地文档首推上去；连接失败回退本地。
+ *  启动协调全程静默（不弹 toast），失败仅记诊断日志——手动「上传到云端 / 从云端恢复」的提示不受影响 */
+const reconcileWithCloud = async (localDoc: StoredDoc): Promise<StoredDoc> => {
+  if (!cloudConfigured()) return localDoc
   try {
     const remote = await cloudPull()
-    if (remote !== null) return { doc: remote, msg: '已从云端恢复最新数据' }
+    if (remote !== null) return remote
     await cloudPush(localDoc)
-    return { doc: localDoc, msg: '本地数据已上传云端' }
-  } catch {
-    return { doc: localDoc, msg: '云端连接失败，已使用本地数据' }
+  } catch (e) {
+    warn('store', '云端协调失败，已使用本地数据', e)
   }
+  return localDoc
 }
 
 /** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 云端协调 → 开启持久化 */
@@ -268,8 +270,7 @@ const doHydrate = async (): Promise<void> => {
       }
     }
   }
-  const { doc: finalDoc, msg } = await reconcileWithCloud(doc)
-  if (msg !== '') toasts.push(msg)
+  const finalDoc = await reconcileWithCloud(doc)
   useApp.setState({
     settings: finalDoc.settings,
     pages: finalDoc.pages,
