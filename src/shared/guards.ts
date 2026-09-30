@@ -10,8 +10,8 @@
 import { z } from 'zod';
 import { MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
-import type { ExtensionRequest, ResolveFaviconData } from './messages';
-import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc } from './types';
+import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
+import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallpaperSource } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -26,9 +26,16 @@ const resolveFaviconSchema: z.ZodType<ResolveFaviconData> = z.object({
     ),
 });
 
+/** SW 代理 GET 请求校验（仅 http(s)，防 file:/data: 等协议滥用） */
+const fetchResourceSchema: z.ZodType<FetchResourceData> = z.object({
+  url: z.string().min(1).regex(/^https?:\/\//, '仅支持 http(s) 地址'),
+  kind: z.enum(['json', 'dataurl']),
+});
+
 /** 消息判别联合 schema：逐分支 safeParse 兜底 */
 const requestParsers = [
   { type: MESSAGE_TYPE.RESOLVE_FAVICON, dataSchema: resolveFaviconSchema },
+  { type: MESSAGE_TYPE.FETCH_RESOURCE, dataSchema: fetchResourceSchema },
 ] as const;
 
 /** 基础对象形状校验 */
@@ -109,7 +116,6 @@ const skinSchema = z.object({
   name: z.string().min(1),
   builtin: z.boolean(),
   base: z.enum(['light', 'dark']),
-  wall: z.number().int().nonnegative(),
   tokens: z.record(z.string()),
 });
 
@@ -137,6 +143,17 @@ const normDockApp = (v: unknown): DockApp | null => {
   const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
   const url = typeof o['url'] === 'string' ? o['url'].trim() : '';
   return name === '' ? null : { name, url };
+};
+
+/** 外部壁纸来源归一化：kind 只认适配器协议，基址必须是 http(s) URL */
+const normWallSource = (v: unknown): WallpaperSource | null => {
+  if (typeof v !== 'object' || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const kind = o['kind'];
+  const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
+  const apiBase = typeof o['apiBase'] === 'string' ? o['apiBase'].trim().replace(/\/+$/, '') : '';
+  if ((kind !== 'wallhaven' && kind !== 'picsum') || name === '' || !/^https?:\/\//.test(apiBase)) return null;
+  return { id: typeof o['id'] === 'string' && o['id'] !== '' ? o['id'] : `ws${Date.now().toString(36)}`, kind, name, apiBase };
 };
 
 /** 设置归一化：逐字段合并到出厂默认（坏数据回退） */
@@ -193,8 +210,10 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     immersive: boolish(o['immersive'], d.immersive),
     simpleSearch: boolish(o['simpleSearch'], d.simpleSearch),
     skinId: strish(o['skinId'], d.skinId),
-    wallpaper: numish(o['wallpaper'], d.wallpaper, 0, 99),
     wallpaperRef: typeof o['wallpaperRef'] === 'string' ? o['wallpaperRef'] : null,
+    wallSources: Array.isArray(o['wallSources'])
+      ? (o['wallSources'] as unknown[]).map(normWallSource).filter((x): x is WallpaperSource => x !== null)
+      : [...d.wallSources],
   };
 };
 

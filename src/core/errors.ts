@@ -5,7 +5,7 @@
  */
 
 /** 错误码字面量联合 */
-export type ErrorCode = 'INVALID_INPUT' | 'MESSAGE_UNKNOWN_TYPE';
+export type ErrorCode = 'INVALID_INPUT' | 'MESSAGE_UNKNOWN_TYPE' | 'MESSAGE_BAD_REQUEST';
 
 /** 业务异常基类 */
 export class BusinessError extends Error {

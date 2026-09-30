@@ -8,6 +8,14 @@
 
 import type { MESSAGE_TYPE } from './constants';
 
+/** SW 代理 GET 请求消息体 */
+export interface FetchResourceData {
+  /** 目标地址（仅允许 http/https） */
+  url: string;
+  /** json = 返回响应文本；dataurl = 图片等二进制转 dataURL 返回 */
+  kind: 'json' | 'dataurl';
+}
+
 /** favicon 解析消息体 */
 export interface ResolveFaviconData {
   /** 站点域名（SW 侧做格式白名单校验，防 SSRF，R18） */
@@ -16,7 +24,8 @@ export interface ResolveFaviconData {
 
 /** ===== 判别联合：全部 runtime 消息 ===== */
 export type ExtensionRequest =
-  | { type: typeof MESSAGE_TYPE.RESOLVE_FAVICON; data: ResolveFaviconData };
+  | { type: typeof MESSAGE_TYPE.RESOLVE_FAVICON; data: ResolveFaviconData }
+  | { type: typeof MESSAGE_TYPE.FETCH_RESOURCE; data: FetchResourceData };
 
 /** 响应统一结构：success 判别 */
 export type ExtensionResponse<T = unknown> =

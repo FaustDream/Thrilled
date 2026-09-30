@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
-import { useApp, WALLS, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
+import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
 import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { stage } from './stage'
 import { WidgetView, SiteIcon, cfg, str } from './widgets'
@@ -170,14 +170,15 @@ export const App = () => {
     })
     return () => { alive = false }
   }, [settings.wallpaperRef])
+  /* 无自定义壁纸时 --wallpaper 置 none：由遮罩底色 + 细纹理兜底（系统不内置壁纸） */
   useEffect(() => {
     const rt = document.documentElement.style
     if (customWall !== null && customWall.type === 'image') {
       rt.setProperty('--wallpaper', `url("${customWall.data}")`)
-    } else if (customWall === null) {
-      rt.setProperty('--wallpaper', WALLS[settings.wallpaper]?.bg ?? WALLS[0]?.bg ?? '')
+    } else {
+      rt.setProperty('--wallpaper', 'none')
     }
-  }, [customWall, settings.wallpaper])
+  }, [customWall])
 
   /* ---------- 时钟 & 整体缩放 ---------- */
   useEffect(() => {

@@ -147,8 +147,6 @@ export interface SkinPack {
   builtin: boolean;
   /** 仅决定文字与图标的对比基线，不限制配色 */
   base: 'light' | 'dark';
-  /** 该风格配套壁纸（WALLS 下标，切风格可带出） */
-  wall: number;
   /** 完整令牌集；缺省项回退 base 默认值 */
   tokens: Record<string, string>;
 }
@@ -209,10 +207,20 @@ export interface AppSettings {
   /** 简洁模式搜索框改为线框样式 */
   simpleSearch: boolean;
   skinId: string;
-  /** 内置壁纸下标（WALLS） */
-  wallpaper: number;
-  /** 自定义壁纸引用（IndexedDB id；非空时优先于内置壁纸） */
+  /** 自定义壁纸引用（IndexedDB id，`idb:` 前缀；null = 未设置壁纸） */
   wallpaperRef: string | null;
+  /** 外部壁纸来源清单（用户自主添加；系统不内置任何壁纸资源） */
+  wallSources: WallpaperSource[];
+}
+
+/** 外部壁纸来源（协议适配器 + 用户可改的 API 基址） */
+export interface WallpaperSource {
+  id: string;
+  /** 协议适配器（同构 API 可换镜像基址） */
+  kind: 'wallhaven' | 'picsum';
+  name: string;
+  /** API 基址（如 https://wallhaven.cc/api/v1） */
+  apiBase: string;
 }
 
 /** 本地持久化文档（chrome.storage 单键整存整取；快照式备份复用同一形状，01 §5.1）

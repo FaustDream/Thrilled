@@ -2,8 +2,11 @@
  * 抽屉与弹窗（添加 / 个性化 / 广场 / 设置 / 我的 + 欢迎 / 引擎 / 编辑卡片 / 备份 / 恢复 / 重置 …）
  * 结构与文案按 docs/v4/02-UI规格.md §8、§6.1、§6.3、§7 与原型冻结内容落地。
  */
-import { useRef, useState } from 'react'
-import { useApp, WALLS, ENGINE_LIMIT, type DrawerKey } from './store'
+import { useEffect, useRef, useState } from 'react'
+import { useApp, ENGINE_LIMIT, type DrawerKey } from './store'
+import { WALL_SOURCE_TEMPLATES, fetchWallPage, sourceCategories, type WallPage } from '../core/wallsource'
+import { saveRemoteWallpaper } from '../core/wallpaper'
+import type { WallpaperSource } from '../shared/types'
 import { WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
 import { SKIN_FIELDS } from '../shared/defaults'
@@ -178,6 +181,94 @@ const AddPanel = () => {
 
 /* ============================== 个性化 ============================== */
 
+/* ---------- 外部壁纸浏览（来源切换 + 分类 + 分页 + 一键设为壁纸） ---------- */
+
+/** 拉取一页外部壁纸（源 / 分类 / 页码变化时刷新） */
+const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number): { data: WallPage | null; state: 'loading' | 'ok' | 'error' } => {
+  const [data, setData] = useState<WallPage | null>(null)
+  const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
+  useEffect(() => {
+    if (!src) return
+    let alive = true
+    setState('loading')
+    fetchWallPage(src, cat, page)
+      .then((res) => { if (alive) { setData(res); setState('ok') } })
+      .catch(() => { if (alive) setState('error') })
+    return () => { alive = false }
+  }, [src, cat, page])
+  return { data, state }
+}
+
+/** 壁纸网格 + 分页（缩略图 <img> 直连加载；点击原图下载落地后应用） */
+const WallPhotos = ({ data, state, page, onPage, onApply, busy }: {
+  data: WallPage | null; state: 'loading' | 'ok' | 'error'; page: number
+  onPage: (p: number) => void; onApply: (p: { full: string; id: string }) => void; busy: string
+}) => (
+  <>
+    <div className="wall-grid">
+      {state === 'loading' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>加载中…</div>}
+      {state === 'error' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>获取失败：来源地址不可达，或当前环境直连受跨域限制（扩展环境会自动经后台代理）</div>}
+      {(data?.photos ?? []).map((p) => (
+        <div key={p.id} className={`wall-thumb${busy === p.full ? ' sel' : ''}`} title={p.author}
+          onClick={() => onApply(p)}>
+          <img src={p.thumb} alt={p.id} loading="lazy" />
+        </div>
+      ))}
+    </div>
+    <div className="pager-row">
+      <div className={`pg${page > 1 ? '' : ' active'}`} onClick={() => page > 1 && onPage(page - 1)}>上一页</div>
+      <span>第 {page} 页{data?.hasMore ? '' : ' · 末页'}</span>
+      <div className={`pg${data?.hasMore ? '' : ' active'}`} onClick={() => data?.hasMore && onPage(page + 1)}>下一页</div>
+    </div>
+  </>
+)
+
+/** 来源浏览面板：源页签 → 分类筛选 → 壁纸网格 */
+const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
+  const setWallpaperRef = useApp((st) => st.setWallpaperRef)
+  const showToast = useApp((st) => st.showToast)
+  const [srcId, setSrcId] = useState(sources[0]?.id ?? '')
+  const src = sources.find((x) => x.id === srcId) ?? sources[0]
+  const cats = src ? sourceCategories(src.kind) : []
+  const [catKey, setCatKey] = useState('')
+  const cat = cats.some((c) => c.key === catKey) ? catKey : (cats[0]?.key ?? 'all')
+  const [page, setPage] = useState(1)
+  const [busy, setBusy] = useState('')
+  const { data, state } = useWallPage(src, cat, page)
+
+  const apply = async (full: string): Promise<void> => {
+    if (busy !== '') return
+    setBusy(full)
+    try {
+      const ref = await saveRemoteWallpaper(full)
+      setWallpaperRef(ref)
+    } catch (e) {
+      showToast(`设为壁纸失败：${(e as Error).message}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  return (
+    <>
+      <div className="sub-tabs" style={{ marginTop: 10 }}>
+        {sources.map((x) => (
+          <div key={x.id} className={`sub-tab${x.id === src?.id ? ' active' : ''}`}
+            onClick={() => { setSrcId(x.id); setPage(1); setCatKey('') }}>{x.name}</div>
+        ))}
+      </div>
+      <div className="cats">
+        {cats.map((c) => (
+          <div key={c.key} className={`cat${c.key === cat ? ' active' : ''}`}
+            onClick={() => { setCatKey(c.key); setPage(1) }}>{c.label}</div>
+        ))}
+      </div>
+      <WallPhotos data={data} state={state} page={page} onPage={setPage}
+        onApply={(p) => { void apply(p.full) }} busy={busy} />
+    </>
+  )
+}
+
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
   const setSetting = useApp((st) => st.setSetting)
@@ -190,9 +281,9 @@ const PersonalPanel = () => {
   const skinDelete = useApp((st) => st.skinDelete)
   const skinRename = useApp((st) => st.skinRename)
   const skinToken = useApp((st) => st.skinToken)
-  const setWallpaper = useApp((st) => st.setWallpaper)
   const setWallpaperRef = useApp((st) => st.setWallpaperRef)
-  const wallRandom = useApp((st) => st.wallRandom)
+  const addWallSource = useApp((st) => st.addWallSource)
+  const removeWallSource = useApp((st) => st.removeWallSource)
   const showToast = useApp((st) => st.showToast)
   const [prevWallRef, setPrevWallRef] = useState<string | null>(null)
   const wallFile = useRef<HTMLInputElement | null>(null)
@@ -202,7 +293,6 @@ const PersonalPanel = () => {
     ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'], ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡'],
   ]
   const skin = skins.find((x) => x.id === s.skinId) ?? skins[0]
-  const walls = WALLS.map((w, i) => ({ ...w, i }))
 
   const upload = async (f: File | undefined): Promise<void> => {
     if (!f) return
@@ -230,9 +320,10 @@ const PersonalPanel = () => {
     <>
       <Sec t="壁纸" />
       <div className="wp-head">
-        <span className="hint-text" style={{ margin: 0 }}>当前壁纸：{s.wallpaperRef !== null ? '自定义壁纸' : (WALLS[s.wallpaper]?.n ?? '')}</span>
+        <span className="hint-text" style={{ margin: 0 }}>当前壁纸：{s.wallpaperRef !== null ? '自定义壁纸' : '未设置'}</span>
         <span className="btn-row">
-          <button className="btn sm ghost" onClick={wallRandom}>随机壁纸</button>
+          <button className="btn sm ghost" onClick={() => wallFile.current?.click()}>本地上传</button>
+          <button className="btn sm ghost" onClick={useLinkWall}>外链上传</button>
           {s.wallpaperRef !== null && (
             <button className="btn sm ghost" onClick={() => {
               if (prevWallRef !== null) setWallpaperRef(prevWallRef)
@@ -241,19 +332,30 @@ const PersonalPanel = () => {
           )}
         </span>
       </div>
-      <div className="wall-grid">
-        {walls.map((w) => (
-          <div key={w.n} className={`wall-thumb${s.wallpaperRef === null && s.wallpaper === w.i ? ' sel' : ''}`}
-            style={{ background: w.bg }} title={w.n} onClick={() => setWallpaper(w.i)} />
-        ))}
-      </div>
-      <div className="btn-row" style={{ marginBottom: 8 }}>
-        <button className="btn sm ghost" onClick={() => wallFile.current?.click()}>本地上传</button>
-        <button className="btn sm ghost" onClick={useLinkWall}>外链上传</button>
-      </div>
       <input ref={wallFile} type="file" accept="image/*,video/mp4,video/webm" style={{ display: 'none' }}
         onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = '' }} />
       <Hint>图片压缩到 1920px 宽，最大 5MB；视频壁纸（mp4 / webm）只存本地 IndexedDB，不参与云同步。</Hint>
+
+      <Sec t="壁纸来源" />
+      <Hint>系统不内置壁纸；添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸。API 地址可改为可达的镜像服务。</Hint>
+      <div className="btn-row" style={{ marginTop: 10, marginBottom: 8 }}>
+        {WALL_SOURCE_TEMPLATES.map((t) => (
+          <button key={t.kind} className="btn sm ghost" onClick={() => addWallSource({ id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase })}>
+            添加 {t.name}
+          </button>
+        ))}
+      </div>
+      {s.wallSources.map((ws) => (
+        <div className="eng-row" key={ws.id}>
+          <div className="er-ico" style={{ background: 'var(--menu-hover)', color: 'var(--panel-sub)', fontSize: 12 }}>{ws.kind === 'wallhaven' ? 'W' : 'P'}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div>{ws.name}</div>
+            <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{ws.apiBase}</div>
+          </div>
+          <button className="btn sm ghost" onClick={() => removeWallSource(ws.id)}>移除</button>
+        </div>
+      ))}
+      {s.wallSources.length > 0 && <WallBrowser sources={s.wallSources} />}
 
       <Sec t="透明度（全局）" />
       <SliderRow l="全局透明度" min={20} max={100} value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}
@@ -312,8 +414,8 @@ const PersonalPanel = () => {
       <Sec t="主题与风格" />
       <div className="theme-grid">
         {skins.map((k) => (
-          <div key={k.id} className={`theme-btn${k.id === s.skinId ? ' sel' : ''}`} onClick={() => applySkin(k.id, true)}>
-            <div className="tb-prev" style={{ background: WALLS[k.wall]?.bg ?? WALLS[0]?.bg }}>
+          <div key={k.id} className={`theme-btn${k.id === s.skinId ? ' sel' : ''}`} onClick={() => applySkin(k.id)}>
+            <div className="tb-prev" style={{ background: k.tokens['--mask-color'] }}>
               <i style={{ background: k.tokens['--card-bg'] }} />
             </div>
             <div className="tb-name">{k.name}{k.builtin ? <span className="tb-tag">出厂</span> : null}</div>
@@ -794,7 +896,7 @@ export const Modal = () => {
             <div className="th-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
               {skins.map((k) => (
                 <div key={k.id} className={`th-card${k.id === selSkin ? ' sel' : ''}`} onClick={() => setSelSkin(k.id)}>
-                  <div className="th-prev" style={{ background: WALLS[k.wall]?.bg ?? WALLS[0]?.bg }}>
+                  <div className="th-prev" style={{ background: k.tokens['--mask-color'] }}>
                     <div className="t-card" style={{ left: '10%', top: '14%', width: '34%', height: '26%', background: k.tokens['--card-bg'] }} />
                     <div className="t-card" style={{ left: '52%', top: '14%', width: '34%', height: '26%', background: k.tokens['--card-bg'] }} />
                     <div className="t-card" style={{ left: '10%', top: '48%', width: '34%', height: '22%', background: k.tokens['--card-bg'] }} />
@@ -807,7 +909,7 @@ export const Modal = () => {
             </div>
             <div className="btn-row end" style={{ marginTop: 16 }}>
               <button className="btn ghost" onClick={() => setModal(null)}>稍后再说</button>
-              <button className="btn" onClick={() => { applySkin(selSkin, true); setModal(null); useApp.getState().showToast('应用成功') }}>应用风格</button>
+              <button className="btn" onClick={() => { applySkin(selSkin); setModal(null); useApp.getState().showToast('应用成功') }}>应用风格</button>
             </div>
           </>
         )

@@ -28,6 +28,7 @@ import type {
   SkinPack,
   StoredDoc,
   ViewMode,
+  WallpaperSource,
   WidgetKind,
 } from '../shared/types'
 
@@ -43,16 +44,6 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 }
 
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
-export const WALLS: readonly { n: string; bg: string }[] = [
-  {
-    n: '经典浅色',
-    bg: 'radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.5),transparent 62%),linear-gradient(178deg,#eef2f8 0%,#e4eaf2 58%,#d8e1ec 100%)',
-  },
-  {
-    n: '经典深色',
-    bg: 'radial-gradient(86% 64% at 76% 8%,rgba(90,200,220,.24),transparent 58%),radial-gradient(64% 54% at 16% 84%,rgba(40,130,160,.20),transparent 60%),linear-gradient(168deg,#10394e 0%,#0b2537 46%,#06131d 100%)',
-  },
-]
 
 export type DrawerKey = 'add' | 'square' | 'personal' | 'setting'
 export type ModalKey = 'theme' | 'engine' | 'addEngine' | 'log' | 'about' | 'editItem' | 'backup' | 'restore' | 'reset'
@@ -100,15 +91,16 @@ interface AppState {
   /** 拖拽排序后提交完整顺序 */
   commitEngineOrder: (ids: string[]) => void
   setGlass: (k: GlassKey, v: number) => void
-  applySkin: (id: string, syncWall?: boolean) => void
+  applySkin: (id: string) => void
   skinNew: () => void
   skinRestore: () => void
   skinDelete: () => void
   skinRename: (name: string) => void
   skinToken: (token: string, value: string) => void
-  setWallpaper: (i: number) => void
   setWallpaperRef: (ref: string | null) => void
-  wallRandom: () => void
+  /** 添加外部壁纸来源（协议适配器 + 用户可改基址） */
+  addWallSource: (src: WallpaperSource) => void
+  removeWallSource: (id: string) => void
   place: (kind: WidgetKind, config?: Record<string, unknown>) => void
   updateConfig: (id: string, patch: Record<string, unknown>) => void
   resize: (id: string, w: number, h: number) => void
@@ -275,11 +267,8 @@ const doHydrate = async (): Promise<void> => {
   }
   const { doc: finalDoc, msg } = await reconcileWithCloud(doc)
   if (msg !== '') toasts.push(msg)
-  /* 内置壁纸缩减为两个主题后，旧文档的越界下标归位浅色 */
-  const settings = { ...finalDoc.settings }
-  if (!(settings.wallpaper >= 0 && settings.wallpaper < WALLS.length)) settings.wallpaper = 0
   useApp.setState({
-    settings,
+    settings: finalDoc.settings,
     pages: finalDoc.pages,
     engines: finalDoc.engines.length > 0 ? finalDoc.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
     skins: finalDoc.skins,
@@ -351,9 +340,7 @@ export const useApp = create<AppState>()((set, get) => ({
   }),
 
   setGlass: (k, v) => set((s) => ({ settings: { ...s.settings, glass: { ...s.settings.glass, [k]: v } } })),
-  applySkin: (id, syncWall) => set((s) => ({
-    settings: { ...s.settings, skinId: id, wallpaper: syncWall ? (s.skins.find((x) => x.id === id)?.wall ?? s.settings.wallpaper) : s.settings.wallpaper },
-  })),
+  applySkin: (id) => set((s) => ({ settings: { ...s.settings, skinId: id } })),
   skinNew: () => set((s) => {
     const cur = s.skins.find((x) => x.id === s.settings.skinId)
     if (!cur) return {}
@@ -382,12 +369,9 @@ export const useApp = create<AppState>()((set, get) => ({
   skinToken: (token, value) => set((s) => ({
     skins: s.skins.map((x) => (x.id === s.settings.skinId ? { ...x, tokens: { ...x.tokens, [token]: value } } : x)),
   })),
-  setWallpaper: (i) => set((s) => ({ settings: { ...s.settings, wallpaper: i, wallpaperRef: null }, toast: `壁纸已切换：${WALLS[i]?.n ?? ''}` })),
-  setWallpaperRef: (ref) => set((s) => ({ settings: { ...s.settings, wallpaperRef: ref }, toast: ref === null ? '已恢复内置壁纸' : '自定义壁纸已应用' })),
-  wallRandom: () => set((s) => {
-    const i = Math.floor(Math.random() * WALLS.length)
-    return { settings: { ...s.settings, wallpaper: i, wallpaperRef: null }, toast: `随机壁纸：${WALLS[i]?.n ?? ''}` }
-  }),
+  setWallpaperRef: (ref) => set((s) => ({ settings: { ...s.settings, wallpaperRef: ref }, toast: ref === null ? '已移除壁纸' : '自定义壁纸已应用' })),
+  addWallSource: (src) => set((s) => ({ settings: { ...s.settings, wallSources: [...s.settings.wallSources, src] }, toast: `已添加壁纸来源：${src.name}` })),
+  removeWallSource: (id) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.filter((x) => x.id !== id) }, toast: '已移除壁纸来源' })),
 
   place: (kind, config = {}) => set((s) => {
     const list = [...s.pages]
@@ -598,7 +582,7 @@ export const useApp = create<AppState>()((set, get) => ({
       next.settings = { ...s.settings, skinId: 'classic' }
     }
     if (wallpaper) {
-      next.settings = { ...(next.settings ?? s.settings), wallpaper: 0, wallpaperRef: null }
+      next.settings = { ...(next.settings ?? s.settings), wallpaperRef: null }
     }
     return next
   }),

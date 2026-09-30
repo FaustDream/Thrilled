@@ -46,6 +46,8 @@ export const WALLPAPER_MAX_WIDTH = 1920 as const;
 export const WALLPAPER_JPEG_QUALITY = 0.85 as const;
 /** 上传大小上限（5MB） */
 export const WALLPAPER_MAX_BYTES = 5 * 1024 * 1024;
+/** 外部壁纸下载落地上限（20MB，覆盖 4K 大图） */
+export const WALLPAPER_EXT_MAX_BYTES = 20 * 1024 * 1024;
 /** 允许的壁纸 MIME 类型 */
 export const WALLPAPER_ALLOWED_TYPES: readonly string[] = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -86,4 +88,6 @@ export const FAVICON_MAX_BYTES = 10 * 1024 * 1024;
 /** ===== 消息类型（判别联合 type 常量） ===== */
 export const MESSAGE_TYPE = {
   RESOLVE_FAVICON: 'RESOLVE_FAVICON',
+  /** SW 代理 GET 请求（json 文本 / 图片 dataURL），绕过页面 CORS 限制 */
+  FETCH_RESOURCE: 'FETCH_RESOURCE',
 } as const;

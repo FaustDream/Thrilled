@@ -34,6 +34,24 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(s.skinId).toBe('dark')
   })
 
+  it('wallSources 保留合法来源清单，坏项丢弃；缺失回退空清单', () => {
+    const s = normalizeSettings({
+      wallSources: [
+        { id: 'a', kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1' },
+        { id: 'b', kind: 'ftp', name: 'bad', apiBase: 'https://x.com' },
+        { id: 'c', kind: 'picsum', name: '', apiBase: 'https://picsum.photos' },
+        { id: 'd', kind: 'picsum', name: 'Picsum', apiBase: 'not-a-url' },
+        'bad',
+      ],
+    })
+    expect(s.wallSources).toEqual([{ id: 'a', kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1' }])
+    expect(normalizeSettings({}).wallSources).toEqual(DEFAULT_SETTINGS.wallSources)
+  })
+
+  it('内置皮肤不再携带配套壁纸字段（内置壁纸已移除）', () => {
+    expect(BUILTIN_SKINS.some((sk) => 'wall' in sk)).toBe(false)
+  })
+
   it('dockApps 保留合法 {name,url} 清单，坏项丢弃（旧版品牌名字符串一并清空）', () => {
     const s = normalizeSettings({ dockApps: [{ name: '知乎', url: 'https://www.zhihu.com' }, 42, { name: '', url: 'https://x.com' }, null, { name: 'GitHub', url: 'https://github.com' }] })
     expect(s.dockApps).toEqual([{ name: '知乎', url: 'https://www.zhihu.com' }, { name: 'GitHub', url: 'https://github.com' }])

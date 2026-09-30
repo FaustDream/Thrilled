@@ -7,7 +7,8 @@
  */
 
 import { error, info, warn } from './logger';
-import { WALLPAPER_ALLOWED_TYPES, WALLPAPER_JPEG_QUALITY, WALLPAPER_MAX_BYTES, WALLPAPER_MAX_WIDTH } from '../shared/constants';
+import { fetchDataUrl } from './fetch-proxy';
+import { WALLPAPER_ALLOWED_TYPES, WALLPAPER_EXT_MAX_BYTES, WALLPAPER_JPEG_QUALITY, WALLPAPER_MAX_BYTES, WALLPAPER_MAX_WIDTH } from '../shared/constants';
 
 const MODULE = 'wallpaper';
 export const WALLPAPER_DB_NAME = 'thrilled-wallpaper';
@@ -194,6 +195,16 @@ export async function uploadWallpaper(file: File): Promise<string | null> {
   const data = isVideo ? raw : await compressImage(raw);
   const ref = await saveWallpaper({ type: isVideo ? 'video' : 'image', data });
   if (ref === null) throw new Error('壁纸保存失败，可能是存储空间不足');
+  return ref;
+}
+
+/** 下载外部壁纸图片落地 IndexedDB（SW 代理 / 直连），返回引用 id（上限 20MB） */
+export async function saveRemoteWallpaper(url: string): Promise<string> {
+  const dataUrl = await fetchDataUrl(url);
+  if (dataUrl.length * 0.75 > WALLPAPER_EXT_MAX_BYTES) throw new Error('图片过大，超过 20MB 上限');
+  const ref = await saveWallpaper({ type: 'image', data: dataUrl });
+  if (ref === null) throw new Error('壁纸保存失败，可能是存储空间不足');
+  info(MODULE, '外部壁纸已落地', { bytes: Math.round(dataUrl.length * 0.75) });
   return ref;
 }
 

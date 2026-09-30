@@ -3,6 +3,7 @@
  *
  * - onMessage：判别联合路由（isExtensionRequest 守卫 + 穷尽 switch + never 兜底）
  * - RESOLVE_FAVICON：响应页面 favicon 解析请求
+ * - FETCH_RESOURCE：SW 代理 GET（外部壁纸源 API / 图片下载，绕过页面 CORS）
  */
 
 import { error, info } from '../core/logger';
@@ -33,6 +34,22 @@ chrome.runtime.onMessage.addListener(
   },
 );
 
+/** SW 代理 GET：json 返回响应文本，dataurl 返回二进制 dataURL（host_permissions 已覆盖 https） */
+async function proxyFetch(data: { url: string; kind: 'json' | 'dataurl' }): Promise<string> {
+  if (!/^https?:\/\//.test(data.url)) throw new BusinessError('MESSAGE_BAD_REQUEST', '仅支持 http(s) 地址', { url: data.url });
+  const res = await fetch(data.url);
+  if (!res.ok) throw new BusinessError('MESSAGE_BAD_REQUEST', `upstream_${res.status}`, { status: res.status });
+  if (data.kind === 'json') return res.text();
+  const blob = await res.blob();
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error('read_failed'));
+    reader.readAsDataURL(blob);
+  });
+  return dataUrl;
+}
+
 async function routeMessage(message: unknown): Promise<ExtensionResponse> {
   if (!isExtensionRequest(message)) {
     return errResponse(UNKNOWN_MESSAGE_REASON);
@@ -45,7 +62,11 @@ async function routeMessage(message: unknown): Promise<ExtensionResponse> {
     return okResponse(dataUrl);
   }
 
-  const exhaustive: never = req.type;
+  if (req.type === MESSAGE_TYPE.FETCH_RESOURCE) {
+    return okResponse(await proxyFetch(req.data));
+  }
+
+  const exhaustive: never = req;
   throw new BusinessError('MESSAGE_UNKNOWN_TYPE', '未预期的消息类型', { type: exhaustive });
 }
 
