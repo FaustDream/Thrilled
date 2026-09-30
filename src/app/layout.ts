@@ -8,7 +8,6 @@
 import type { GridItem, LayoutDoc, ModePages, WidgetKind } from '../shared/types';
 import { WIDGET_KINDS } from '../shared/widget-defs';
 import { COLS, MAX_PAGES, ROWS, findSlot } from '../shared/grid';
-import { DEFAULT_DOCK_APPS } from '../shared/defaults';
 
 let seq = 0
 export const uid = (): string => `i${Date.now().toString(36)}${(seq++).toString(36)}`
@@ -18,7 +17,6 @@ export const G = (c: number, r: number, w: number, h: number, t: WidgetKind, con
   ({ id: uid(), c, r, w, h, t, config })
 
 /* ---------- 分区应用清单 ---------- */
-export const DOCK_APPS: readonly string[] = DEFAULT_DOCK_APPS
 const AI_APPS = ['豆包', 'Kimi', '秘塔AI搜索', '通义千问']
 const AI_EXTRA = ['智谱清言', '讯飞星火', 'DeepSeek', '文心一言', '即梦AI', '可灵AI', 'ChatGPT', 'Claude']
 const TOOL_APPS = ['翻译', '计算器', '截图', '二维码']

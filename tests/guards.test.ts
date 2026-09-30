@@ -34,9 +34,10 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(s.skinId).toBe('dark')
   })
 
-  it('dockApps 保留合法品牌名清单，坏数据回退默认', () => {
-    const s = normalizeSettings({ dockApps: ['知乎', 42, 'GitHub', null] })
-    expect(s.dockApps).toEqual(['知乎', 'GitHub'])
+  it('dockApps 保留合法 {name,url} 清单，坏项丢弃（旧版品牌名字符串一并清空）', () => {
+    const s = normalizeSettings({ dockApps: [{ name: '知乎', url: 'https://www.zhihu.com' }, 42, { name: '', url: 'https://x.com' }, null, { name: 'GitHub', url: 'https://github.com' }] })
+    expect(s.dockApps).toEqual([{ name: '知乎', url: 'https://www.zhihu.com' }, { name: 'GitHub', url: 'https://github.com' }])
+    expect(normalizeSettings({ dockApps: ['知乎', 'GitHub'] }).dockApps).toEqual([]) // 旧字符串数据不属于新模型，清空
     expect(normalizeSettings({ dockApps: 'bad' }).dockApps).toEqual(DEFAULT_SETTINGS.dockApps)
     expect(normalizeSettings(null).dockApps).toEqual(DEFAULT_SETTINGS.dockApps)
   })

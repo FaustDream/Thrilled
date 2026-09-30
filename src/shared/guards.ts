@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
 import type { ExtensionRequest, ResolveFaviconData } from './messages';
-import type { AppSettings, EngineDef, ModePages, SkinPack, StoredDoc } from './types';
+import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -130,6 +130,15 @@ export const normalizeEngines = (v: unknown): EngineDef[] => {
   return v.map(normalizeEngine).filter((e): e is EngineDef => e !== null);
 };
 
+/** Dock 快捷方式归一化：只认 {name,url} 对象（旧版品牌名字符串数据一并丢弃） */
+const normDockApp = (v: unknown): DockApp | null => {
+  if (typeof v !== 'object' || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
+  const url = typeof o['url'] === 'string' ? o['url'].trim() : '';
+  return name === '' ? null : { name, url };
+};
+
 /** 设置归一化：逐字段合并到出厂默认（坏数据回退） */
 export const normalizeSettings = (v: unknown): AppSettings => {
   const d = DEFAULT_SETTINGS;
@@ -171,7 +180,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     dockCount: numish(o['dockCount'], d.dockCount, 4, 8),
     dockIcon: dockIcon === 'circle' ? 'circle' : 'rect',
     dockApps: Array.isArray(o['dockApps'])
-      ? (o['dockApps'] as unknown[]).filter((x): x is string => typeof x === 'string')
+      ? (o['dockApps'] as unknown[]).map(normDockApp).filter((x): x is DockApp => x !== null)
       : [...d.dockApps],
     clockColor: strish(o['clockColor'], d.clockColor),
     showTime: boolish(o['showTime'], d.showTime),

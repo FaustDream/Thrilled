@@ -86,7 +86,6 @@ export const BRANDS: Record<string, Brand> = {
   '秘塔AI搜索': { color: '#2B6BE4', glyph: '秘', url: 'https://metaso.cn' },
   '音乐': { color: '#EC4899', glyph: '乐', url: 'https://music.163.com' },
   '影视': { color: '#7C3AED', glyph: '影', url: 'https://v.qq.com' },
-  '头像': { color: '#E08A4A', glyph: 'T', latin: true },
   '百度网盘': { color: '#3385FF', glyph: '盘', url: 'https://pan.baidu.com' },
   'OneDrive': { color: '#0078D4', glyph: 'O', latin: true, url: 'https://onedrive.live.com' },
   'Dropbox': { color: '#0061FF', glyph: 'D', latin: true, url: 'https://www.dropbox.com' },

@@ -4,10 +4,10 @@
  * 内置 4 套风格仅为出厂初始值，与用户自建风格同构（02 §6.1）；
  * core/reset 与 app/store 都从这里取默认，避免双份维护。
  */
-import type { AppSettings, SkinPack } from './types';
+import type { AppSettings, DockApp, SkinPack } from './types';
 
-/** Dock 出厂应用（品牌名；Dock 图标右键可修改 / 移除，可恢复默认） */
-export const DEFAULT_DOCK_APPS: readonly string[] = ['音乐', '哔哩哔哩', '淘宝', '抖音', '小红书', '头像', '影视', '百度网盘'];
+/** Dock 出厂为空：快捷方式由用户在「添加 → 自定义」手动新增（右键图标可改名 / 改网址 / 移除） */
+export const DEFAULT_DOCK_APPS: readonly DockApp[] = [];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   mode: 'standard',

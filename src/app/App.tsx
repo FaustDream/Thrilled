@@ -1,6 +1,6 @@
 /**
  * 新标签页装配（v4）
- * 结构：Stage（1920×945 设计稿整体缩放）→ 搜索行 / 翻页网格 / Dock / 模式胶囊 / 头像 / 页点 + 浮层（菜单·抽屉·弹窗·Toast）
+ * 结构：Stage（1920×945 设计稿整体缩放）→ 搜索行 / 翻页网格 / Dock（快捷方式 + 新增·个性化·广场·设置）/ 模式胶囊 / 页点 + 浮层（菜单·抽屉·弹窗·Toast）
  * 交互：文档级 data-act 事件委托（与原型一致），拖拽换位用指针事件 + 网格吸附，滚轮 / 方向键翻页。
  * 平台行为：打开链接走 core/link-opener（打开方式设置），壁纸走 core/wallpaper（IndexedDB）。
  */
@@ -9,8 +9,7 @@ import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent }
 import { useApp, WALLS, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
 import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { stage } from './stage'
-import { DOCK_APPS } from './layout'
-import { WidgetView, TileGlyph, cfg, str } from './widgets'
+import { WidgetView, SiteIcon, cfg, str } from './widgets'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
 import { Drawer, Modal } from './panels'
@@ -22,13 +21,15 @@ import { GLASS_ALPHA_FACTOR, GLASS_BLUR_PX, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN_DE
 import type { WeatherData } from '../core/weather'
 import type { GridItem } from '../shared/types'
 
-/** 模式说明句（04 §5.1 源码原文） */
-const MODE_TIPS: Record<string, string> = {
-  minimal: '简单可靠的网络访问',
-  standard: '灵活的拖拽&极致的响应交互',
-}
-
 const allItems = (pages: GridItem[][]): GridItem[] => pages.flat()
+
+/** Dock 功能键（顺序固定：新增 / 个性化 / 广场 / 设置），图标为 iconfont 单色线性风格 */
+const DOCK_ACTIONS = [
+  ['add', '新增', Icon.plus],
+  ['personal', '个性化', Icon.palette],
+  ['square', '广场', Icon.compass],
+  ['setting', '设置', Icon.gear],
+] as const
 
 /** 解析要打开的 URL：显式 url → 站点注册表 → null（提示补充） */
 const resolveSiteUrl = (item: GridItem): string | null => {
@@ -55,23 +56,25 @@ const runSearch = (): void => {
   if (!st.settings.searchKeep && el) el.value = ''
 }
 
-/** Dock 图标右键菜单动作（修改名称 / 移除 / 恢复默认）；返回是否已处理 */
+/** Dock 图标右键菜单动作（修改名称 / 修改网址 / 移除）；返回是否已处理 */
 const dockMenuAct = (name: string, v: string): boolean => {
   const st = useApp.getState()
-  const apps = st.settings.dockApps
   const idx = Number(v)
+  const apps = st.settings.dockApps
+  const app = apps[idx]
+  const patchAt = (patch: { name?: string; url?: string }): void => {
+    st.setSetting('dockApps', apps.map((a, i) => (i === idx ? { ...a, ...patch } : a)))
+  }
   if (name === 'dock-rename') {
-    const next = window.prompt('修改 Dock 快捷方式名称', apps[idx] ?? '')?.trim() ?? ''
-    if (next !== '') {
-      st.setSetting('dockApps', apps.map((a, i) => (i === idx ? next : a)))
-      st.showToast('已修改 Dock 快捷方式')
-    }
+    const next = window.prompt('修改名称', app?.name ?? '')?.trim() ?? ''
+    if (next !== '') { patchAt({ name: next }); st.showToast('已修改名称') }
+  } else if (name === 'dock-url') {
+    const next = window.prompt('修改网址（以 http(s):// 开头）', app?.url ?? '')?.trim() ?? ''
+    if (/^https?:\/\//.test(next)) { patchAt({ url: next }); st.showToast('已修改网址') }
+    else if (next !== '') st.showToast('网址需以 http(s):// 开头')
   } else if (name === 'dock-remove') {
     st.setSetting('dockApps', apps.filter((_, i) => i !== idx))
-    st.showToast('已从 Dock 移除，可在全局右键菜单恢复默认')
-  } else if (name === 'dock-reset') {
-    st.setSetting('dockApps', [...DOCK_APPS])
-    st.showToast('已恢复默认 Dock 应用')
+    st.showToast('已从 Dock 移除')
   } else return false
   st.openCtx(null)
   return true
@@ -94,7 +97,7 @@ export const App = () => {
   const weather = useApp((s) => s.weather)
   const [now, setNow] = useState(() => new Date())
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [avatarOpen, setAvatarOpen] = useState(false)
+  const [pillOpen, setPillOpen] = useState(false)
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; c: number; r: number; moved: boolean } | null>(null)
   const [customWall, setCustomWall] = useState<BgData | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -105,7 +108,6 @@ export const App = () => {
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
-
   /* ---------- Dock 苹果式悬停放大（指针接近度 → 余弦衰减缩放，图标原点贴底向上生长） ---------- */
   const dockMagnify = (e: ReactMouseEvent) => {
     const bar = dockBarRef.current
@@ -252,12 +254,11 @@ export const App = () => {
         case 'open-drawer': st.setDrawer((v || 'personal') as DrawerKey); break
         case 'dock-app': {
           st.openCtx(null)
-          const url = siteUrlOf(v)
-          if (url !== null) openByMode(st, url, 'link')
-          else st.showToast(`${v}：暂无站点地址`)
+          if (v !== '') openByMode(st, v, 'link')
+          else st.showToast('未配置网址，右键图标可补充链接')
           break
         }
-        case 'dock-rename': case 'dock-remove': case 'dock-reset':
+        case 'dock-rename': case 'dock-url': case 'dock-remove':
           dockMenuAct(name, v)
           break
         case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', square: 'square', setting: 'setting' } as const)[v] ?? 'setting'); break
@@ -316,8 +317,6 @@ export const App = () => {
         /* 点击非可聚焦区域不会自动转移焦点，必须主动 blur，否则输入框永久保持聚焦态 */
         inputRef.current?.blur()
       }
-      const inAvatar = (e.target as HTMLElement).closest?.('#avatarWrap')
-      if (!inAvatar) setAvatarOpen(false)
       const inEngine = (e.target as HTMLElement).closest?.('#engineIco') || (e.target as HTMLElement).closest?.('#enginePanel')
       if (!inEngine) st.setEnginePanel(false)
     }
@@ -341,7 +340,7 @@ export const App = () => {
     const key = (e: KeyboardEvent) => {
       const st = useApp.getState()
       if (e.key === 'Escape') {
-        st.openCtx(null); st.setModal(null); st.setDrawer(null); st.setEnginePanel(false); setHistoryOpen(false); setAvatarOpen(false)
+        st.openCtx(null); st.setModal(null); st.setDrawer(null); st.setEnginePanel(false); setHistoryOpen(false)
         return
       }
       /* Ctrl+Shift+E 导出布局 / Ctrl+Shift+R 一键重置（重置走确认弹窗，满足二次确认约束） */
@@ -491,12 +490,12 @@ export const App = () => {
           style={{ width: settings.searchWidth, borderRadius: settings.searchRadius }}
           onClick={() => setHistoryOpen(true)}>
           <span className="engine-ico" id="engineIco" data-act="engine-open"
-            style={{ background: engine?.color, fontSize: engine?.latin ? 10 : 11 }}>{engine?.glyph}</span>
+            style={{ fontSize: engine?.latin ? 10 : 11, ['--engine-color' as string]: engine?.color }}>{engine?.glyph}</span>
           <input id="searchInput" ref={inputRef} placeholder={`${engine?.name ?? ''} 搜索`} autoComplete="off" spellCheck={false}
             onFocus={() => setHistoryOpen(true)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); setHistoryOpen(false) } }} />
           {!settings.hideBtn && (
-            <span className="search-go-btn" data-act="search-go" title="搜索" style={{ color: 'var(--search-text)' }}>{Icon.search()}</span>
+            <span className="search-go-btn" data-act="search-go" title="搜索">{Icon.search()}</span>
           )}
         </div>
       </div>
@@ -528,66 +527,52 @@ export const App = () => {
         </div>
       )}
 
-      {/* 极简模式时钟 */}
+      {/* 极简模式：大时钟（日期格式 2026年9月29日）+ 鼓励语（Dock 上方） */}
       <div className="minimal-clock">
         <div className="mc-time">{`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`}</div>
-        <div className="mc-date">{`${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日 星期${'日一二三四五六'[now.getDay()]}`}</div>
+        <div className="mc-date">{`${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`}</div>
       </div>
-
-      {/* 模式胶囊 + 头像（悬停展开 + 说明句） */}
-      {!settings.hideTop && (
-        <>
-          <div className="mode-pill">
-            <span className="pill-ico">{Icon.modeStd()}</span>
-            <div className="pill-opts">
-              {([['minimal', '极简'], ['standard', '标准']] as const).map(([k, n]) => (
-                <div key={k} className={`pill-btn${settings.mode === k ? ' active' : ''}`} data-act="set-mode" data-v={k}
-                  onMouseEnter={() => {
-                    const tip = document.getElementById('modeTip')
-                    if (tip === null) return
-                    tip.textContent = MODE_TIPS[k] ?? ''
-                    tip.classList.add('show')
-                  }}
-                  onMouseLeave={() => document.getElementById('modeTip')?.classList.remove('show')}>
-                  {k === 'minimal' ? Icon.modeMin() : k === 'standard' ? Icon.modeStd() : Icon.modePri()}{n}
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="mode-tip" id="modeTip" />
-          <div className="avatar-wrap" id="avatarWrap">
-            <div className="avatar" onClick={() => setAvatarOpen(!avatarOpen)} title="我的与设置">{'T'}</div>
-            {avatarOpen && (
-              <div className="avatar-menu">
-                {([['personal', '个性化'], ['square', '广场'], ['setting', '设置']] as const).map(([k, n]) => (
-                  <div key={k} className="ctx-item" data-act="open-drawer" data-v={k} onClick={() => setAvatarOpen(false)}>
-                    <span>{n}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
+      {settings.mode === 'minimal' && settings.showQuote && (
+        <div className="minimal-quote">{encourage}</div>
       )}
 
-      {/* Dock（苹果式：图标右键可改/删，悬停邻近放大；个性化/广场/设置移入头像菜单） */}
+      {/* 模式胶囊：默认只显图标，悬停 / 点击展开 极简 / 标准 两选项（无说明文字） */}
+      {!settings.hideTop && (
+        <div className={`mode-pill${pillOpen ? ' open' : ''}`} id="modePill"
+          onMouseEnter={() => setPillOpen(true)} onMouseLeave={() => setPillOpen(false)}>
+          <span className="pill-ico">{settings.mode === 'minimal' ? Icon.feather() : Icon.modeStd()}</span>
+          <div className="pill-opts">
+            {([['minimal', '极简'], ['standard', '标准']] as const).map(([k, n]) => (
+              <div key={k} className={`pill-btn${settings.mode === k ? ' active' : ''}`} data-act="set-mode" data-v={k}
+                onClick={() => setPillOpen(false)}>
+                {k === 'minimal' ? Icon.feather() : Icon.modeStd()}{n}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Dock：用户快捷方式（favicon 图标）+ 功能键 新增/个性化/广场/设置 */}
       {settings.mascot && (
         <div className="dock">
           <div className="dock-bar" ref={dockBarRef} onMouseMove={dockMagnify} onMouseLeave={dockMagnifyReset}>
             <div className="dock-apps">
-              {dockApps.slice(0, settings.dockCount).map((n, i) => (
-                <div className="dock-item" key={`dock-${i}`} data-act="dock-app" data-v={n} data-idx={String(i)}>
-                  <TileGlyph name={n} cls={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`} fs={24} />
-                  <div className="dock-name">{n}</div>
+              {dockApps.slice(0, settings.dockCount).map((app, i) => (
+                <div className="dock-item" key={`dock-${i}`} data-act="dock-app" data-v={app.url} data-idx={String(i)}
+                  title={app.name}>
+                  <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`}>
+                    <SiteIcon url={app.url} name={app.name} cls="dock-favicon" fs={24} size={38} />
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="dock-sep" />
+            {dockApps.length > 0 && <div className="dock-sep" />}
             <div className="dock-actions">
-              <div className="dock-item" data-act="dock-act" data-v="add">
-                <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`}>{Icon.plus()}</div>
-                <div className="dock-name">添加</div>
-              </div>
+              {DOCK_ACTIONS.map(([act, label, icon]) => (
+                <div className="dock-item" key={act} data-act="dock-act" data-v={act} title={label}>
+                  <div className="dock-icon dock-fn">{icon()}</div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

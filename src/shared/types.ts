@@ -167,6 +167,12 @@ export type ViewMode = 'minimal' | 'standard';
 /** 链接打开方式（link-opener 统一入口） */
 export type OpenMode = 'link' | 'tab' | 'search';
 
+/** Dock 快捷方式（name 为悬浮提示名，url 为打开地址与 favicon 来源） */
+export interface DockApp {
+  name: string;
+  url: string;
+}
+
 /** v4 界面设置（本地持久化，云同步见 01 §5） */
 export interface AppSettings {
   mode: ViewMode;
@@ -185,8 +191,8 @@ export interface AppSettings {
   searchRadius: number;
   dockCount: number;
   dockIcon: 'rect' | 'circle';
-  /** Dock 快捷应用（品牌名清单，Dock 图标右键可修改 / 移除 / 恢复默认） */
-  dockApps: string[];
+  /** Dock 快捷应用（用户手动新增；图标显示站点 favicon，右键可改名 / 改网址 / 移除） */
+  dockApps: DockApp[];
   clockColor: string;
   showTime: boolean;
   showDate: boolean;

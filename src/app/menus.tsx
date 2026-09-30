@@ -42,7 +42,7 @@ const GlobalMenu = () => {
           <SubItem act="open-drawer" v="personal">栏透明度</SubItem>
           <SubItem act="open-drawer" v="personal">栏应用数量</SubItem>
           <SubItem act="open-drawer" v="personal">栏图标</SubItem>
-          <SubItem act="dock-reset">恢复默认应用</SubItem>
+          <SubItem act="open-drawer" v="add">添加快捷方式</SubItem>
         </div>
       </div>
       <div className="ctx-item" data-act="set-mode" data-v="minimal"><span>极简模式</span><Sw on={mode === 'minimal'} /></div>
@@ -96,17 +96,17 @@ const CardMenu = ({ id }: { id: string }) => {
   )
 }
 
-/** Dock 图标右键菜单（打开 / 修改名称 / 移除 / 恢复默认，动作在 App.onAct → dockMenuAct） */
+/** Dock 图标右键菜单（打开 / 修改名称 / 修改网址 / 移除，动作在 App.onAct → dockMenuAct） */
 const DockMenu = ({ idx }: { idx: number }) => {
   const apps = useApp((s) => s.settings.dockApps)
-  const name = apps[idx]
+  const name = apps[idx]?.name
   if (name === undefined) return null
   return (
     <>
-      <div className="ctx-item" data-act="dock-app" data-v={name}><span>打开</span></div>
+      <div className="ctx-item" data-act="dock-app" data-v={apps[idx]?.url ?? ''}><span>打开</span></div>
       <div className="ctx-item" data-act="dock-rename" data-v={String(idx)}><span>修改名称</span></div>
+      <div className="ctx-item" data-act="dock-url" data-v={String(idx)}><span>修改网址</span></div>
       <div className="ctx-item" data-act="dock-remove" data-v={String(idx)}><span>从 Dock 移除</span></div>
-      <div className="ctx-item" data-act="dock-reset"><span>恢复默认应用</span></div>
     </>
   )
 }

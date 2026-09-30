@@ -42,7 +42,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   display:flex;align-items:center;gap:10px;padding:0 18px;transition:border-radius .18s,background .18s,width .18s}
 .search-box.line{border-radius:12px;background:transparent;border-color:rgba(255,255,255,.6)}
 .engine-ico{width:20px;height:20px;flex:0 0 auto;border-radius:6px;display:flex;align-items:center;
-  justify-content:center;font-size:11px;font-weight:700;color:#fff;cursor:pointer;background:#2932e1}
+  justify-content:center;font-size:11px;font-weight:700;color:#fff;cursor:pointer;background:var(--engine-color,#2932e1)}
 .search-box input{flex:1;height:100%;border:none;background:transparent;outline:none;
   font-size:15px;color:var(--search-text);font-family:inherit}
 .search-box input::placeholder{color:var(--search-ph)}
@@ -95,7 +95,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.4);white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;pointer-events:none}
 #stage[data-labels='0'] .item-label{display:none}
-#stage[data-hidetop='1'] .mode-pill,#stage[data-hidetop='1'] .avatar{display:none}
+#stage[data-hidetop='1'] .mode-pill{display:none}
 #stage[data-hidesearch='1'] .search-row{display:none}
 #stage[data-showtime='0'] .ck-time{display:none}
 #stage[data-showdate='0'] .ck-date{display:none}
@@ -218,55 +218,63 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .w-folder{display:flex;align-items:center;justify-content:center;color:var(--card-sub)}
 .w-folder svg{width:34px;height:34px}
 
-/* ============ 6. Dock（悬浮圆角栏 + 分隔线 + 4 功能按钮） ============ */
-.dock{position:absolute;left:0;bottom:0;width:100%;height:75px;display:flex;align-items:center;
-  justify-content:center;z-index:var(--z-float)}
-.dock-bar{display:flex;align-items:center;padding:7px 10px;border-radius:16px;
-  background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-dock)));backdrop-filter:blur(var(--blur-dock));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 12px 34px rgba(6,12,24,.24)}
+/* ============ 6. Dock（苹果式悬浮栏：快捷方式 favicon + 功能键） ============ */
+.dock{position:absolute;left:0;bottom:0;width:100%;height:96px;display:flex;align-items:flex-end;
+  justify-content:center;z-index:var(--z-float);padding-bottom:14px}
+.dock-bar{display:flex;align-items:center;padding:9px 12px;border-radius:24px;
+  background:rgba(255,255,255,calc(var(--g-alpha) * (var(--ga-dock) + .08)));
+  backdrop-filter:blur(var(--blur-dock)) saturate(1.6);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 18px 44px -14px rgba(6,12,24,.36);
+  outline:1px solid rgba(255,255,255,.38);outline-offset:-1px}
 #stage[data-mode='minimal'] .dock-bar{background:rgba(255,255,255,calc(var(--g-alpha) * (var(--ga-dock) + .12)))}
-.dock-apps,.dock-actions{display:flex}
-.dock-sep{width:1px;height:32px;margin:0 16px;background:var(--label-color);opacity:.28;flex:0 0 auto}
-.dock-item{width:61px;height:61px;display:flex;align-items:center;justify-content:center;
+.dock-apps,.dock-actions{display:flex;align-items:center}
+.dock-sep{width:1px;height:34px;margin:0 14px;background:var(--label-color);opacity:.22;flex:0 0 auto}
+.dock-item{width:64px;height:60px;display:flex;align-items:center;justify-content:center;
   position:relative;cursor:pointer}
-.dock-icon{width:44px;height:44px;border-radius:14px;font-size:22px;flex:0 0 auto;
-  box-shadow:0 4px 12px rgba(6,12,24,.14);
+.dock-icon{width:46px;height:46px;border-radius:15px;font-size:22px;flex:0 0 auto;overflow:hidden;
+  box-shadow:0 6px 16px rgba(6,12,24,.16);
   transition:transform .16s var(--ease)}
 .dock-icon.circle{border-radius:50%}
-.dock-icon svg{width:24px;height:24px}
-.dock-item:hover .dock-icon{transform:scale(1.16)}
+.dock-favicon{width:38px;height:38px;object-fit:cover;display:flex;align-items:center;justify-content:center}
+.dock-fn{background:rgba(255,255,255,.42);color:var(--label-color)}
+.dock-fn svg{width:21px;height:21px}
+.dock-item:hover .dock-icon{transform:scale(1.16) translateY(-2px)}
 .dock-name{display:none;position:absolute;top:4px;left:50%;transform:translate(-50%,-100%) scale(.92);
   background:rgba(15,23,42,.86);color:#fff;font-size:12px;padding:4px 10px;border-radius:8px;
   white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .16s,transform .16s}
 .dock-item:hover .dock-name{opacity:1;transform:translate(-50%,-100%) scale(1)}
 
-/* ============ 7. 模式胶囊 / 头像 ============ */
-.mode-pill{position:absolute;left:40px;top:16px;height:50px;border-radius:12px;display:flex;
-  align-items:center;gap:6px;padding:0 10px;color:var(--chip-text);
+/* ============ 7. 模式胶囊 ============ */
+/* 收起：圆角方块只显当前模式图标（图3）；悬停 / 展开向右生长出 极简 / 标准 两选项（图4） */
+.mode-pill{position:absolute;left:40px;top:16px;height:46px;border-radius:14px;display:flex;
+  align-items:center;gap:6px;padding:0 7px;color:var(--chip-text);
   background:color-mix(in srgb,var(--chip-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
-  backdrop-filter:blur(var(--blur-menu));z-index:var(--z-dropdown);cursor:pointer;overflow:hidden}
-.pill-ico{width:22px;height:22px;flex:0 0 auto}
-.pill-opts{display:flex;gap:6px;opacity:0;max-width:0;transition:opacity .18s,max-width .18s}
-.mode-pill:hover .pill-opts,.mode-pill.open .pill-opts{opacity:1;max-width:420px}
-.pill-btn{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:9px;font-size:14px;
-  white-space:nowrap;color:var(--chip-text)}
+  backdrop-filter:blur(var(--blur-menu)) saturate(1.45);
+  outline:1px solid rgba(255,255,255,.32);outline-offset:-1px;
+  z-index:var(--z-dropdown);cursor:pointer;overflow:hidden;
+  transition:max-width .22s var(--ease)}
+.pill-ico{width:32px;height:32px;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+.pill-ico svg{width:20px;height:20px}
+.pill-opts{display:flex;gap:6px;opacity:0;max-width:0;transform:translateX(-6px);
+  transition:opacity .2s var(--ease),max-width .22s var(--ease),transform .2s var(--ease);pointer-events:none}
+.mode-pill:hover .pill-opts,.mode-pill.open .pill-opts{opacity:1;max-width:420px;transform:translateX(0);pointer-events:auto}
+.pill-btn{display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;font-size:13px;
+  white-space:nowrap;color:var(--chip-text);transition:background .16s}
 .pill-btn svg{width:15px;height:15px}
+.pill-btn:hover{background:rgba(255,255,255,.28)}
 .pill-btn.active{background:rgba(255,255,255,.92);color:#1f2937;font-weight:600}
-.mode-tip{position:absolute;left:392px;top:22px;padding:7px 12px;border-radius:9px;font-size:12px;
-  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);color:var(--menu-text);
-  box-shadow:0 10px 26px rgba(6,12,24,.26);
-  opacity:0;pointer-events:none;transition:opacity .16s;z-index:var(--z-dropdown);max-width:340px;line-height:1.5}
-.mode-tip.show{opacity:1}
-.avatar{position:absolute;right:56px;top:16px;width:42px;height:42px;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:17px;
-  cursor:pointer;background-image:linear-gradient(160deg,#f5c58a,#e08a4a);z-index:var(--z-dropdown);
-  box-shadow:0 6px 18px rgba(15,23,42,.28)}
 
-/* ============ 8. 极简模式大时钟 ============ */
-.minimal-clock{position:absolute;left:50%;top:250px;transform:translateX(-50%);text-align:center;
+/* ============ 8. 极简模式：大时钟 + 鼓励语 ============ */
+.minimal-clock{position:absolute;left:50%;top:270px;transform:translateX(-50%);text-align:center;
   color:#fff;display:none;text-shadow:0 2px 14px rgba(0,0,0,.42);z-index:2}
-.mc-time{font-size:78px;font-weight:700;letter-spacing:3px;font-variant-numeric:tabular-nums}
-.mc-date{font-size:16px;opacity:.92;margin-top:6px}
+.mc-time{font-size:84px;font-weight:600;letter-spacing:4px;font-variant-numeric:tabular-nums}
+.mc-date{font-size:26px;font-weight:400;opacity:.96;margin-top:8px;letter-spacing:2px}
+/* 鼓励语悬浮在 Dock 上方（图8） */
+.minimal-quote{position:absolute;left:50%;bottom:130px;transform:translateX(-50%);color:#fff;
+  font-size:15px;letter-spacing:1px;text-shadow:0 2px 10px rgba(0,0,0,.5);opacity:.95;
+  z-index:var(--z-float);pointer-events:none;max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.minimal-quote::before{content:'\201C';margin-right:6px;opacity:.85}
+.minimal-quote::after{content:'\201D';margin-left:6px;opacity:.85}
 
 /* ============ 9. 右键菜单 ============ */
 .ctx{position:absolute;width:196px;color:var(--menu-text);border-radius:10px;
@@ -537,7 +545,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .search-go-btn:hover{background:color-mix(in srgb,var(--accent) 20%,transparent);transform:scale(1.06)}
 
 /* —— 浮层统一：更深层的分层阴影 —— */
-.search-panel,.engine-panel,.ctx,.ctx-sub,.mode-tip{box-shadow:var(--shadow-pop)}
+.search-panel,.engine-panel,.ctx,.ctx-sub{box-shadow:var(--shadow-pop)}
 .search-panel,.engine-panel,.ctx,.ctx-sub{border-radius:14px}
 
 /* —— 右键菜单：条目微动效 —— */
@@ -585,7 +593,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .btn:active{transform:translateY(0) scale(.97)}
 
 /* —— 玻璃质感统一加饱和度（更通透的毛玻璃） —— */
-.dw,.modal,.ctx,.ctx-sub,.search-panel,.engine-panel,.mode-tip,.dock-bar{backdrop-filter:blur(var(--blur-menu)) saturate(1.45)}
+.dw,.modal,.ctx,.ctx-sub,.search-panel,.engine-panel,.mode-pill{backdrop-filter:blur(var(--blur-menu)) saturate(1.45)}
 .search-box{backdrop-filter:blur(var(--blur-search)) saturate(1.5)}
 .item{backdrop-filter:blur(var(--blur-card)) saturate(1.45)}
 
@@ -622,25 +630,24 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .item-label{text-shadow:none;opacity:.9}
 .item:hover + .item-label{opacity:1}
 
-/* —— Dock：单层磨砂面板 + 无容器图标 —— */
-.dock-bar{border-radius:16px;padding:7px 10px;
-  box-shadow:0 14px 36px -16px rgba(15,23,42,.28)}
-.dock-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;
-  font-size:30px;transition:transform .22s var(--ease-spring)}
-.dock-icon svg{width:30px;height:30px}
-.dock-item:hover .dock-icon{transform:scale(1.16);box-shadow:none}
-.dock-sep{display:none}
-.dock-actions{margin-left:16px}
+/* —— Dock：玻璃磨砂悬浮栏（苹果式尺寸），快捷方式显 favicon、功能键显线性图标 —— */
+.dock-bar{border-radius:24px;padding:9px 12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 18px 44px -14px rgba(15,23,42,.30)}
+.dock-icon{box-shadow:0 6px 16px rgba(6,12,24,.16)}
+.dock-fn{background:rgba(255,255,255,.42);box-shadow:none}
+.dock-item:hover .dock-icon{transform:scale(1.16) translateY(-2px);box-shadow:0 10px 22px rgba(6,12,24,.20)}
+.dock-sep{display:block;opacity:.22}
+.dock-actions{margin-left:0}
 
 /* —— 页点：极小淡化，胶囊只作轻提示 —— */
 .page-dot{width:5px;height:5px;opacity:.28}
 .page-dot.on{width:16px;opacity:.55}
 
-/* —— 模式胶囊：贴纸化（无投影） —— */
-.mode-pill{box-shadow:none;border-radius:12px}
+/* —— 模式胶囊：轻投影玻璃 —— */
+.mode-pill{box-shadow:0 10px 28px -12px rgba(6,12,24,.30);border-radius:14px}
 
 /* —— 浮层阴影收敛（统一单层柔和投影） —— */
-.ctx,.ctx-sub,.engine-panel,.search-panel,.mode-tip{box-shadow:0 18px 44px -16px rgba(15,23,42,.30)}
+.ctx,.ctx-sub,.engine-panel,.search-panel{box-shadow:0 18px 44px -16px rgba(15,23,42,.30)}
 .modal,.dw{box-shadow:0 24px 60px -20px rgba(15,23,42,.34)}
 .toast{box-shadow:0 10px 28px -12px rgba(15,23,42,.36)}
 
@@ -659,13 +666,34 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .grid-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
   pointer-events:none;max-width:560px}
 
-/* ============ 20. Dock 苹果式放大 + 头像菜单（v4.3 补丁 7） ============ */
+/* ============ 20. Dock 苹果式放大（v4.4 保留） ============ */
 /* 放大由 App.dockMagnify 按指针接近度内联写入 transform：原点贴底向上生长，短过渡跟手 */
 .dock-icon{transform-origin:50% 100%;transition:transform .13s ease-out;will-change:transform}
-.dock-name{display:block}
-.avatar-menu{position:absolute;top:66px;right:56px;width:148px;padding:6px;border-radius:12px;
-  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
-  backdrop-filter:blur(var(--blur-menu));box-shadow:0 18px 44px -16px rgba(15,23,42,.30);
-  z-index:var(--z-dropdown);color:var(--menu-text)}
 .grid-hint .gh-title{font-size:20px;font-weight:600;color:var(--label-color);opacity:.55}
 .grid-hint .gh-sub{font-size:13px;color:var(--label-color);opacity:.42;line-height:1.8;margin-top:10px}
+
+/* ============ 21. 极简模式（v4.4）：图6/7 搜索框 + 页面降噪 ============ */
+/* 极简模式只留：模式胶囊 / 大时钟+日期 / 搜索框 / 鼓励语 / Dock */
+#stage[data-mode='minimal'] .search-row{top:150px}
+/* 未聚焦：透明玻璃胶囊 + 白描边（图6），文字加投影保证浅壁纸上可读 */
+#stage[data-mode='minimal'] .search-box{border-radius:999px;background:rgba(0,0,0,.06);
+  border:1.5px solid rgba(255,255,255,.75);box-shadow:0 8px 28px -14px rgba(6,12,24,.22);
+  backdrop-filter:blur(6px) saturate(1.3);
+  transition:background .22s,box-shadow .22s,border-color .22s,border-radius .22s}
+#stage[data-mode='minimal'] .search-box input{color:#fff;font-size:16px;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+#stage[data-mode='minimal'] .search-box input::placeholder{color:rgba(255,255,255,.85);text-shadow:0 1px 6px rgba(0,0,0,.35)}
+#stage[data-mode='minimal'] .search-go-btn{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+#stage[data-mode='minimal'] .search-go-btn:hover{background:rgba(255,255,255,.22)}
+/* 聚焦：展开为白色玻璃卡片（图7），历史 / 引擎面板贴合成整体 */
+#stage[data-mode='minimal'] .search-box:focus-within{border-radius:22px;background:rgba(255,255,255,.94);
+  border-color:transparent;box-shadow:0 24px 64px -18px rgba(6,12,24,.4);backdrop-filter:blur(var(--blur-search)) saturate(1.5)}
+#stage[data-mode='minimal'] .search-box:focus-within input{color:#1f2937;text-shadow:none}
+#stage[data-mode='minimal'] .search-box:focus-within input::placeholder{color:rgba(31,41,55,.5);text-shadow:none}
+#stage[data-mode='minimal'] .search-box:focus-within .search-go-btn{color:#1f2937;text-shadow:none}
+/* 搜索引擎图标：未聚焦白色玻璃底、聚焦恢复品牌色底 */
+#stage[data-mode='minimal'] .search-box .engine-ico{background:rgba(255,255,255,.28);backdrop-filter:blur(4px)}
+#stage[data-mode='minimal'] .search-box:focus-within .engine-ico{background:var(--engine-color,#2932e1)}
+/* 历史 / 引擎面板跟随极简搜索框位置（框 top:150 + 高 54 + 12px 间隙） */
+#stage[data-mode='minimal'] .search-panel,#stage[data-mode='minimal'] .engine-panel{top:216px}
+/* 极简模式无网格卡片，页点隐藏 */
+#stage[data-mode='minimal'] .page-dots{display:none}

@@ -61,6 +61,8 @@ const NAVI: readonly { c: string; l: readonly string[] }[] = [
 const AddPanel = () => {
   const place = useApp((s) => s.place)
   const placeMany = useApp((s) => s.placeMany)
+  const settings = useApp((s) => s.settings)
+  const setSetting = useApp((s) => s.setSetting)
   const showToast = useApp((s) => s.showToast)
   const [tab, setTab] = useState(0)
   const [kw, setKw] = useState('')
@@ -68,12 +70,22 @@ const AddPanel = () => {
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
   const [icon, setIcon] = useState('')
+  const [toDock, setToDock] = useState(true)
   const [folderName, setFolderName] = useState('')
   const iconFile = useRef<HTMLInputElement | null>(null)
   const ws = WIDGET_LIST.filter((w) => !kw || w.n.includes(kw) || w.s.includes(kw))
 
+  /** 加进 Dock 快捷方式（去重，最多 8 个；手动新增入口） */
+  const addToDock = (label: string, link: string): void => {
+    const apps = settings.dockApps
+    if (apps.some((a) => a.url === link)) return
+    if (apps.length >= settings.dockCount) { showToast(`Dock 最多 ${settings.dockCount} 个快捷方式，请先移除一些`); return }
+    setSetting('dockApps', [...apps, { name: label, url: link }])
+  }
+
   const addCustom = (): void => {
     const label = name.trim() || '未命名'
+    if (url.trim() !== '' && toDock) addToDock(label, url.trim())
     if (folderName.trim() !== '') {
       // 02 §8：自定义网站可选创建图标格容器
       place('group', { label: folderName.trim(), cols: 2, apps: [label] })
@@ -144,6 +156,7 @@ const AddPanel = () => {
             <input className="f-input" placeholder="请输入网站名称" value={name} onChange={(e) => setName(e.target.value)} /></div>
           <div className="f-row"><label className="f-label">网站链接</label>
             <input className="f-input" placeholder="请输入网站链接地址" value={url} onChange={(e) => setUrl(e.target.value)} /></div>
+          <SwitchRow l="同时添加到底部 Dock" d="Dock 快捷方式显示站点图标，右键可改名 / 改网址 / 移除" on={toDock} onToggle={() => setToDock(!toDock)} />
           <div className="f-row"><label className="f-label">图标</label>
             <div className="btn-row">
               <button className="btn sm ghost" onClick={() => iconFile.current?.click()}>上传自定义图标</button>
@@ -288,7 +301,7 @@ const PersonalPanel = () => {
         <input type="color" className="f-input" value={s.clockColor} onChange={(e) => setSetting('clockColor', e.target.value)} /></div>
 
       <Sec t="显隐" />
-      <SwitchRow l="隐藏顶部区域" d="隐藏左上模式胶囊与右上头像" on={s.hideTop} onToggle={() => toggle('hideTop')} />
+      <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
       <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
       <SwitchRow l="隐藏图标标签" d="只保留图标，不显示名称" on={!s.labels} onToggle={() => toggle('labels')} />
       <SwitchRow l="吉祥物" on={s.mascot} onToggle={() => toggle('mascot')} />
@@ -702,6 +715,7 @@ export const Drawer = () => {
 /* ============================== 弹窗 ============================== */
 
 const CHANGELOG: readonly { v: string; d: string; l: readonly string[] }[] = [
+  { v: '4.4', d: '2026-09-30', l: ['极简页面优化：模式胶囊收起只显图标、悬停展开极简/标准（去除说明文字）；右上头像移除，新增/个性化/广场/设置移入底部 Dock 功能键', 'Dock 改版：出厂快捷方式清空、用户手动新增（添加抽屉「同时添加到底部 Dock」），图标显示站点 favicon，苹果式尺寸与玻璃质感；右键支持改名/改网址/移除', '极简模式：日期改为「2026年9月30日」格式、搜索框未聚焦透明胶囊白描边/聚焦白色玻璃卡片、鼓励语悬浮 Dock 上方'] },
   { v: '4.3', d: '2026-09-29', l: ['移除登录与账号体系，隐私模式并入标准模式（单套页面）', '新增云端同步：配置注入式连接（地址 / 令牌仅存本机），本地改动自动上传、新环境一键恢复，云端为唯一权威数据源', 'Dock 可编辑 + 苹果式放大、头像菜单、搜索引擎恢复 v3 设置、搜索历史贴框与自动关闭'] },
   { v: '4.1', d: '2026-09-27', l: ['按 v4 原型补全五面板与九弹窗（含风格皮肤编辑器、广场三页签）', '设置 / 布局 / 皮肤接通本地持久化，支持 v3 数据一次性迁移', '壁纸支持本地上传与外链（图片压缩 + 视频壁纸，IndexedDB 存储）', '天气卡接入 Open-Meteo 实况数据；搜索 / 卡片 / Dock 真实打开链接', '新增收藏夹导入、布局导出导入、备份 / 恢复 / 一键重置确认弹窗'] },
   { v: '4.0', d: '2026-09-26', l: ['仓库重组为 app / core / background / shared 四层', 'React 18 + Vite 重写视图层，落地 v4 内容模型（18 类小组件引用）'] },
