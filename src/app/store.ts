@@ -101,6 +101,9 @@ interface AppState {
   /** 添加外部壁纸来源（协议适配器 + 用户可改基址） */
   addWallSource: (src: WallpaperSource) => void
   removeWallSource: (id: string) => void
+  toggleWallSource: (id: string) => void
+  /** 修改来源名称 / API 基址（镜像地址） */
+  updateWallSource: (id: string, patch: Partial<Pick<WallpaperSource, 'name' | 'apiBase'>>) => void
   place: (kind: WidgetKind, config?: Record<string, unknown>) => void
   updateConfig: (id: string, patch: Record<string, unknown>) => void
   resize: (id: string, w: number, h: number) => void
@@ -372,6 +375,8 @@ export const useApp = create<AppState>()((set, get) => ({
   setWallpaperRef: (ref) => set((s) => ({ settings: { ...s.settings, wallpaperRef: ref }, toast: ref === null ? '已移除壁纸' : '自定义壁纸已应用' })),
   addWallSource: (src) => set((s) => ({ settings: { ...s.settings, wallSources: [...s.settings.wallSources, src] }, toast: `已添加壁纸来源：${src.name}` })),
   removeWallSource: (id) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.filter((x) => x.id !== id) }, toast: '已移除壁纸来源' })),
+  toggleWallSource: (id) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)) } })),
+  updateWallSource: (id, patch) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.map((x) => (x.id === id ? { ...x, ...patch } : x)) }, toast: '来源配置已更新' })),
 
   place: (kind, config = {}) => set((s) => {
     const list = [...s.pages]

@@ -217,10 +217,12 @@ export interface AppSettings {
 export interface WallpaperSource {
   id: string;
   /** 协议适配器（同构 API 可换镜像基址） */
-  kind: 'wallhaven' | 'picsum';
+  kind: 'wallhaven' | 'picsum' | 'bing' | 'wg061129';
   name: string;
   /** API 基址（如 https://wallhaven.cc/api/v1） */
   apiBase: string;
+  /** 启用状态：禁用的来源不在浏览面板显示 */
+  enabled: boolean;
 }
 
 /** 本地持久化文档（chrome.storage 单键整存整取；快照式备份复用同一形状，01 §5.1）

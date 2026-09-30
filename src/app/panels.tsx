@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp, ENGINE_LIMIT, type DrawerKey } from './store'
-import { WALL_SOURCE_TEMPLATES, fetchWallPage, sourceCategories, type WallPage } from '../core/wallsource'
+import { WALL_SOURCE_TEMPLATES, fetchCategories, fetchWallPage, type WallCategory, type WallPage } from '../core/wallsource'
 import { saveRemoteWallpaper } from '../core/wallpaper'
 import type { WallpaperSource } from '../shared/types'
 import { WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
@@ -183,6 +183,22 @@ const AddPanel = () => {
 
 /* ---------- 外部壁纸浏览（来源切换 + 分类 + 分页 + 一键设为壁纸） ---------- */
 
+/** 拉取来源分类清单（061129 需在线解析数据目录，其余为静态结构） */
+const useWallCategories = (src: WallpaperSource | undefined): { cats: WallCategory[]; state: 'loading' | 'ok' | 'error' } => {
+  const [cats, setCats] = useState<WallCategory[]>([])
+  const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
+  useEffect(() => {
+    if (!src) return
+    let alive = true
+    setState('loading')
+    fetchCategories(src)
+      .then((list) => { if (alive) { setCats(list); setState('ok') } })
+      .catch(() => { if (alive) setState('error') })
+    return () => { alive = false }
+  }, [src?.id, src?.apiBase])
+  return { cats, state }
+}
+
 /** 拉取一页外部壁纸（源 / 分类 / 页码变化时刷新） */
 const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number): { data: WallPage | null; state: 'loading' | 'ok' | 'error' } => {
   const [data, setData] = useState<WallPage | null>(null)
@@ -208,28 +224,30 @@ const WallPhotos = ({ data, state, page, onPage, onApply, busy }: {
     <div className="wall-grid">
       {state === 'loading' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>加载中…</div>}
       {state === 'error' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>获取失败：来源地址不可达，或当前环境直连受跨域限制（扩展环境会自动经后台代理）</div>}
-      {(data?.photos ?? []).map((p) => (
-        <div key={p.id} className={`wall-thumb${busy === p.full ? ' sel' : ''}`} title={p.author}
+      {(state === 'ok' ? (data?.photos ?? []) : []).map((p) => (
+        <div key={p.id} className={`wall-thumb${busy === p.full ? ' sel' : ''}`} title={p.title || p.author}
           onClick={() => onApply(p)}>
           <img src={p.thumb} alt={p.id} loading="lazy" />
         </div>
       ))}
     </div>
-    <div className="pager-row">
-      <div className={`pg${page > 1 ? '' : ' active'}`} onClick={() => page > 1 && onPage(page - 1)}>上一页</div>
-      <span>第 {page} 页{data?.hasMore ? '' : ' · 末页'}</span>
-      <div className={`pg${data?.hasMore ? '' : ' active'}`} onClick={() => data?.hasMore && onPage(page + 1)}>下一页</div>
-    </div>
+    {state === 'ok' && (
+      <div className="pager-row">
+        <div className={`pg${page > 1 ? '' : ' active'}`} onClick={() => page > 1 && onPage(page - 1)}>上一页</div>
+        <span>第 {page} 页{data?.hasMore ? '' : ' · 末页'}</span>
+        <div className={`pg${data?.hasMore ? '' : ' active'}`} onClick={() => data?.hasMore && onPage(page + 1)}>下一页</div>
+      </div>
+    )}
   </>
 )
 
-/** 来源浏览面板：源页签 → 分类筛选 → 壁纸网格 */
+/** 来源浏览面板：源页签 → 分类筛选 → 壁纸网格（只显示已启用的来源） */
 const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
   const setWallpaperRef = useApp((st) => st.setWallpaperRef)
   const showToast = useApp((st) => st.showToast)
   const [srcId, setSrcId] = useState(sources[0]?.id ?? '')
   const src = sources.find((x) => x.id === srcId) ?? sources[0]
-  const cats = src ? sourceCategories(src.kind) : []
+  const { cats, state: catState } = useWallCategories(src)
   const [catKey, setCatKey] = useState('')
   const cat = cats.some((c) => c.key === catKey) ? catKey : (cats[0]?.key ?? 'all')
   const [page, setPage] = useState(1)
@@ -258,7 +276,9 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
         ))}
       </div>
       <div className="cats">
-        {cats.map((c) => (
+        {catState === 'loading' && <div className="cat active">分类加载中…</div>}
+        {catState === 'error' && <div className="cat">分类获取失败</div>}
+        {catState === 'ok' && cats.map((c) => (
           <div key={c.key} className={`cat${c.key === cat ? ' active' : ''}`}
             onClick={() => { setCatKey(c.key); setPage(1) }}>{c.label}</div>
         ))}
@@ -284,6 +304,8 @@ const PersonalPanel = () => {
   const setWallpaperRef = useApp((st) => st.setWallpaperRef)
   const addWallSource = useApp((st) => st.addWallSource)
   const removeWallSource = useApp((st) => st.removeWallSource)
+  const toggleWallSource = useApp((st) => st.toggleWallSource)
+  const updateWallSource = useApp((st) => st.updateWallSource)
   const showToast = useApp((st) => st.showToast)
   const [prevWallRef, setPrevWallRef] = useState<string | null>(null)
   const wallFile = useRef<HTMLInputElement | null>(null)
@@ -340,22 +362,28 @@ const PersonalPanel = () => {
       <Hint>系统不内置壁纸；添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸。API 地址可改为可达的镜像服务。</Hint>
       <div className="btn-row" style={{ marginTop: 10, marginBottom: 8 }}>
         {WALL_SOURCE_TEMPLATES.map((t) => (
-          <button key={t.kind} className="btn sm ghost" onClick={() => addWallSource({ id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase })}>
+          <button key={t.kind} className="btn sm ghost" onClick={() => addWallSource({ id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase, enabled: true })}>
             添加 {t.name}
           </button>
         ))}
       </div>
       {s.wallSources.map((ws) => (
         <div className="eng-row" key={ws.id}>
-          <div className="er-ico" style={{ background: 'var(--menu-hover)', color: 'var(--panel-sub)', fontSize: 12 }}>{ws.kind === 'wallhaven' ? 'W' : 'P'}</div>
+          <div className="er-ico" style={{ background: 'var(--menu-hover)', color: 'var(--panel-sub)', fontSize: 11 }}>{ws.name.slice(0, 2)}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div>{ws.name}</div>
+            <div>{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }}>{ws.enabled ? '已启用' : '已禁用'}</span></div>
             <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{ws.apiBase}</div>
           </div>
+          <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
+          <button className="btn sm ghost" onClick={() => {
+            const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
+            if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
+            else if (next !== '') showToast('地址需以 http(s):// 开头')
+          }}>改地址</button>
           <button className="btn sm ghost" onClick={() => removeWallSource(ws.id)}>移除</button>
         </div>
       ))}
-      {s.wallSources.length > 0 && <WallBrowser sources={s.wallSources} />}
+      {s.wallSources.some((ws) => ws.enabled) && <WallBrowser sources={s.wallSources.filter((ws) => ws.enabled)} />}
 
       <Sec t="透明度（全局）" />
       <SliderRow l="全局透明度" min={20} max={100} value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}

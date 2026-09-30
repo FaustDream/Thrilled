@@ -44,7 +44,7 @@ describe('设置归一化（normalizeSettings）', () => {
         'bad',
       ],
     })
-    expect(s.wallSources).toEqual([{ id: 'a', kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1' }])
+    expect(s.wallSources).toEqual([{ id: 'a', kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1', enabled: true }])
     expect(normalizeSettings({}).wallSources).toEqual(DEFAULT_SETTINGS.wallSources)
   })
 
