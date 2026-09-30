@@ -13,7 +13,7 @@ import {
 import { loadDoc } from '../core/storage'
 import { useApp } from './store'
 
-/** 文档从存储重新载入 store（本地目录快照恢复后调用） */
+/** 文档从存储重新载入 store（本地目录快照恢复后调用；启动路径静默，提示由手动操作自带） */
 export const reloadDocIntoStore = (): void => {
   const doc = loadDoc()
   if (doc === null) return
@@ -25,7 +25,6 @@ export const reloadDocIntoStore = (): void => {
     history: doc.history,
     backupTime: doc.backupTime,
   })
-  useApp.getState().showToast('本地目录数据已恢复')
 }
 
 /** 注入 core 层 UI 回调并启动本地目录同步 */

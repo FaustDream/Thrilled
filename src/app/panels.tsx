@@ -544,7 +544,7 @@ const PersonalPanel = () => {
           {skins.map((k) => (
             <div key={k.id} className={`theme-btn${k.id === s.skinId ? ' sel' : ''}`} onClick={() => applySkin(k.id)}>
               <MiniSkinPreview tokens={k.tokens} />
-              <div className="tb-name">{k.name}{k.builtin ? <span className="tb-tag">出厂</span> : null}</div>
+              <div className="tb-name">{k.name}</div>
             </div>
           ))}
         </div>
