@@ -351,7 +351,7 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
 }
 
 /** 个性化面板导航页签（分组导航，避免单页堆全部设置） */
-const PANEL_TABS: readonly (readonly [string])[] = [['壁纸'], ['背景效果'], ['显示'], ['搜索与 Dock'], ['主题']];
+const PANEL_TABS: readonly (readonly [string])[] = [['壁纸'], ['背景效果'], ['显示'], ['搜索与Dock'], ['主题']];
 
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
