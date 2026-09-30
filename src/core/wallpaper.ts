@@ -121,10 +121,10 @@ export async function saveWallpaper(bgData: BgData): Promise<string | null> {
   return ok ? ref : null;
 }
 
-/** 按引用读取背景数据 */
+/** 按引用读取背景数据（键 = 完整 ref，与 saveWallpaper 一致） */
 export async function getWallpaper(ref: string): Promise<BgData | null> {
   if (!ref.startsWith(WALLPAPER_REF_PREFIX)) return null;
-  const data = await idbGet<BgData>(ref.slice(WALLPAPER_REF_PREFIX.length));
+  const data = await idbGet<BgData>(ref);
   if (data === null || (data.type !== 'image' && data.type !== 'video')) return null;
   return data;
 }
@@ -132,7 +132,7 @@ export async function getWallpaper(ref: string): Promise<BgData | null> {
 /** 删除背景数据（换壁纸 / 重置时调用；旧文件不清理会占空间） */
 export async function deleteWallpaper(ref: string): Promise<void> {
   if (!ref.startsWith(WALLPAPER_REF_PREFIX)) return;
-  await idbRemove(ref.slice(WALLPAPER_REF_PREFIX.length));
+  await idbRemove(ref);
 }
 
 /* ================= 上传处理 ================= */
