@@ -178,8 +178,6 @@ const AddPanel = () => {
 
 /* ============================== 个性化 ============================== */
 
-const WALL_CATS = ['全部', '极简', '风景', '动漫', '更多'] as const
-
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
   const setSetting = useApp((st) => st.setSetting)
@@ -196,7 +194,6 @@ const PersonalPanel = () => {
   const setWallpaperRef = useApp((st) => st.setWallpaperRef)
   const wallRandom = useApp((st) => st.wallRandom)
   const showToast = useApp((st) => st.showToast)
-  const [wallCat, setWallCat] = useState(0)
   const [prevWallRef, setPrevWallRef] = useState<string | null>(null)
   const wallFile = useRef<HTMLInputElement | null>(null)
   const GLASS: readonly [keyof typeof s.glass, string, string][] = [
@@ -205,7 +202,7 @@ const PersonalPanel = () => {
     ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'], ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡'],
   ]
   const skin = skins.find((x) => x.id === s.skinId) ?? skins[0]
-  const walls = WALLS.map((w, i) => ({ ...w, i })).filter((w) => wallCat === 0 || w.c === WALL_CATS[wallCat])
+  const walls = WALLS.map((w, i) => ({ ...w, i }))
 
   const upload = async (f: File | undefined): Promise<void> => {
     if (!f) return
@@ -248,11 +245,6 @@ const PersonalPanel = () => {
         {walls.map((w) => (
           <div key={w.n} className={`wall-thumb${s.wallpaperRef === null && s.wallpaper === w.i ? ' sel' : ''}`}
             style={{ background: w.bg }} title={w.n} onClick={() => setWallpaper(w.i)} />
-        ))}
-      </div>
-      <div className="cats">
-        {WALL_CATS.map((c, i) => (
-          <div key={c} className={`cat${i === wallCat ? ' active' : ''}`} onClick={() => setWallCat(i)}>{c}</div>
         ))}
       </div>
       <div className="btn-row" style={{ marginBottom: 8 }}>

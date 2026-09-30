@@ -59,9 +59,9 @@ const CLASSIC_TOKENS: Record<string, string> = {
 };
 
 export const BUILTIN_SKINS: readonly SkinPack[] = [
-  { id: 'classic', name: '经典', builtin: true, base: 'light', wall: 6, tokens: { ...CLASSIC_TOKENS } },
+  { id: 'classic', name: '经典', builtin: true, base: 'light', wall: 0, tokens: { ...CLASSIC_TOKENS } },
   {
-    id: 'glass', name: '光感', builtin: true, base: 'light', wall: 3,
+    id: 'glass', name: '光感', builtin: true, base: 'light', wall: 0,
     tokens: {
       '--card-bg': 'rgba(255,255,255,.68)', '--card-text': '#141e2c', '--card-sub': '#5a6a7e', '--accent': '#2b7fff',
       '--label-color': '#141e2c', '--panel-bg': '#ffffff', '--panel-text': '#141e2c', '--panel-sub': '#5a6a7e',
@@ -71,7 +71,7 @@ export const BUILTIN_SKINS: readonly SkinPack[] = [
     },
   },
   {
-    id: 'dark', name: '暗黑', builtin: true, base: 'dark', wall: 2,
+    id: 'dark', name: '暗黑', builtin: true, base: 'dark', wall: 1,
     tokens: {
       '--card-bg': '#1d2332', '--card-text': '#e8edf7', '--card-sub': '#8e9cb4', '--accent': '#4f8cff',
       '--label-color': '#f2f5fb', '--panel-bg': '#171c29', '--panel-text': '#e8edf7', '--panel-sub': '#8e9cb4',
@@ -81,7 +81,7 @@ export const BUILTIN_SKINS: readonly SkinPack[] = [
     },
   },
   {
-    id: 'purple', name: '黑紫', builtin: true, base: 'dark', wall: 5,
+    id: 'purple', name: '黑紫', builtin: true, base: 'dark', wall: 1,
     tokens: {
       '--card-bg': '#1a1326', '--card-text': '#efe8fa', '--card-sub': '#9d8bb5', '--accent': '#b06aff',
       '--label-color': '#ffffff', '--panel-bg': '#160f20', '--panel-text': '#efe8fa', '--panel-sub': '#9d8bb5',
@@ -91,7 +91,7 @@ export const BUILTIN_SKINS: readonly SkinPack[] = [
     },
   },
   {
-    id: 'dawn', name: '晨曦', builtin: true, base: 'light', wall: 7,
+    id: 'dawn', name: '晨曦', builtin: true, base: 'light', wall: 0,
     tokens: {
       '--card-bg': '#fffdf9', '--card-text': '#463225', '--card-sub': '#a68a76', '--accent': '#f0762b',
       '--label-color': '#463225', '--panel-bg': '#fffaf3', '--panel-text': '#463225', '--panel-sub': '#a68a76',
@@ -101,7 +101,7 @@ export const BUILTIN_SKINS: readonly SkinPack[] = [
     },
   },
   {
-    id: 'teal', name: '黛青', builtin: true, base: 'dark', wall: 8,
+    id: 'teal', name: '黛青', builtin: true, base: 'dark', wall: 1,
     tokens: {
       '--card-bg': '#11211e', '--card-text': '#e3f2ec', '--card-sub': '#8fb0a6', '--accent': '#2fd4b0',
       '--label-color': '#f0faf6', '--panel-bg': '#0d1a17', '--panel-text': '#e3f2ec', '--panel-sub': '#8fb0a6',

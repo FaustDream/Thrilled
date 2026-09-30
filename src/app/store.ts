@@ -42,42 +42,15 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
   return skin?.tokens ?? {}
 }
 
-export const WALLS: readonly { n: string; c: string; bg: string }[] = [
+/** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
+export const WALLS: readonly { n: string; bg: string }[] = [
   {
-    n: '雾蓝', c: '极简',
+    n: '经典浅色',
     bg: 'radial-gradient(120% 90% at 50% 0%,rgba(255,255,255,.5),transparent 62%),linear-gradient(178deg,#eef2f8 0%,#e4eaf2 58%,#d8e1ec 100%)',
   },
   {
-    n: '暮色', c: '风景',
-    bg: 'radial-gradient(80% 60% at 78% 12%,rgba(255,150,110,.30),transparent 58%),radial-gradient(60% 50% at 20% 78%,rgba(150,90,180,.20),transparent 62%),linear-gradient(162deg,#3d2a52 0%,#241a3c 44%,#100c1c 100%)',
-  },
-  {
-    n: '海岸', c: '风景',
+    n: '经典深色',
     bg: 'radial-gradient(86% 64% at 76% 8%,rgba(90,200,220,.24),transparent 58%),radial-gradient(64% 54% at 16% 84%,rgba(40,130,160,.20),transparent 60%),linear-gradient(168deg,#10394e 0%,#0b2537 46%,#06131d 100%)',
-  },
-  {
-    n: '晨雾', c: '极简',
-    bg: 'radial-gradient(88% 66% at 80% 10%,rgba(255,255,255,.50),transparent 60%),radial-gradient(70% 58% at 14% 86%,rgba(160,180,205,.28),transparent 62%),linear-gradient(152deg,#e6ecf4 0%,#c3cedd 52%,#98a8bc 100%)',
-  },
-  {
-    n: '樱', c: '动漫',
-    bg: 'radial-gradient(84% 62% at 78% 10%,rgba(255,235,240,.55),transparent 58%),radial-gradient(66% 54% at 16% 82%,rgba(255,150,175,.26),transparent 62%),linear-gradient(158deg,#ffdfe8 0%,#ffc4d3 48%,#f39cb4 100%)',
-  },
-  {
-    n: '夜紫', c: '更多',
-    bg: 'radial-gradient(80% 60% at 80% 8%,rgba(150,90,230,.26),transparent 58%),radial-gradient(62% 52% at 16% 84%,rgba(90,50,150,.24),transparent 60%),linear-gradient(160deg,#2c1c4a 0%,#1b1132 46%,#0d081a 100%)',
-  },
-  {
-    n: '云白', c: '极简',
-    bg: 'radial-gradient(84% 62% at 80% 6%,rgba(255,222,180,.42),transparent 58%),radial-gradient(66% 54% at 12% 86%,rgba(150,190,255,.30),transparent 60%),linear-gradient(155deg,#fdfeff 0%,#eff5fc 52%,#dde8f6 100%)',
-  },
-  {
-    n: '晨曦', c: '风景',
-    bg: 'radial-gradient(88% 64% at 78% 10%,rgba(255,190,130,.44),transparent 58%),radial-gradient(64% 52% at 18% 82%,rgba(255,140,150,.22),transparent 60%),radial-gradient(44% 38% at 52% 46%,rgba(180,160,255,.16),transparent 64%),linear-gradient(156deg,#fff3e6 0%,#ffe3cf 44%,#f6c6b8 100%)',
-  },
-  {
-    n: '黛青', c: '更多',
-    bg: 'radial-gradient(86% 62% at 78% 8%,rgba(70,220,190,.22),transparent 58%),radial-gradient(62% 52% at 16% 84%,rgba(40,140,130,.22),transparent 60%),radial-gradient(46% 40% at 58% 58%,rgba(60,110,200,.12),transparent 64%),linear-gradient(162deg,#12312c 0%,#0c201d 46%,#050f0e 100%)',
   },
 ]
 
@@ -302,8 +275,11 @@ const doHydrate = async (): Promise<void> => {
   }
   const { doc: finalDoc, msg } = await reconcileWithCloud(doc)
   if (msg !== '') toasts.push(msg)
+  /* 内置壁纸缩减为两个主题后，旧文档的越界下标归位浅色 */
+  const settings = { ...finalDoc.settings }
+  if (!(settings.wallpaper >= 0 && settings.wallpaper < WALLS.length)) settings.wallpaper = 0
   useApp.setState({
-    settings: finalDoc.settings,
+    settings,
     pages: finalDoc.pages,
     engines: finalDoc.engines.length > 0 ? finalDoc.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
     skins: finalDoc.skins,
