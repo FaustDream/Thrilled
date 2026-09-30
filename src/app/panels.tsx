@@ -188,7 +188,7 @@ const useWallCategories = (src: WallpaperSource | undefined): { cats: WallCatego
   const [cats, setCats] = useState<WallCategory[]>([])
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
   useEffect(() => {
-    if (!src) return
+    if (!src || WALL_SOURCE_UNAVAILABLE[src.kind] !== undefined) return
     let alive = true
     setState('loading')
     fetchCategories(src)
@@ -204,7 +204,7 @@ const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number
   const [data, setData] = useState<WallPage | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
   useEffect(() => {
-    if (!src) return
+    if (!src || WALL_SOURCE_UNAVAILABLE[src.kind] !== undefined) return
     let alive = true
     setState('loading')
     fetchWallPage(src, cat, page, query)
@@ -270,6 +270,24 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
   }
 
   const unavailable = src ? WALL_SOURCE_UNAVAILABLE[src.kind] : undefined
+  if (src !== undefined && unavailable !== undefined) {
+    /* 不可用来源（实测存在无法合法解决的访问限制）：只显示说明，不发起任何请求 */
+    return (
+      <>
+        <div className="sub-tabs" style={{ marginTop: 10 }}>
+          {sources.map((x) => (
+            <div key={x.id} className={`sub-tab${x.id === src.id ? ' active' : ''}`}
+              onClick={() => { setSrcId(x.id); setPage(1); setCatKey(''); setQuery(''); setQInput('') }}>{x.name}</div>
+          ))}
+        </div>
+        <div className="empty-box">
+          <div>「{src.name}」当前不可用</div>
+          <div style={{ marginTop: 6, lineHeight: 1.7 }}>{unavailable}</div>
+          <div style={{ marginTop: 6 }}>此限制与网络 / 代理无关，待站方提供公开接口后即可接入。</div>
+        </div>
+      </>
+    )
+  }
   const searchable = src ? sourceSearchable(src.kind) : false
   return (
     <>
@@ -279,8 +297,7 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
             onClick={() => { setSrcId(x.id); setPage(1); setCatKey(''); setQuery(''); setQInput('') }}>{x.name}</div>
         ))}
       </div>
-      {unavailable !== undefined && <div className="empty-box">当前不可用：{unavailable}</div>}
-      {searchable && unavailable === undefined && (
+      {searchable && (
         <div className="f-row" style={{ marginTop: 10, marginBottom: 4 }}>
           <input className="f-input" placeholder="输入关键词搜索，回车确认" value={qInput}
             onChange={(e) => setQInput(e.target.value)}
@@ -371,7 +388,7 @@ const PersonalPanel = () => {
       <Hint>图片压缩到 1920px 宽，最大 5MB；视频壁纸（mp4 / webm）只存本地 IndexedDB，不参与云同步。</Hint>
 
       <Sec t="壁纸来源" />
-      <Hint>系统不内置壁纸；添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸。API 地址可改为可达的镜像服务。</Hint>
+      <Hint>系统不内置壁纸；添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸。API 地址可改为可达的镜像服务。扩展环境的请求经后台转发并自动遵循系统代理设置。</Hint>
       <div className="btn-row" style={{ marginTop: 10, marginBottom: 8 }}>
         {WALL_SOURCE_TEMPLATES.map((t) => {
           const un = WALL_SOURCE_UNAVAILABLE[t.kind]
