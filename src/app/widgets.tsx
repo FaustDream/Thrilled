@@ -32,7 +32,8 @@ export const TileGlyph = ({ name, cls, fs, size }: { name: string; cls: string; 
       className={`${cls}${b.latin ? ' lat' : ''}`}
       style={{ color: b.color, fontSize: b.latin ? Math.round(fs * 0.74) : fs, ...(size ? { width: size, height: size } : {}) }}
     >
-      {b.glyph}
+      {/* 图形单独一层：容器底色（--ga-tile）与图形本身（--ga-glyph / --ga-dockIcon）可分别调节 */}
+      <span className="glyph">{b.glyph}</span>
     </div>
   )
 }

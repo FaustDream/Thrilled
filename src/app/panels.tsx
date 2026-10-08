@@ -1,35 +1,45 @@
 /**
- * 抽屉与弹窗（添加 / 个性化 / 广场 / 设置 / 我的 + 欢迎 / 引擎 / 编辑卡片 / 备份 / 恢复 / 重置 …）
+ * 抽屉与弹窗（添加 / 个性化 / 设置 + 欢迎 / 引擎 / 编辑卡片 / 备份 / 恢复 / 重置 …）
  * 结构与文案按 docs/v4/02-UI规格.md §8、§6.1、§6.3、§7 与原型冻结内容落地。
  */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp, ENGINE_LIMIT, type DrawerKey } from './store'
-import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage } from '../core/wallsource'
-import { saveRemoteWallpaper } from '../core/wallpaper'
+import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
+import { findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
+import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
 import { WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
 import { SKIN_FIELDS } from '../shared/defaults'
+import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
 import { Icon } from './icons'
 import { SiteIcon } from './widgets'
 import { siteUrlOf } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
-import { uploadWallpaper } from '../core/wallpaper'
+import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks } from '../core/bookmark-importer'
 import { resetAllData } from '../core/reset'
 import { saveDoc } from '../core/storage'
 import { getCloudConfig, setCloudConfig, type CloudConfig } from '../core/cloud'
-import type { GridItem, WidgetField, WidgetKind } from '../shared/types'
+import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
   add: ['添加', '在这里添加你喜爱的网站图标和小组件'],
-  personal: ['个性化', '在这里进行个性化配置'],
-  square: ['广场', '在这里查看别人分享的壁纸'],
-  setting: ['设置', '在这里进行网站的设置'],
+  personal: ['个性化', ''],
+  /* 设置面板自带分区页签，头部不再重复一句话说明（与个性化同款单行头部） */
+  setting: ['设置', ''],
 }
 
-const Sec = ({ t }: { t: string }) => <div className="sec-title">{t}</div>
 const Hint = ({ children }: { children: React.ReactNode }) => <div className="hint-text">{children}</div>
+
+/** 抽屉内的分区导航页签：个性化与设置共用同一套导航语言（等宽密排、单行不折行、选中态为实底胶囊） */
+const DrawerTabs = ({ tabs, value, onChange }: { tabs: readonly string[]; value: number; onChange: (i: number) => void }) => (
+  <div className="dw-tabs">
+    {tabs.map((label, i) => (
+      <div key={label} className={`dw-tab${i === value ? ' active' : ''}`} onClick={() => onChange(i)}>{label}</div>
+    ))}
+  </div>
+)
 
 const SwitchRow = ({ l, d, on, onToggle }: { l: string; d?: string; on: boolean; onToggle: () => void }) => (
   <div className="switch-row">
@@ -38,11 +48,47 @@ const SwitchRow = ({ l, d, on, onToggle }: { l: string; d?: string; on: boolean;
   </div>
 )
 
-const SliderRow = ({ l, min, max, value, display, onInput }: {
-  l: string; min: number; max: number; value: number; display: string; onInput: (v: number) => void
+/** 名称右侧的说明 ⓘ：悬停 200ms 或点击展开，气泡 220px，逼近容器右缘时自动向左翻转 */
+const InfoDot = ({ text }: { text: string }) => {
+  const [open, setOpen] = useState(false)
+  const [flip, setFlip] = useState(false)
+  const box = useRef<HTMLSpanElement | null>(null)
+  const pop = useRef<HTMLSpanElement | null>(null)
+  const timer = useRef(0)
+  const clear = (): void => {
+    if (timer.current !== 0) { window.clearTimeout(timer.current); timer.current = 0 }
+  }
+  useEffect(() => clear, [])
+  /* 展开后量一次：气泡右缘越过面板右缘则翻到左侧 */
+  useLayoutEffect(() => {
+    if (!open) return
+    const ico = box.current
+    const tip = pop.current
+    if (ico === null || tip === null) return
+    const host = ico.closest('.dw-body') ?? document.body
+    setFlip(ico.getBoundingClientRect().left + tip.offsetWidth > host.getBoundingClientRect().right - 8)
+  }, [open])
+  return (
+    <span className={`sl-info${open ? ' on' : ''}`} ref={box} tabIndex={0} aria-label="说明"
+      onMouseEnter={() => { clear(); timer.current = window.setTimeout(() => setOpen(true), 200) }}
+      onMouseLeave={() => { clear(); setOpen(false) }}
+      onFocus={() => { clear(); setOpen(true) }}
+      onBlur={() => setOpen(false)}
+      onClick={() => { clear(); setOpen((v) => !v) }}>
+      {Icon.info()}
+      <span className={`sl-info-pop${flip ? ' flip' : ''}`} ref={pop}>{text}</span>
+    </span>
+  )
+}
+
+const SliderRow = ({ l, info, min, max, value, display, onInput }: {
+  l: string; info?: string; min: number; max: number; value: number; display: string; onInput: (v: number) => void
 }) => (
   <div className="slider-row">
-    <div className="sl-head"><span>{l}</span><span>{display}</span></div>
+    <div className="sl-head">
+      <span className="sl-label">{l}{info !== undefined && <InfoDot text={info} />}</span>
+      <span>{display}</span>
+    </div>
     <input type="range" min={min} max={max} value={value} onChange={(e) => onInput(Number(e.target.value))} />
   </div>
 )
@@ -181,25 +227,37 @@ const AddPanel = () => {
 
 /* ============================== 个性化 ============================== */
 
-/** 分组卡片：0.5px 描边容器，把标题与其设置项圈在同一视觉边界内 */
-const SecCard = ({ t, children }: { t: string; children: React.ReactNode }) => (
-  <section className="sec-card">
-    <div className="sec-title">{t}</div>
+/** 分组卡片：0.5px 描边容器，把标题与其设置项圈在同一视觉边界内；danger 用于覆盖 / 删除类操作的分组（红色标识） */
+const SecCard = ({ t, info, danger = false, children }: {
+  t: string; info?: string; danger?: boolean; children: React.ReactNode
+}) => (
+  <section className={`sec-card${danger ? ' danger' : ''}`}>
+    <div className="sec-title">
+      {t}
+      {info !== undefined && <InfoDot text={info} />}
+    </div>
     {children}
   </section>
 )
 
-/** 统一颜色控件：标签 + 24px 圆形色点（内置取色器）+ 十六进制值文本 */
-const ColorField = ({ label, value, auto, onAuto, onChange }: {
-  label: string; value: string; auto?: string; onAuto?: () => void; onChange: (hex: string) => void
+/** 统一颜色控件：标签 + 24px 圆形色点（内置取色器）+ 十六进制值文本
+ *  compact：密排模式（风格编辑器 12 项 4 列 × 3 行）——行内只留「名称 + 色点」，
+ *  十六进制折叠进取色浮层（点色点即打开的原生取色器），需要时看色点悬停提示 */
+const ColorField = ({ label, value, auto, onAuto, onChange, compact = false }: {
+  label: string; value: string; auto?: string; onAuto?: () => void; onChange: (hex: string) => void; compact?: boolean
 }) => (
-  <div className="color-field">
+  <div className={`color-field${compact ? ' compact' : ''}`}>
     <span className="cf-label">{label}</span>
-    <label className="cf-dot" style={{ background: auto !== undefined && value === '' ? 'linear-gradient(135deg,#fff 50%,#94a3b8 50%)' : value }}>
+    <label className="cf-dot" title={`${label} · ${(value === '' && auto !== undefined ? auto : value).toUpperCase()}`}
+      style={{ background: auto !== undefined && value === '' ? 'linear-gradient(135deg,#fff 50%,#94a3b8 50%)' : value }}>
       <input type="color" value={value} onChange={(e) => onChange(e.target.value)} />
     </label>
-    <span className="cf-hex">{value === '' && auto !== undefined ? auto : value.toUpperCase()}</span>
-    {onAuto !== undefined && value !== '' && <button className="btn sm ghost" style={{ marginLeft: 'auto' }} onClick={onAuto}>跟随风格</button>}
+    {compact ? null : (
+      <>
+        <span className="cf-hex">{value === '' && auto !== undefined ? auto : value.toUpperCase()}</span>
+        {onAuto !== undefined && value !== '' && <button className="btn sm ghost" style={{ marginLeft: 'auto' }} onClick={onAuto}>跟随风格</button>}
+      </>
+    )}
   </div>
 )
 
@@ -212,6 +270,57 @@ const MiniSkinPreview = ({ tokens }: { tokens: Record<string, string> }) => (
     <i className="tp-dock" style={{ background: tokens['--card-bg'] }} />
   </div>
 )
+
+/* ---------- 行尾溢出菜单与来源页签（添加 / 切换唯一入口） ---------- */
+
+interface MenuItem {
+  label: string;
+  onClick?: () => void;
+}
+
+/** 点击展开的下拉菜单：点外部、按 Esc 或选中后关闭；trigger 由调用方给定 */
+const OverflowMenu = ({ trigger, items, align = 'right' }: {
+  trigger: () => React.ReactNode; items: readonly MenuItem[]; align?: 'left' | 'right'
+}) => {
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const away = (e: MouseEvent): void => {
+      if (box.current !== null && !box.current.contains(e.target as Node)) setOpen(false)
+    }
+    const esc = (e: KeyboardEvent): void => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', away)
+    document.addEventListener('keydown', esc)
+    return () => {
+      document.removeEventListener('mousedown', away)
+      document.removeEventListener('keydown', esc)
+    }
+  }, [open])
+  return (
+    <div className={`ov-wrap ov-${align}`} ref={box}>
+      <div onClick={() => setOpen((v) => !v)}>{trigger()}</div>
+      {open && (
+        <div className="ov-menu">
+          {items.map((it) => (
+            <div key={it.label} className={`ov-item${it.onClick === undefined ? ' dis' : ''}`}
+              onClick={() => {
+                if (it.onClick === undefined) return
+                setOpen(false)
+                it.onClick()
+              }}>{it.label}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** 字节数转可读体积（dataURL 长度 ×0.75 还原为原始字节，与写入侧上限算法一致） */
+const readableSize = (dataUrl: string): string => {
+  const mb = (dataUrl.length * 0.75) / 1024 / 1024
+  return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round((dataUrl.length * 0.75) / 1024))} KB`
+}
 
 /* ---------- 外部壁纸浏览（来源切换 + 分类 + 分页 + 一键设为壁纸） ---------- */
 
@@ -247,18 +356,93 @@ const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number
   return { data, state }
 }
 
+/* ---------- 在线壁纸应用反馈（阶段进度 + 循环等待） ---------- */
+
+/** 应用壁纸的三个阶段：下载 → 处理 → 应用；short 为步骤条上的短名 */
+const WALL_STAGES = [
+  { short: '下载', n: '正在下载壁纸' },
+  { short: '处理', n: '正在处理图片' },
+  { short: '应用', n: '即将应用' },
+] as const
+
+/** 进行中的应用任务；total = 0 表示总量不可知（SW 代理拿不到 Content-Length），进度条转循环扫光 */
+interface ApplyTask {
+  name: string
+  thumb: string
+  stage: number
+  loaded: number
+  total: number
+  /** 命中本地已有记录：整段下载被跳过 */
+  reused: boolean
+}
+
+/** 浮层最短停留（ms）：太快完成时一闪而过反而像没响应 */
+const FEEDBACK_MIN_MS = 420
+/** 「即将应用」阶段的额外停留，保证该阶段文案可读 */
+const APPLY_STAGE_HOLD_MS = 280
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+/** 字节数 → 人类可读（下载进度用） */
+const byteText = (b: number): string =>
+  b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`
+
+/** 各阶段「正在做什么、为什么还没有结果」的解释文案 */
+const stageDetail = (t: ApplyTask, srcName: string, pct: number | null): string => {
+  if (t.reused) return '本地已有同一张，直接复用记录应用，无需重新下载'
+  if (t.stage === 0) {
+    const from = `正在从「${srcName}」获取原图`
+    return pct === null
+      ? `${from} · 该来源未返回文件体积，进度以循环动画表示`
+      : `${from} · 已接收 ${byteText(t.loaded)} / ${byteText(t.total)}`
+  }
+  if (t.stage === 1) return '正在校验体积并写入本地存储（上限 20MB），此时主页还没有变化'
+  return '正在写入设置，主页正在渲染新背景'
+}
+
+/**
+ * 应用任务浮层：盖住壁纸网格区（不占布局高度），顶部进度条 + 被点击壁纸的缩略图与阶段文案 +
+ * 循环等待环 + 三段步骤条。进度确定时按字节百分比推进，总量不可知时退化为 indeterminate 扫光。
+ * 底色比常规玻璃更实一档，保证下面的缩略图不会透出来干扰阅读。
+ */
+const WallTaskOverlay = ({ t, srcName }: { t: ApplyTask; srcName: string }) => {
+  const pct = t.total > 0 ? Math.min(100, Math.round((t.loaded / t.total) * 100)) : null
+  const cur = WALL_STAGES[t.stage] ?? WALL_STAGES[0]
+  return (
+    <div className="wl-task" role="status" aria-live="polite">
+      <div className={`wl-bar${pct === null ? ' indet' : ''}`}>{pct !== null && <i style={{ width: `${pct}%` }} />}</div>
+      <div className="wl-head">
+        {t.thumb !== '' && <img className="wl-thumb" src={t.thumb} alt="" />}
+        <div className="wl-txt">
+          <div className="wl-t1">{cur.n} · {t.name}</div>
+          <div className="wl-t2">{stageDetail(t, srcName, pct)}{pct !== null && t.stage === 0 ? `（${pct}%）` : ''}</div>
+        </div>
+      </div>
+      <div className="wl-foot">
+        <span className="wl-ring" />
+        <div className="wl-steps">
+          {WALL_STAGES.map((s, i) => (
+            <span key={s.short} className={`wl-step${i < t.stage ? ' done' : i === t.stage ? ' now' : ''}`}>
+              {i < t.stage ? Icon.check() : <i className="wl-dot" />}{s.short}
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** 壁纸网格 + 分页（缩略图 <img> 直连加载；点击原图下载落地后应用） */
-const WallPhotos = ({ data, state, page, onPage, onApply, busy }: {
+const WallPhotos = ({ data, state, page, onPage, onApply }: {
   data: WallPage | null; state: 'loading' | 'ok' | 'error'; page: number
-  onPage: (p: number) => void; onApply: (p: { full: string; id: string }) => void; busy: string
+  onPage: (p: number) => void; onApply: (p: WallPhoto) => void
 }) => (
   <>
     <div className="wall-grid">
       {state === 'loading' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>加载中…</div>}
       {state === 'error' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>获取失败：来源地址不可达，或当前环境直连受跨域限制（扩展环境会自动经后台代理）</div>}
       {(state === 'ok' ? (data?.photos ?? []) : []).map((p) => (
-        <div key={p.id} className={`wall-thumb${busy === p.full ? ' sel' : ''}`} title={p.title || p.author}
-          onClick={() => onApply(p)}>
+        <div key={p.id} className="wall-thumb" title={p.title || p.author} onClick={() => onApply(p)}>
           <img src={p.thumb} alt={p.id} loading="lazy" />
         </div>
       ))}
@@ -273,62 +457,79 @@ const WallPhotos = ({ data, state, page, onPage, onApply, busy }: {
   </>
 )
 
-/** 来源浏览面板：源页签 → 分类筛选 → 壁纸网格（只显示已启用的来源） */
-const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
+/** 来源浏览区：分类筛选 → 壁纸网格（预览对象由外部来源列表驱动，无启用来源时不渲染） */
+const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
   const setWallpaperRef = useApp((st) => st.setWallpaperRef)
   const showToast = useApp((st) => st.showToast)
-  const [srcId, setSrcId] = useState(sources[0]?.id ?? '')
-  const src = sources.find((x) => x.id === srcId) ?? sources[0]
   const { cats, state: catState } = useWallCategories(src)
   const [catKey, setCatKey] = useState('')
   const cat = cats.some((c) => c.key === catKey) ? catKey : (cats[0]?.key ?? 'all')
   const [page, setPage] = useState(1)
   const [busy, setBusy] = useState('')
+  const [task, setTask] = useState<ApplyTask | null>(null)
+  const startedAt = useRef(0)
   const [query, setQuery] = useState('')
   const [qInput, setQInput] = useState('')
   const { data, state } = useWallPage(src, cat, page, query)
 
-  const apply = async (full: string): Promise<void> => {
+  /** 三段式应用：下载（带字节进度）→ 处理（校验 + 入库）→ 应用（写设置并渲染），全程由浮层反馈 */
+  const apply = async (p: WallPhoto): Promise<void> => {
     if (busy !== '') return
-    setBusy(full)
+    setBusy(p.full)
+    startedAt.current = Date.now()
+    setTask({ name: p.title || p.author || '当前壁纸', thumb: p.thumb, stage: 0, loaded: 0, total: 0, reused: false })
+    const move = (patch: Partial<ApplyTask>): void => {
+      setTask((t) => (t === null ? null : { ...t, ...patch }))
+    }
     try {
-      const ref = await saveRemoteWallpaper(full)
+      /* 同一张图下过就跳过整段下载：键是源地址哈希，命中即复用已有记录 */
+      const hit = await findWallpaperBySource(p.full)
+      if (hit !== null) {
+        move({ stage: 2, reused: true })
+        setWallpaperRef(hit.ref)
+        await sleep(APPLY_STAGE_HOLD_MS)
+        return
+      }
+      const dataUrl = await fetchDataUrl(p.full, (loaded, total) => move({ loaded, total }))
+      move({ stage: 1 })
+      const ref = await storeRemoteWallpaper(p.full, dataUrl, src?.name ?? '外部来源')
+      move({ stage: 2 })
       setWallpaperRef(ref)
+      await sleep(APPLY_STAGE_HOLD_MS)
     } catch (e) {
       showToast(`设为壁纸失败：${(e as Error).message}`)
     } finally {
+      await sleep(Math.max(0, FEEDBACK_MIN_MS - (Date.now() - startedAt.current)))
+      setTask(null)
       setBusy('')
     }
   }
 
-  const unavailable = src ? WALL_SOURCE_UNAVAILABLE[src.kind] : undefined
-  if (src !== undefined && unavailable !== undefined) {
+  /* 切换来源后重置分类 / 页码 / 搜索词，避免沿用上一源的浏览位置 */
+  const srcId = src?.id
+  useEffect(() => {
+    setPage(1)
+    setCatKey('')
+    setQuery('')
+    setQInput('')
+  }, [srcId])
+
+  if (src === undefined) return null
+
+  const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind]
+  if (unavailable !== undefined) {
     /* 不可用来源（实测存在无法合法解决的访问限制）：只显示说明，不发起任何请求 */
     return (
-      <>
-        <div className="sub-tabs" style={{ marginTop: 10 }}>
-          {sources.map((x) => (
-            <div key={x.id} className={`sub-tab${x.id === src.id ? ' active' : ''}`}
-              onClick={() => { setSrcId(x.id); setPage(1); setCatKey(''); setQuery(''); setQInput('') }}>{x.name}</div>
-          ))}
-        </div>
-        <div className="empty-box">
-          <div>「{src.name}」当前不可用</div>
-          <div style={{ marginTop: 6, lineHeight: 1.7 }}>{unavailable}</div>
-          <div style={{ marginTop: 6 }}>此限制与网络 / 代理无关，待站方提供公开接口后即可接入。</div>
-        </div>
-      </>
+      <div className="empty-box">
+        <div>「{src.name}」当前不可用</div>
+        <div style={{ marginTop: 6, lineHeight: 1.7 }}>{unavailable}</div>
+        <div style={{ marginTop: 6 }}>此限制与网络 / 代理无关，待站方提供公开接口后即可接入。</div>
+      </div>
     )
   }
-  const searchable = src ? sourceSearchable(src.kind) : false
+  const searchable = sourceSearchable(src.kind)
   return (
     <>
-      <div className="sub-tabs" style={{ marginTop: 10 }}>
-        {sources.map((x) => (
-          <div key={x.id} className={`sub-tab${x.id === src?.id ? ' active' : ''}`}
-            onClick={() => { setSrcId(x.id); setPage(1); setCatKey(''); setQuery(''); setQInput('') }}>{x.name}</div>
-        ))}
-      </div>
       {searchable && (
         <div className="f-row" style={{ marginTop: 10, marginBottom: 4 }}>
           <input className="f-input" placeholder="输入关键词搜索，回车确认" value={qInput}
@@ -344,20 +545,24 @@ const WallBrowser = ({ sources }: { sources: WallpaperSource[] }) => {
             onClick={() => { setCatKey(c.key); setPage(1) }}>{c.label}</div>
         ))}
       </div>
-      <WallPhotos data={data} state={state} page={page} onPage={setPage}
-        onApply={(p) => { void apply(p.full) }} busy={busy} />
+      <div className="wall-stage">
+        <WallPhotos data={data} state={state} page={page} onPage={setPage}
+          onApply={(p) => { void apply(p) }} />
+        {task !== null && <WallTaskOverlay t={task} srcName={src.name} />}
+      </div>
     </>
   )
 }
 
 /** 个性化面板导航页签（分组导航，避免单页堆全部设置） */
-const PANEL_TABS: readonly (readonly [string])[] = [['壁纸'], ['背景效果'], ['显示'], ['搜索与Dock'], ['主题']];
+const PANEL_TABS: readonly string[] = ['壁纸', '背景效果', '显示', '搜索与Dock', '主题']
 
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
   const setSetting = useApp((st) => st.setSetting)
   const toggle = useApp((st) => st.toggle)
   const setGlass = useApp((st) => st.setGlass)
+  const setBlur = useApp((st) => st.setBlur)
   const applySkin = useApp((st) => st.applySkin)
   const skins = useApp((st) => st.skins)
   const skinNew = useApp((st) => st.skinNew)
@@ -373,11 +578,32 @@ const PersonalPanel = () => {
   const showToast = useApp((st) => st.showToast)
   const [tab, setTab] = useState(0)
   const [prevWallRef, setPrevWallRef] = useState<string | null>(null)
+  const [previewId, setPreviewId] = useState('')
+  const [wall, setWall] = useState<BgData | null>(null)
   const wallFile = useRef<HTMLInputElement | null>(null)
-  const GLASS: readonly [keyof typeof s.glass, string, string][] = [
-    ['card', '卡片', '资讯卡 / 小组件卡'], ['tile', '图标容器', '网站图标与图标格'],
-    ['dock', 'Dock 栏', '底部悬浮栏'], ['search', '搜索框', '顶部搜索框'],
-    ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'], ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡'],
+  /* 透明度 12 项：前六项是玻璃底色，后六项是元素显隐强度（说明即各自的作用范围） */
+  const GLASS: readonly (readonly [GlassKey, string, string])[] = [
+    ['card', '卡片', '资讯卡与小组件卡的玻璃底色'],
+    ['tile', '图标容器', '图标方块与图标格的底座底色'],
+    ['glyph', '图标图形', '图标容器里的 logo 字形本身，独立于容器底色'],
+    ['dock', 'Dock 快捷栏', '底部悬浮栏的玻璃底座（整条快捷栏）'],
+    ['dockIcon', 'Dock 图标', '快捷栏里的应用图标贴图，独立于网格图标'],
+    ['search', '搜索框', '顶部搜索框的玻璃底色'],
+    ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'],
+    ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡 / 任务浮层'],
+    ['clock', '时间与日期', '时钟与日期文字（标准模式卡片内 + 极简模式大时钟）'],
+    ['quote', '每日一言', '问候语与鼓励语文字（每日一言卡 + 极简模式悬浮语）'],
+    ['line', '边框与分隔线', '卡片描边、列表分隔线与浅色胶囊底，调低后界面更轻盈'],
+    ['hover', '悬停与激活态', '菜单与列表的 hover 高亮、选中项描边的反馈强度'],
+  ]
+  /* 毛玻璃模糊 6 项：只与有玻璃底色的那六项配对（图标图形 / 文字 / 线条没有可模糊的背景） */
+  const BLUR: readonly (readonly [BlurKey, string, string])[] = [
+    ['card', '卡片', '资讯卡与小组件卡'],
+    ['tile', '图标容器', '图标方块底板（网址导航图标与 Dock 图标）'],
+    ['dock', 'Dock 快捷栏', '底部悬浮栏'],
+    ['search', '搜索框', '顶部搜索框'],
+    ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'],
+    ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡'],
   ]
   const skin = skins.find((x) => x.id === s.skinId) ?? skins[0]
 
@@ -403,110 +629,154 @@ const PersonalPanel = () => {
       .catch(() => showToast('外链获取失败，请检查地址是否允许跨域'))
   }
 
+  /** 行尾「···」→ 改地址：仅接受 http(s) 基址，可指向镜像服务 */
+  const editWallSource = (ws: WallpaperSource): void => {
+    const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
+    if (next === '') return
+    if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
+    else showToast('地址需以 http(s):// 开头')
+  }
+
+  /* 当前壁纸的缩略图与体积（仅读取引用对应的那份数据，不写入） */
+  const wallRef = s.wallpaperRef
+  useEffect(() => {
+    if (wallRef === null) { setWall(null); return }
+    let alive = true
+    void getWallpaper(wallRef).then((d) => { if (alive) setWall(d) })
+    return () => { alive = false }
+  }, [wallRef])
+
+  /* 历史壁纸（按落地时间倒序，超出保留上限的已在入库时淘汰） */
+  const [history, setHistory] = useState<{ ref: string; bg: BgData }[]>([])
+  useEffect(() => {
+    let alive = true
+    void listWallpapers().then((list) => {
+      if (alive) setHistory(list)
+    })
+    return () => { alive = false }
+  }, [wallRef])
+
+  /* 预览对象：列表行点击切换；来源被禁用后自动落到首个启用来源 */
+  const enabledSources = s.wallSources.filter((ws) => ws.enabled)
+  const preview = enabledSources.find((x) => x.id === previewId) ?? enabledSources[0]
+  const pendingSources = WALL_SOURCE_TEMPLATES.filter((t) => !s.wallSources.some((ws) => ws.kind === t.kind))
+
+  /** 点行名预览该来源；禁用态不发起请求，仅提示 */
+  const previewSource = (ws: WallpaperSource): void => {
+    if (!ws.enabled) { showToast(`「${ws.name}」已禁用，请先打开右侧开关`); return }
+    setPreviewId(ws.id)
+  }
+
+  /** 列表末尾「+ 添加来源」：加入尚未添加的协议模板并立即预览 */
+  const addSource = (t: (typeof WALL_SOURCE_TEMPLATES)[number]): void => {
+    const src = { id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase, enabled: true }
+    addWallSource(src)
+    setPreviewId(src.id)
+  }
+
   return (
     <>
-      <div className="dw-tabs">
-        {PANEL_TABS.map(([label], i) => (
-          <div key={label} className={`dw-tab${i === tab ? ' active' : ''}`} onClick={() => setTab(i)}>{label}</div>
-        ))}
-      </div>
+      <DrawerTabs tabs={PANEL_TABS} value={tab} onChange={setTab} />
       {tab === 0 && (
-      <>
-      <SecCard t="壁纸">
-        <div className="wp-head">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <span className="wp-label">当前壁纸</span>
-            <span className="wp-value">{s.wallpaperRef !== null ? '自定义壁纸' : '未设置'}</span>
+      <SecCard t="壁纸" info="图片最大 5MB（视频同限）；外部网站壁纸在下方来源中获取。开关控制来源是否参与浏览，点行名可预览该来源，行尾「···」可改 API 基址（可指向镜像服务，扩展环境自动走系统代理）或移除。">
+        <div className="wall-now">
+          <div className="wall-thumb-now">
+            {wall !== null && wall.type === 'image'
+              ? <img src={wall.data} alt="当前壁纸" />
+              : <span className="wall-thumb-ph">{wall !== null ? '视频' : '无'}</span>}
           </div>
-          {s.wallpaperRef !== null && (
-            <button className="btn sm ghost" onClick={() => {
-              if (prevWallRef !== null) setWallpaperRef(prevWallRef)
-              else setWallpaperRef(null)
-            }}>移除</button>
-          )}
-        </div>
-        <div className="btn-row" style={{ marginBottom: 4 }}>
-          <button className="btn sm ghost" onClick={() => wallFile.current?.click()}>本地上传</button>
-          <button className="btn sm ghost" onClick={useLinkWall}>外链上传</button>
+          <div className="wall-now-info">
+            <div className="wall-now-name">{s.wallpaperRef !== null ? '自定义壁纸' : '未设置壁纸'}</div>
+            {s.wallpaperRef !== null && wall !== null && <div className="wall-now-size">{readableSize(wall.data)}</div>}
+            <div className="btn-row" style={{ marginTop: 6 }}>
+              <button className="btn sm ghost" onClick={() => wallFile.current?.click()}>本地上传</button>
+              <button className="btn sm ghost" onClick={useLinkWall}>外链上传</button>
+              {s.wallpaperRef !== null && (
+                <button className="btn sm ghost" onClick={() => {
+                  if (prevWallRef !== null) setWallpaperRef(prevWallRef)
+                  else setWallpaperRef(null)
+                }}>移除</button>
+              )}
+            </div>
+          </div>
         </div>
         <input ref={wallFile} type="file" accept="image/*,video/mp4,video/webm" style={{ display: 'none' }}
           onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = '' }} />
-        <Hint>支持本地上传 / 外链，图片最大 5MB；外部网站壁纸在下方来源中获取。</Hint>
-      </SecCard>
-
-      <SecCard t="壁纸来源">
-      <Hint>添加外部壁纸网站，按分类浏览后点击图片即可设为壁纸；API 地址可改为镜像服务，扩展环境自动走系统代理。</Hint>
-      <div className="wall-source-grid">
-        {WALL_SOURCE_TEMPLATES.map((t) => {
-          const un = WALL_SOURCE_UNAVAILABLE[t.kind]
-          return (
-            <button key={t.kind} className="btn sm ghost" style={un ? { opacity: 0.5 } : undefined}
-              title={un ? `实测不可接入：${un}` : undefined}
-              onClick={() => { addWallSource({ id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase, enabled: true }); if (un) showToast(`已添加（当前不可用：${un}）`) }}>
-              添加 {t.name}{un ? '（不可用）' : ''}
-            </button>
-          )
-        })}
-      </div>
-      {s.wallSources.map((ws) => (
-        <div className="wall-source-row" key={ws.id}>
-          <div className="ws-head">
-            <span className="ws-name">{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ? '当前不可用' : (ws.enabled ? '已启用' : '已禁用')}</span></span>
-            <span className="ws-acts">
-              <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
-              <button className="btn sm ghost" onClick={() => removeWallSource(ws.id)}>移除</button>
-            </span>
-          </div>
-          <div className="ws-actions">
-            <button className="btn sm ghost" onClick={() => {
-              const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
-              if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
-              else if (next !== '') showToast('地址需以 http(s):// 开头')
-            }}>改地址</button>
-          </div>
-        </div>
-      ))}
-      {s.wallSources.map((ws) => (
-        <div className="wall-source-row" key={ws.id}>
-          <div className="ws-head">
-            <span className="ws-name">{ws.name}<span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>{WALL_SOURCE_UNAVAILABLE[ws.kind] ? '当前不可用' : (ws.enabled ? '已启用' : '已禁用')}</span></span>
-            <span className="ws-acts">
-              <button className="btn sm ghost" onClick={() => toggleWallSource(ws.id)}>{ws.enabled ? '禁用' : '启用'}</button>
-              <button className="btn sm ghost" onClick={() => removeWallSource(ws.id)}>移除</button>
-            </span>
-          </div>
-          <div className="ws-actions">
-            <button className="btn sm ghost" onClick={() => {
-              const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
-              if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
-              else if (next !== '') showToast('地址需以 http(s):// 开头')
-            }}>改地址</button>
+        {history.length > 1 && (
+          <>
+            <div className="sr-desc" style={{ marginTop: 12 }}>
+              历史壁纸（保留最近 {WALLPAPER_HISTORY_LIMIT} 张，点缩略图直接切换）
+            </div>
+            <div className="wp-history">
+              {history.map((h) => (
+                <div key={h.ref}
+                  className={`wp-hitem${h.ref === s.wallpaperRef ? ' on' : ''}`}
+                  title={h.bg.at > 0 ? `${h.bg.from} · ${new Date(h.bg.at).toLocaleDateString('zh-CN')}` : h.bg.from}
+                  onClick={() => setWallpaperRef(h.ref)}>
+                  {h.bg.type === 'image'
+                    ? <img src={h.bg.data} alt="" loading="lazy" />
+                    : <span className="wp-hph">视频</span>}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+        <div className="wall-src-list">
+          {s.wallSources.map((ws) => (
+            <div className="wall-source-row" key={ws.id}>
+              <span className={`ws-name${preview?.id === ws.id ? ' on' : ''}`} onClick={() => previewSource(ws)}>
+                {ws.name}
+                {preview?.id === ws.id && <span className="tb-tag" style={{ marginLeft: 6 }}>预览中</span>}
+                {WALL_SOURCE_UNAVAILABLE[ws.kind] !== undefined
+                  && <span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>当前不可用</span>}
+              </span>
+              <div className={`switch${ws.enabled ? ' on' : ''}`} title={ws.enabled ? '已启用，点击禁用' : '已禁用，点击启用'}
+                onClick={() => toggleWallSource(ws.id)}><i /></div>
+              <OverflowMenu
+                trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
+                items={[
+                  { label: '改地址', onClick: () => editWallSource(ws) },
+                  { label: '移除', onClick: () => removeWallSource(ws.id) },
+                ]} />
+            </div>
+          ))}
+          <div className="ws-add-row">
+            <OverflowMenu
+              align="left"
+              trigger={() => <span className="ws-add">{Icon.plus()}添加来源</span>}
+              items={pendingSources.length === 0
+                ? [{ label: '全部来源均已添加' }]
+                : pendingSources.map((t) => ({ label: t.name, onClick: () => addSource(t) }))} />
           </div>
         </div>
-      ))}
-      {s.wallSources.some((ws) => ws.enabled) && <WallBrowser sources={s.wallSources.filter((ws) => ws.enabled)} />}
+        <WallBrowser src={preview} />
       </SecCard>
-      </>
       )}
       {tab === 1 && (
-      <SecCard t="背景效果">
+      <>
+      <SecCard t="透明度" info="0% 完全不透明、100% 完全透明。玻璃底色类保留可读下限（滑到底仍可辨认），元素显隐类可直接调到消失。全局透明度会再乘一层，两者叠加。">
         <SliderRow l="全局透明度" min={20} max={100} value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}
           onInput={(v) => setSetting('gAlpha', v / 100)} />
         <div style={{ height: 12 }} />
         {GLASS.map(([k, l, d]) => (
-          <div key={k}>
-            <SliderRow l={l} min={0} max={100} value={Math.round(s.glass[k] * 100)} display={`${Math.round(s.glass[k] * 100)}%`}
-              onInput={(v) => setGlass(k, v / 100)} />
-            <div className="sr-desc glass-scope">作用于：{d}</div>
-          </div>
+          <SliderRow key={k} l={l} info={d} min={0} max={100} value={Math.round(s.glass[k] * 100)}
+            display={`${Math.round(s.glass[k] * 100)}%`} onInput={(v) => setGlass(k, v / 100)} />
         ))}
-        <div style={{ height: 12 }} />
+      </SecCard>
+      <SecCard t="毛玻璃模糊" info="与透明度分开设置：只降透明度不调模糊，背景会「透但看不清」、观感发脏；两者配对才通透。0px 即关闭毛玻璃。">
+        {BLUR.map(([k, l, d]) => (
+          <SliderRow key={k} l={l} info={d} min={0} max={BLUR_MAX_PX} value={s.blur[k]}
+            display={`${s.blur[k]}px`} onInput={(v) => setBlur(k, v)} />
+        ))}
+      </SecCard>
+      <SecCard t="壁纸与文字">
         <SliderRow l="壁纸遮罩" min={0} max={100} value={Math.round(s.cover * 100)} display={`${Math.round(s.cover * 100)}%`}
           onInput={(v) => setSetting('cover', v / 100)} />
         <div style={{ height: 12 }} />
         <ColorField label="字体颜色" value={s.fontColor === '' ? '#1f2937' : s.fontColor} auto="跟随风格"
           onAuto={() => setSetting('fontColor', '')} onChange={(hex) => setSetting('fontColor', hex)} />
       </SecCard>
+      </>
       )
       }
       {tab === 2 && (
@@ -519,7 +789,7 @@ const PersonalPanel = () => {
         <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
         <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
         <SwitchRow l="隐藏图标标签" d="只保留图标" on={!s.labels} onToggle={() => toggle('labels')} />
-        <SwitchRow l="吉祥物" on={s.mascot} onToggle={() => toggle('mascot')} />
+        <SwitchRow l="Dock 快捷栏" d="隐藏底部快捷栏" on={s.mascot} onToggle={() => toggle('mascot')} />
       </SecCard>
       )
       }
@@ -550,135 +820,29 @@ const PersonalPanel = () => {
         </div>
       </SecCard>
       <SecCard t="风格编辑器">
-        <div className="f-row"><label className="f-label">皮肤名称</label>
-          <input className="f-input" value={skin?.name ?? ''} onChange={(e) => skinRename(e.target.value)} /></div>
+        <div className="f-row inline">
+          <label className="f-label">皮肤名称</label>
+          <input className="f-input" value={skin?.name ?? ''} onChange={(e) => skinRename(e.target.value)} />
+          <OverflowMenu
+            trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
+            items={[
+              { label: '还原内置', onClick: skinRestore },
+              // 内置皮肤不可删：不给 onClick 即为禁用项
+              skin?.builtin === true ? { label: '删除皮肤' } : { label: '删除皮肤', onClick: skinDelete },
+            ]} />
+        </div>
         <div className="color-grid">
           {SKIN_FIELDS.map(([token, label]) => {
             const raw = skin?.tokens[token] ?? '#ffffff'
             const hex = raw.startsWith('#') ? raw : '#ffffff'
-            return <ColorField key={token} label={label} value={hex} onChange={(v) => skinToken(token, v)} />
+            return <ColorField key={token} compact label={label} value={hex} onChange={(v) => skinToken(token, v)} />
           })}
         </div>
         <div className="btn-row" style={{ marginTop: 12 }}>
           <button className="btn sm" onClick={skinNew}>新建皮肤</button>
-          <button className="btn sm ghost" onClick={skinRestore}>还原内置</button>
-          <button className="btn sm danger" onClick={skinDelete}>删除皮肤</button>
         </div>
       </SecCard>
       </>
-      )}
-    </>
-  )
-}
-
-/* ============================== 广场 ============================== */
-
-const PZ_SEED = [
-  { t: '极夜星轨', a: '星野', l: 1284, b: 'linear-gradient(150deg,#141b2e,#2a2350 60%,#0b0e18)' },
-  { t: '晨雾山峦', a: '青山', l: 962, b: 'linear-gradient(150deg,#dfe7ef,#a9b8c9 60%,#7d8fa3)' },
-  { t: '樱色渐变', a: 'Momo', l: 743, b: 'linear-gradient(150deg,#ffd9e5,#ffb6c9 55%,#f0879f)' },
-  { t: '深海静谧', a: 'Aqua', l: 651, b: 'linear-gradient(150deg,#0f3b52,#0b2233 55%,#07131d)' },
-  { t: '我的工作台', a: '我', l: 12, b: 'linear-gradient(150deg,#1b2532,#0b1017)' },
-  { t: '摸鱼模式', a: '我', l: 8, b: 'linear-gradient(150deg,#2a1b46,#0d0818)' },
-]
-
-const PzCard = ({ t, a, l, b }: { t: string; a: string; l: number; b: string }) => {
-  const [liked, setLiked] = useState(false)
-  const showToast = useApp((s) => s.showToast)
-  return (
-    <div className="pz-card">
-      <div className="pz-prev" style={{ background: b }}>
-        <div className="m-card" style={{ left: '12%', top: '16%', width: '34%', height: '26%' }} />
-        <div className="m-card" style={{ left: '52%', top: '16%', width: '34%', height: '26%' }} />
-        <div className="m-card" style={{ left: '12%', top: '50%', width: '34%', height: '22%' }} />
-        <div className="m-card" style={{ left: '52%', top: '50%', width: '34%', height: '22%' }} />
-        <div className="m-dock" />
-      </div>
-      <div className="pz-body">
-        <div className="pz-title">{t}</div>
-        <div className="pz-sub">by {a} · 发布于 09-24</div>
-        <div className="pz-like" onClick={() => setLiked(!liked)}>{Icon.heart()}{l + (liked ? 1 : 0)} 收藏</div>
-        <div className="pz-acts">
-          <button className="btn sm" onClick={() => showToast('应用成功，恢复后将覆盖当前界面')}>应用</button>
-          <button className="btn sm ghost" onClick={() => showToast('分享依赖云端服务（thrilled-server，后续接入）')}>分享</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const SquarePanel = () => {
-  const showToast = useApp((s) => s.showToast)
-  const [tab, setTab] = useState(0)
-  const [mineTab, setMineTab] = useState(0)
-  const [page, setPage] = useState(1)
-  const [kw, setKw] = useState('')
-  const list = PZ_SEED.filter((p) => !kw || p.t.includes(kw))
-  return (
-    <>
-      <div className="sub-tabs">
-        {['大厅', '分享', '我的'].map((t, i) => (
-          <div key={t} className={`sub-tab${i === tab ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</div>
-        ))}
-      </div>
-      {tab === 0 && (
-        <>
-          <div className="f-row"><input className="f-input" placeholder="按关键字搜索界面 / 或粘贴至大厅搜索框搜索" value={kw} onChange={(e) => setKw(e.target.value)} /></div>
-          <div className="cats">
-            {['热门推荐', '用户分享'].map((c, i) => (
-              <div key={c} className={`cat${i === 0 ? ' active' : ''}`}>{c}</div>
-            ))}
-          </div>
-          <div className="pz-grid">
-            {list.map((p) => <PzCard key={p.t} {...p} />)}
-          </div>
-          <div className="pager-row">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className={`pg${i === page ? ' active' : ''}`} onClick={() => setPage(i)}>{i}</div>
-            ))}
-          </div>
-          <Hint>广场云端服务（thrilled-server）接入后，这里展示真实模板；当前为种子模板示意。</Hint>
-        </>
-      )}
-      {tab === 1 && (
-        <>
-          <SwitchRow l="公开分享" d="任何人都能在广场看到" on onToggle={() => showToast('分享依赖云端服务')} />
-          <SwitchRow l="私密分享" d="私密分享只能主页粘贴分享链接访问" on={false} onToggle={() => showToast('分享依赖云端服务')} />
-          <div className="f-row" style={{ marginTop: 14 }}><label className="f-label">界面标题</label>
-            <input className="f-input" placeholder="请输入界面标题" defaultValue="我的新标签页" /></div>
-          <div className="f-row"><label className="f-label">界面描述</label>
-            <input className="f-input" placeholder="请输入界面描述" /></div>
-          <div className="btn-row">
-            <button className="btn" onClick={() => showToast('分享依赖云端服务')}>立即分享</button>
-            <button className="btn ghost" onClick={() => showToast('分享依赖云端服务')}>复制分享链接</button>
-          </div>
-          <Hint>分享时只有上传云端壁纸或在线壁纸才能正常分享。</Hint>
-        </>
-      )}
-      {tab === 2 && (
-        <>
-          <div className="sub-tabs">
-            {['我的作品', '我的收藏', '应用记录', '使用记录'].map((t, i) => (
-              <div key={t} className={`sub-tab${i === mineTab ? ' active' : ''}`} onClick={() => setMineTab(i)}>{t}</div>
-            ))}
-          </div>
-          <div className="pz-grid" style={{ marginTop: 12 }}>
-            {PZ_SEED.slice(4).map((p) => (
-              <div className="pz-card" key={p.t}>
-                <div className="pz-prev" style={{ background: p.b }} />
-                <div className="pz-body">
-                  <div className="pz-title">{p.t}</div>
-                  <div className="pz-sub">发布于 09-20</div>
-                  <div className="pz-acts">
-                    <button className="btn sm ghost" onClick={() => showToast('应用成功，恢复后将覆盖当前界面')}>应用之前的界面</button>
-                    <button className="btn sm ghost" onClick={() => showToast('确定删除作品')}>删除作品</button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <Hint>应用记录仅保存在本地；恢复后将覆盖当前界面。</Hint>
-        </>
       )}
     </>
   )
@@ -739,127 +903,202 @@ const OPEN_MODES: readonly (readonly ['link' | 'tab' | 'search', string])[] = [
   ['link', '当前窗口打开链接'], ['tab', '打开新标签页'], ['search', '当前窗口打开搜索结果'],
 ]
 
-const SettingPanel = () => {
+/* ---------- 设置面板：分区页签 + 卡片分组（与个性化同一套分布方式） ---------- */
+
+/**
+ * 分区顺序 = 使用频率 × 风险：搜索（高频）→ 通用（常用偏好）→ 数据（低频动作）→ 云端 → 关于（只读参考）。
+ * 卡片内主次排布：可即时生效的开关与单选项常驻卡片主体；低频动作退到卡片底部按钮行；
+ * 说明文案统一收进标题右侧 ⓘ 气泡；覆盖 / 删除类操作单独成卡并标红，不与常规操作混排。
+ */
+const SETTING_TABS: readonly string[] = ['搜索', '通用', '数据', '云端', '关于']
+
+/** 只读信息行：左侧说明 + 右侧值（复用引擎行的分隔线语言，用于「版本」「快捷键」这类参考项） */
+const InfoRow = ({ l, r }: { l: string; r: React.ReactNode }) => (
+  <div className="eng-row"><span style={{ flex: 1 }}>{l}</span><span style={{ color: 'var(--panel-sub)' }}>{r}</span></div>
+)
+
+/** 快捷键清单（设置 → 关于 → 快捷键） */
+const SHORTCUTS: readonly (readonly [string, string])[] = [
+  ['1 – 9', '切换搜索引擎（非输入状态）'],
+  ['Enter', '执行搜索'],
+  ['← →', '切换页面'],
+  ['双击每日一言卡', '换一条鼓励语'],
+  ['Esc', '关闭面板 / 菜单 / 搜索历史'],
+  ['Ctrl+Shift+E', '导出布局 JSON'],
+  ['Ctrl+Shift+R', '一键重置（需确认）'],
+]
+
+/** 导出布局 JSON 并提示 */
+const exportLayoutFile = (): void => {
+  const st = useApp.getState()
+  downloadJson('thrilled-layout.json', buildLayoutDoc(st.exportLayout().pages))
+  st.showToast('已导出 thrilled-layout.json')
+}
+
+/** 导入收藏夹：书签树 → 网址图标铺到页面 */
+const importBookmarks = async (): Promise<void> => {
+  const st = useApp.getState()
+  const tree = await readBookmarkTree()
+  if (tree === null) { st.showToast('收藏夹导入需要在扩展中使用'); return }
+  const entries = collectBookmarks(tree)
+  if (entries.length === 0) { st.showToast('收藏夹里没有可导入的 http(s) 书签'); return }
+  st.showToast(`已从收藏夹导入 ${st.placeMany(entries)} 个网站图标`)
+}
+
+/** 恢复本地快照：结构合法则写入存储并提示刷新 */
+const restoreSnapshotDoc = (v: unknown): void => {
+  const st = useApp.getState()
+  const doc = restoreSnapshot(v)
+  if (doc === null) { st.showToast('快照恢复失败：结构不合法'); return }
+  saveDoc(doc)
+  st.showToast('快照恢复成功，请刷新页面')
+}
+
+/** 从文件输入读 JSON：解析成功交给 ok，失败按 fail 前缀提示；无论成败都清空输入，便于重选同一文件 */
+const pickJson = (e: React.ChangeEvent<HTMLInputElement>, ok: (v: unknown) => void, fail: string): void => {
+  const f = e.target.files?.[0]
+  if (f !== undefined) {
+    const rd = new FileReader()
+    rd.onload = () => {
+      try { ok(JSON.parse(String(rd.result))) } catch { useApp.getState().showToast(`${fail}：不是合法的 JSON 文件`) }
+    }
+    rd.readAsText(f)
+  }
+  e.target.value = ''
+}
+
+/** 搜索分区：引擎清单（主内容）→ 搜索框行为（次内容，开关即时生效） */
+const SettingSearchTab = () => {
+  const s = useApp((st) => st.settings)
+  const toggle = useApp((st) => st.toggle)
+  return (
+    <>
+      <SecCard t="搜索引擎" info="拖动行首 ⋮⋮ 排序；左侧序号即数字键映射（非输入状态下按 1–9 直接切换）；隐藏的引擎不出现在搜索框下拉与右键二级菜单里。">
+        <EngineRows modalMode={false} />
+      </SecCard>
+      <SecCard t="搜索框" info="本项目不做搜索联想：输入时不出候选词，只在开启搜索历史时展示历史记录。">
+        <SwitchRow l="自动聚焦" d="打开新标签时自动聚焦搜索框" on={s.autoFocus} onToggle={() => toggle('autoFocus')} />
+        <SwitchRow l="保留搜索内容" d="搜索后不清空输入框内容" on={s.searchKeep} onToggle={() => toggle('searchKeep')} />
+        <SwitchRow l="隐藏搜索按钮" d="仅通过 Enter 键触发搜索" on={s.hideBtn} onToggle={() => toggle('hideBtn')} />
+        <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')} />
+      </SecCard>
+    </>
+  )
+}
+
+/** 通用分区：打开方式（互斥单选，一行胶囊表达）→ 每日问候（文本字段） */
+const SettingGeneralTab = () => {
   const s = useApp((st) => st.settings)
   const setSetting = useApp((st) => st.setSetting)
-  const toggle = useApp((st) => st.toggle)
+  return (
+    <>
+      <SecCard t="打开方式" info="点击卡片、图标与 Dock 快捷方式时链接的打开位置：前两项作用于普通链接，第三项作用于搜索结果。">
+        <div className="cats">
+          {OPEN_MODES.map(([k, n]) => (
+            <div key={k} className={`cat${s.openMode === k ? ' active' : ''}`} onClick={() => setSetting('openMode', k)}>{n}</div>
+          ))}
+        </div>
+      </SecCard>
+      <SecCard t="每日问候" info="用在每日一言卡：时段问候 + 昵称 + 竖线鼓励语；双击卡片可换一条鼓励语。">
+        <div className="f-row inline">
+          <label className="f-label">昵称</label>
+          <input className="f-input" value={s.nick} placeholder="主人" onChange={(e) => setSetting('nick', e.target.value)} />
+        </div>
+      </SecCard>
+    </>
+  )
+}
+
+/** 备份与迁移卡片：主按钮（备份 / 恢复默认）在前，导入导出等次要动作退到第二行 */
+const SettingBackupCard = () => {
   const setModal = useApp((st) => st.setModal)
-  const exportLayout = useApp((st) => st.exportLayout)
   const importLayout = useApp((st) => st.importLayout)
   const showToast = useApp((st) => st.showToast)
   const file = useRef<HTMLInputElement | null>(null)
   const bkFile = useRef<HTMLInputElement | null>(null)
+  return (
+    <SecCard t="备份与迁移" info="导出内容 = 全部页面的卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来；已配置同步目录时改动会自动写入本地目录。">
+      <div className="btn-row">
+        <button className="btn" onClick={() => setModal('backup')}>备份当前界面</button>
+        <button className="btn ghost" onClick={() => setModal('restore')}>恢复为默认界面</button>
+      </div>
+      <div className="btn-row" style={{ marginTop: 8 }}>
+        <button className="btn sm ghost" onClick={exportLayoutFile}>导出布局 JSON</button>
+        <button className="btn sm ghost" onClick={() => file.current?.click()}>导入布局 JSON</button>
+        <button className="btn sm ghost" onClick={() => void importBookmarks()}>导入收藏夹</button>
+        <button className="btn sm ghost" onClick={() => bkFile.current?.click()}>恢复本地快照</button>
+      </div>
+      <input ref={file} type="file" accept=".json,application/json" style={{ display: 'none' }}
+        onChange={(e) => pickJson(e, (v) => showToast(importLayout(v) ? '布局导入成功' : '布局导入失败：没有有效的页面数据'), '布局导入失败')} />
+      <input ref={bkFile} type="file" accept=".json,application/json" style={{ display: 'none' }}
+        onChange={(e) => pickJson(e, restoreSnapshotDoc, '快照恢复失败')} />
+    </SecCard>
+  )
+}
 
-  const download = (): void => {
-    const doc = exportLayout()
-    downloadJson('thrilled-layout.json', buildLayoutDoc(doc.pages))
-    showToast('已导出 thrilled-layout.json')
-  }
-
-  const importBookmarks = async (): Promise<void> => {
-    const tree = await readBookmarkTree()
-    if (tree === null) { showToast('收藏夹导入需要在扩展中使用'); return }
-    const entries = collectBookmarks(tree)
-    if (entries.length === 0) { showToast('收藏夹里没有可导入的 http(s) 书签'); return }
-    const n = useApp.getState().placeMany(entries)
-    showToast(`已从收藏夹导入 ${n} 个网站图标`)
-  }
-
+/** 重置与清理卡片：两项都会覆盖 / 删除本机数据，单独成卡并标红，与常规操作分离 */
+const SettingResetCard = () => {
+  const setModal = useApp((st) => st.setModal)
   const clearLocal = async (): Promise<void> => {
     if (!window.confirm('将彻底删除本地数据（图标、布局、皮肤、壁纸配置），且不可撤销。确定继续？')) return
     await resetAllData()
   }
-
   return (
-    <>
-      <Sec t="搜索引擎" />
-      <EngineRows modalMode={false} />
-
-      <Sec t="搜索框设置" />
-      <SwitchRow l="自动聚焦" d="打开新标签时自动聚焦搜索框" on={s.autoFocus} onToggle={() => toggle('autoFocus')} />
-      <SwitchRow l="保留搜索内容" d="搜索后不清空输入框内容" on={s.searchKeep} onToggle={() => toggle('searchKeep')} />
-      <SwitchRow l="隐藏搜索按钮" d="仅通过 Enter 键触发搜索" on={s.hideBtn} onToggle={() => toggle('hideBtn')} />
-      <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')} />
-      <Hint>本项目不做搜索联想：输入时不出候选词，只在开启搜索历史时展示历史记录。</Hint>
-
-      <Sec t="每日问候" />
-      <div className="f-row"><label className="f-label">昵称</label>
-        <input className="f-input" value={s.nick} placeholder="主人" onChange={(e) => setSetting('nick', e.target.value)} /></div>
-      <Hint>用在每日一言卡：时段问候 + 昵称 + 竖线鼓励语；双击卡片可换一条鼓励语。</Hint>
-
-      <Sec t="打开方式" />
-      {OPEN_MODES.map(([k, n]) => (
-        <div className="switch-row" key={k}>
-          <span>{n}</span>
-          <div className={`switch${s.openMode === k ? ' on' : ''}`} onClick={() => setSetting('openMode', k)}><i /></div>
-        </div>
-      ))}
-
-      <Sec t="数据与备份" />
+    <SecCard danger t="重置与清理" info="两项都只作用于本机数据且不可撤销：「清除本地数据」会连壁纸一起删除；「一键重置」可只勾选要重置的部分，建议先用上方备份留一份退路。">
       <div className="btn-row">
-        <button className="btn" onClick={() => setModal('backup')}>备份当前界面</button>
-        <button className="btn ghost" onClick={() => void useApp.getState().cloudUpload()}>上传到云端</button>
-        <button className="btn ghost" onClick={() => setModal('restore')}>恢复为默认界面</button>
         <button className="btn ghost" onClick={() => void clearLocal()}>清除本地数据</button>
         <button className="btn danger" onClick={() => setModal('reset')}>一键重置</button>
       </div>
-      <div className="btn-row" style={{ marginTop: 8 }}>
-        <button className="btn ghost" onClick={download}>导出布局 JSON</button>
-        <button className="btn ghost" onClick={() => file.current?.click()}>导入布局 JSON</button>
-        <button className="btn ghost" onClick={() => void importBookmarks()}>导入收藏夹</button>
-        <button className="btn ghost" onClick={() => bkFile.current?.click()}>恢复本地快照</button>
-      </div>
-      <input ref={file} type="file" accept=".json,application/json" style={{ display: 'none' }}
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (!f) return
-          const rd = new FileReader()
-          rd.onload = () => {
-            try {
-              showToast(importLayout(JSON.parse(String(rd.result))) ? '布局导入成功' : '布局导入失败：没有有效的页面数据')
-            } catch {
-              showToast('布局导入失败：不是合法的 JSON 文件')
-            }
-          }
-          rd.readAsText(f)
-          e.target.value = ''
-        }} />
-      <input ref={bkFile} type="file" accept=".json,application/json" style={{ display: 'none' }}
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (!f) return
-          const rd = new FileReader()
-          rd.onload = () => {
-            try {
-              const doc = restoreSnapshot(JSON.parse(String(rd.result)))
-              if (doc === null) { showToast('快照恢复失败：结构不合法'); return }
-              saveDoc(doc)
-              showToast('快照恢复成功，请刷新页面')
-            } catch {
-              showToast('快照恢复失败：不是合法的 JSON 文件')
-            }
-          }
-          rd.readAsText(f)
-          e.target.value = ''
-        }} />
-      <Hint>导出内容 = 全部页面的卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来。已配置同步目录时，改动会自动写入本地目录。</Hint>
+    </SecCard>
+  )
+}
 
-      <Sec t="云端同步" />
-      <CloudSyncSection />
+/** 数据分区：备份与迁移（常规动作）→ 重置与清理（危险动作，置底） */
+const SettingDataTab = () => (
+  <>
+    <SettingBackupCard />
+    <SettingResetCard />
+  </>
+)
 
-      <Sec t="关于" />
-      <div className="eng-row"><span style={{ flex: 1 }}>版本</span><span style={{ color: 'var(--panel-sub)' }}>4.3（v4 重构版）</span></div>
-      <div className="btn-row">
-        <button className="btn sm ghost" onClick={() => setModal('log')}>更新记录</button>
-        <button className="btn sm ghost" onClick={() => setModal('about')}>关于我们</button>
-      </div>
+/** 云端分区：连接配置与上传 / 恢复（单卡承载，云端为唯一权威数据源） */
+const SettingCloudTab = () => (
+  <SecCard t="云端同步" info="配置服务器地址与访问令牌后，本地改动自动上传、云端为唯一权威数据源；两项都只保存在本机浏览器存储，不进入代码仓库。">
+    <CloudSyncSection />
+  </SecCard>
+)
 
-      <Sec t="快捷键" />
-      {([['1 – 9', '切换搜索引擎（非输入状态）'], ['Enter', '执行搜索'], ['← →', '切换页面'],
-        ['双击每日一言卡', '换一条鼓励语'], ['Esc', '关闭面板 / 菜单 / 搜索历史'],
-        ['Ctrl+Shift+E', '导出布局 JSON'], ['Ctrl+Shift+R', '一键重置（需确认）']] as const).map(([k, d]) => (
-        <div className="eng-row" key={k}><span style={{ flex: 1 }}>{d}</span><kbd className="kbd">{k}</kbd></div>
-      ))}
+/** 关于分区：版本与入口 + 快捷键参考（全为只读内容，集中在同一页签） */
+const SettingAboutTab = () => {
+  const setModal = useApp((st) => st.setModal)
+  return (
+    <>
+      <SecCard t="关于">
+        <InfoRow l="版本" r="4.4（v4 重构版）" />
+        <div className="btn-row" style={{ marginTop: 12 }}>
+          <button className="btn sm ghost" onClick={() => setModal('log')}>更新记录</button>
+          <button className="btn sm ghost" onClick={() => setModal('about')}>关于我们</button>
+        </div>
+      </SecCard>
+      <SecCard t="快捷键" info="非输入状态下生效；Ctrl+Shift 组合键在任意位置可用。">
+        {SHORTCUTS.map(([k, d]) => <InfoRow key={k} l={d} r={<kbd className="kbd">{k}</kbd>} />)}
+      </SecCard>
+    </>
+  )
+}
+
+/** 页签序号 → 分区组件（顺序与 SETTING_TABS 一致） */
+const SETTING_PANES: readonly (() => React.ReactElement)[] = [
+  SettingSearchTab, SettingGeneralTab, SettingDataTab, SettingCloudTab, SettingAboutTab,
+]
+
+const SettingPanel = () => {
+  const [tab, setTab] = useState(0)
+  const Pane = SETTING_PANES[tab] ?? SettingSearchTab
+  return (
+    <>
+      <DrawerTabs tabs={SETTING_TABS} value={tab} onChange={setTab} />
+      <Pane />
     </>
   )
 }
@@ -903,7 +1142,7 @@ const CloudSyncSection = () => {
 }
 
 const PANELS: Record<DrawerKey, () => React.ReactElement> = {
-  add: AddPanel, personal: PersonalPanel, square: SquarePanel, setting: SettingPanel,
+  add: AddPanel, personal: PersonalPanel, setting: SettingPanel,
 }
 
 export const Drawer = () => {
@@ -915,10 +1154,10 @@ export const Drawer = () => {
     <>
       <div className={`dw-mask${drawer ? ' show' : ''}`} onClick={() => setDrawer(null)} />
       <div className={`dw${drawer ? ' open' : ''}`}>
-        <div className="dw-head">
+        <div className={`dw-head${sub === '' ? ' solo' : ''}`}>
           <div>
             <div className="dw-title">{title}</div>
-            <div className="dw-sub">{sub}</div>
+            {sub !== '' && <div className="dw-sub">{sub}</div>}
           </div>
           <div className="dw-close" onClick={() => setDrawer(null)}>{Icon.close()}</div>
         </div>
@@ -931,8 +1170,9 @@ export const Drawer = () => {
 /* ============================== 弹窗 ============================== */
 
 const CHANGELOG: readonly { v: string; d: string; l: readonly string[] }[] = [
-  { v: '4.4', d: '2026-09-30', l: ['极简页面优化：模式胶囊收起只显图标、悬停展开极简/标准（去除说明文字）；右上头像移除，新增/个性化/广场/设置移入底部 Dock 功能键', 'Dock 改版：出厂快捷方式清空、用户手动新增（添加抽屉「同时添加到底部 Dock」），图标显示站点 favicon，苹果式尺寸与玻璃质感；右键支持改名/改网址/移除', '极简模式：日期改为「2026年9月30日」格式、搜索框未聚焦透明胶囊白描边/聚焦白色玻璃卡片、鼓励语悬浮 Dock 上方'] },
+  { v: '4.4', d: '2026-09-30 / 2026-10-08', l: ['极简页面优化：模式胶囊收起只显图标、悬停展开极简/标准（去除说明文字）；右上头像移除，新增/个性化/设置移入底部 Dock 功能键', 'Dock 改版：出厂快捷方式清空、用户手动新增（「添加」抽屉勾选「同时添加到底部 Dock」），图标显示站点 favicon，苹果式尺寸与玻璃质感；右键支持改名/改网址/移除', '极简模式：日期改为「2026年9月30日」格式、搜索框未聚焦透明胶囊白描边/聚焦白色玻璃卡片、鼓励语悬浮 Dock 上方', '壁纸整理：内置壁纸全部移除，改为外部来源适配器（Wallhaven / Picsum / 必应每日 / 061129 / 哲风）；自适应裁剪焦点、同一张图去重、最近 12 张历史缩略图带、应用分阶段反馈', '面板整理：设置抽屉改「搜索 / 通用 / 数据 / 云端 / 关于」五分区页签 + 卡片分组；个性化「主题」页签压缩为 4 列缩略图 + 12 项色值 4 列密排；透明度补至 12 项并与毛玻璃模糊解耦', '在线广场模块整体移除（个性化里的「主题」不受影响）；「吉祥物」开关更名为「Dock 快捷栏」'] },
   { v: '4.3', d: '2026-09-29', l: ['移除登录与账号体系，隐私模式并入标准模式（单套页面）', '新增云端同步：配置注入式连接（地址 / 令牌仅存本机），本地改动自动上传、新环境一键恢复，云端为唯一权威数据源', 'Dock 可编辑 + 苹果式放大、头像菜单、搜索引擎恢复 v3 设置、搜索历史贴框与自动关闭'] },
+  { v: '4.2', d: '2026-09-27', l: ['界面风格重大升级：光影体系 2.0（18px 圆角 / 内高光 / 分层投影）与弹簧动效、弹窗缩放入场、搜索框聚焦光晕；壁纸与出厂皮肤扩到 6 套', '迁移与恢复默认修复：v3 迁移改为「出厂布局在前 + 迁移图标追加成新页」，「恢复为默认界面」支持「保留我的网址图标」'] },
   { v: '4.1', d: '2026-09-27', l: ['按 v4 原型补全五面板与九弹窗（含风格皮肤编辑器、广场三页签）', '设置 / 布局 / 皮肤接通本地持久化，支持 v3 数据一次性迁移', '壁纸支持本地上传与外链（图片压缩 + 视频壁纸，IndexedDB 存储）', '天气卡接入 Open-Meteo 实况数据；搜索 / 卡片 / Dock 真实打开链接', '新增收藏夹导入、布局导出导入、备份 / 恢复 / 一键重置确认弹窗'] },
   { v: '4.0', d: '2026-09-26', l: ['仓库重组为 app / core / background / shared 四层', 'React 18 + Vite 重写视图层，落地 v4 内容模型（18 类小组件引用）'] },
 ]
@@ -1088,7 +1328,7 @@ export const Modal = () => {
       case 'log':
         return (
           <>
-            <h2>更新记录</h2><p className="sub">当前版本 4.3（v4 重构版）</p>
+            <h2>更新记录</h2><p className="sub">当前版本 4.4（v4 重构版）</p>
             {CHANGELOG.map((c) => (
               <div className="log-item" key={c.v}>
                 <b>{c.v}<div style={{ fontSize: 11, color: '#9aa4b2', fontWeight: 400 }}>{c.d}</div></b>
@@ -1101,7 +1341,7 @@ export const Modal = () => {
       case 'about':
         return (
           <>
-            <h2>关于我们</h2><p className="sub">Thrilled · 新标签页 4.1</p>
+            <h2>关于我们</h2><p className="sub">Thrilled · 新标签页 4.4</p>
             <div className="btn-row">
               <button className="btn ghost" onClick={() => useApp.getState().showToast('问题反馈：请联系工作人员')}>问题反馈</button>
               <button className="btn ghost" onClick={() => useApp.getState().showToast('隐私协议：尊重用户的隐私权利')}>隐私协议</button>

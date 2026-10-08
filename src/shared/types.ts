@@ -155,9 +155,27 @@ export interface SkinPack {
  * 设置与本地持久化文档
  * ========================================================================== */
 
-/** 透明度与玻璃质感的六个可调区域（对应 --ga-* / --blur-*） */
-export type GlassKey = 'card' | 'tile' | 'dock' | 'search' | 'panel' | 'menu';
+/**
+ * 透明度可调项（对应 --ga-*）。
+ * 前六个是「玻璃底色」——有可读性下限，alpha = 1 − 0.55×值（见 GLASS_ALPHA_FACTOR）；
+ * 后六个是「元素显隐强度」——alpha = 1 − 值，可一路调到完全透明。
+ */
+export type GlassKey =
+  | 'card' | 'tile' | 'glyph' | 'dock' | 'dockIcon' | 'search'
+  | 'panel' | 'menu' | 'clock' | 'quote' | 'line' | 'hover';
 export type GlassSettings = Record<GlassKey, number>;
+
+/** 毛玻璃模糊半径（px，0–20），与有玻璃底色的六个透明度项一一配对（对应 --blur-*） */
+export type BlurKey = 'card' | 'tile' | 'dock' | 'search' | 'panel' | 'menu';
+export type BlurSettings = Record<BlurKey, number>;
+
+/** 壁纸自适应裁剪焦点：object-position 百分比（0–100）+ 算它时的视口宽高比 */
+export interface WallFocus {
+  x: number;
+  y: number;
+  /** 计算该焦点时的视口宽高比；0 = 尚未计算（视口比例变化超阈值会重算） */
+  ratio: number;
+}
 
 /** 模式（单套页面集；极简只留搜索 + 时钟 + Dock） */
 export type ViewMode = 'minimal' | 'standard';
@@ -196,6 +214,8 @@ export interface AppSettings {
   showDate: boolean;
   showQuote: boolean;
   glass: GlassSettings;
+  /** 毛玻璃模糊半径（px，0–20）；与透明度分开设置，互不影响 */
+  blur: BlurSettings;
   /** 全局透明度 0.2–1 */
   gAlpha: number;
   /** 壁纸遮罩 0–1（02 §6.4 遮罩滑杆） */
@@ -209,6 +229,8 @@ export interface AppSettings {
   skinId: string;
   /** 自定义壁纸引用（IndexedDB id，`idb:` 前缀；null = 未设置壁纸） */
   wallpaperRef: string | null;
+  /** 壁纸自适应裁剪焦点（按视口宽高比自动算出，保证主体不被居中裁掉） */
+  wallFocus: WallFocus;
   /** 外部壁纸来源清单（用户自主添加；系统不内置任何壁纸资源） */
   wallSources: WallpaperSource[];
 }

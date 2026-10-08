@@ -31,7 +31,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showTime: true,
   showDate: true,
   showQuote: true,
-  glass: { card: 0.6, tile: 0.35, dock: 0.7, search: 0.45, panel: 0.65, menu: 0.65 },
+  /* 透明度：前六项等同旧「玻璃质感」的视觉，后六项默认 0（不改变出厂外观） */
+  glass: {
+    card: 0.6, tile: 0.35, dock: 0.7, search: 0.45, panel: 0.65, menu: 0.65,
+    glyph: 0, dockIcon: 0, clock: 0, quote: 0, line: 0, hover: 0,
+  },
+  /* 毛玻璃模糊：与透明度解耦，默认值取旧 glass 换算结果（26px × 旧值），升级后外观不变 */
+  blur: { card: 15.6, tile: 9.1, dock: 18.2, search: 11.7, panel: 16.9, menu: 16.9 },
   gAlpha: 1,
   cover: 0.18,
   fontColor: '',
@@ -39,6 +45,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   simpleSearch: false,
   skinId: 'classic',
   wallpaperRef: null,
+  wallFocus: { x: 50, y: 50, ratio: 0 },
   wallSources: [],
 };
 

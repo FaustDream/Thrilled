@@ -8,10 +8,6 @@ export const CheckIcon = (): ReactElement => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 13l4 4L19 7" /></svg>
 )
 
-export const HeartIcon = (): ReactElement => (
-  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20s-7.4-4.4-7.4-9.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.4 3.2C19.4 15.6 12 20 12 20z" /></svg>
-)
-
 export const Icon = {
   search: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.6-3.6" /></svg>,
   close: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>,
@@ -19,13 +15,16 @@ export const Icon = {
   trash: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" /></svg>,
   gear: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="12" cy="12" r="3.2" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 2.6 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 9 4.6a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9 2 2 0 1 1 0 4z" /></svg>,
   plus: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>,
+  /* 说明气泡：标题右侧 ⓘ，悬停/聚焦展开低频说明文案 */
+  info: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round"><circle cx="12" cy="12" r="8.6" /><path d="M12 11.2v5" /><path d="M12 7.6v.01" /></svg>,
+  /* 溢出菜单：行尾「···」，低频操作收纳 */
+  more: () => <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.2" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="18.8" cy="12" r="1.7" /></svg>,
   sliders: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>,
   grid: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3.5" y="3.5" width="7" height="7" rx="2" /><rect x="13.5" y="3.5" width="7" height="7" rx="2" /><rect x="3.5" y="13.5" width="7" height="7" rx="2" /><rect x="13.5" y="13.5" width="7" height="7" rx="2" /></svg>,
   /* 模式与 Dock 功能图标（iconfont 单色线性风格） */
   feather: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20.2 3.8a5.7 5.7 0 0 0-8.1 0L5 10.9V19h8.1l7.1-7.1a5.7 5.7 0 0 0 0-8.1z" /><path d="M16 8L2.5 21.5" /><path d="M14.5 15H9.5" /></svg>,
   modeStd: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3.8" y="3.8" width="7" height="7" rx="2.2" /><rect x="13.2" y="3.8" width="7" height="7" rx="2.2" /><rect x="3.8" y="13.2" width="7" height="7" rx="2.2" /><rect x="13.2" y="13.2" width="7" height="7" rx="2.2" /></svg>,
   palette: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 0 0 0 18c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01a1.5 1.5 0 0 1 1.11-2.49H16a5 5 0 0 0 5-5c0-4.42-4.03-8-9-8zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4.2a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4.2a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" /></svg>,
-  compass: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="8.6" /><path d="M15.6 8.4l-2 5.2-5.2 2 2-5.2z" /></svg>,
   list: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h10" /></svg>,
   prev: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h2v14H7z" /><path d="M19 5.4v13.2L10 12z" /></svg>,
   next: () => <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 5h2v14h-2z" /><path d="M5 5.4v13.2L14 12z" /></svg>,
@@ -41,5 +40,4 @@ export const Icon = {
   calc: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><rect x="4" y="2.6" width="16" height="18.8" rx="2.4" /><path d="M8 7h8M8 11.6h2M12 11.6h2M16 11.6h.01M8 15.6h2M12 15.6h2M16 15.6h.01M8 19h8" /></svg>,
   trans: () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3.4 6h8M7.4 4.2V6M9.4 6c-.6 3.4-2.6 6.2-5.6 8M5.2 9.2c1 2 2.6 3.6 4.6 4.6" /><path d="M12.6 20l3.6-9.4L19.8 20M13.9 17h4.7" /></svg>,
   check: CheckIcon,
-  heart: HeartIcon,
 }

@@ -34,6 +34,27 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(s.skinId).toBe('dark')
   })
 
+  it('透明度 12 项与毛玻璃 6 项各自独立归一化（解耦后互不牵连）', () => {
+    const s = normalizeSettings({
+      glass: { glyph: 0.8, line: 2 },   // line 超上限 → 钳制 1
+      blur: { card: 99, dock: 4 },      // card 超上限 → 钳制 20
+    })
+    expect(s.glass.glyph).toBe(0.8)
+    expect(s.glass.line).toBe(1)
+    expect(s.glass.clock).toBe(DEFAULT_SETTINGS.glass.clock) // 未给的新项回退默认 0
+    expect(s.blur.card).toBe(20)
+    expect(s.blur.dock).toBe(4)
+    expect(s.blur.menu).toBe(DEFAULT_SETTINGS.blur.menu)
+  })
+
+  it('旧文档没有 blur 字段时，毛玻璃回退出厂默认、透明度照旧读取', () => {
+    const s = normalizeSettings({ glass: { card: 0.6, dock: 0.7 } })
+    expect(s.glass.card).toBe(0.6)          // 老值原样保留，外观不发生跳变
+    expect(s.glass.dock).toBe(0.7)
+    expect(s.glass.glyph).toBe(0)
+    expect(s.blur).toEqual(DEFAULT_SETTINGS.blur)
+  })
+
   it('wallSources 保留合法来源清单，坏项丢弃；缺失回退空清单', () => {
     const s = normalizeSettings({
       wallSources: [

@@ -72,9 +72,17 @@ export const SEARCH_HISTORY_LIMIT = 8 as const;
 /** 卡片拖拽判定阈值（px，原型 4px） */
 export const DRAG_THRESHOLD_PX = 4 as const;
 
-/** ===== 玻璃质感换算（02 §6.4：alpha = 1 − 0.55×值，blur = 26px×值） ===== */
+/** ===== 透明度 / 毛玻璃换算（两者已解耦，分别由 settings.glass 与 settings.blur 驱动） ===== */
+/** 玻璃底色的透气因子：alpha = 1 − 0.55×值（保留可读下限，滑到底不会消失） */
 export const GLASS_ALPHA_FACTOR = 0.55 as const;
-export const GLASS_BLUR_PX = 26 as const;
+/** 有玻璃底色的透明度项——其余项按 alpha = 1 − 值 计算，可一路调到完全透明 */
+export const GLASS_FADED_KEYS: readonly string[] = ['card', 'tile', 'dock', 'search', 'panel', 'menu'];
+/** 毛玻璃模糊半径上限（px） */
+export const BLUR_MAX_PX = 20 as const;
+/** 壁纸历史保留张数（入库后淘汰更旧的，当前使用中的不删） */
+export const WALLPAPER_HISTORY_LIMIT = 12 as const;
+/** 视口宽高比相对上次计算值变化超过该比例时，重算裁剪焦点 */
+export const WALLPAPER_FOCUS_RATIO_TOLERANCE = 0.03 as const;
 /** 遮罩超过该值时壁纸加轻模糊（原型行为） */
 export const WALLPAPER_BLUR_COVER_THRESHOLD = 0.3 as const;
 export const WALLPAPER_BLUR_PX = 6 as const;

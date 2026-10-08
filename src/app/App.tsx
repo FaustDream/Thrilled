@@ -1,6 +1,6 @@
 /**
  * 新标签页装配（v4）
- * 结构：Stage（1920×945 设计稿整体缩放）→ 搜索行 / 翻页网格 / Dock（快捷方式 + 新增·个性化·广场·设置）/ 模式胶囊 / 页点 + 浮层（菜单·抽屉·弹窗·Toast）
+ * 结构：Stage（1920×945 设计稿整体缩放）→ 搜索行 / 翻页网格 / Dock（快捷方式 + 新增·个性化·设置）/ 模式胶囊 / 页点 + 浮层（菜单·抽屉·弹窗·Toast）
  * 交互：文档级 data-act 事件委托（与原型一致），拖拽换位用指针事件 + 网格吸附，滚轮 / 方向键翻页。
  * 平台行为：打开链接走 core/link-opener（打开方式设置），壁纸走 core/wallpaper（IndexedDB）。
  */
@@ -17,19 +17,28 @@ import { Icon } from './icons'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
 import { getWallpaper, type BgData } from '../core/wallpaper'
-import { GLASS_ALPHA_FACTOR, GLASS_BLUR_PX, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN_DELTA, WALLPAPER_BLUR_COVER_THRESHOLD, WALLPAPER_BLUR_PX } from '../shared/constants'
+import { GLASS_ALPHA_FACTOR, GLASS_FADED_KEYS, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN_DELTA, WALLPAPER_BLUR_COVER_THRESHOLD, WALLPAPER_BLUR_PX, WALLPAPER_FOCUS_RATIO_TOLERANCE } from '../shared/constants'
+import { computeWallFocus } from '../core/wallpaper-focus'
 import type { WeatherData } from '../core/weather'
 import type { GridItem } from '../shared/types'
 
 const allItems = (pages: GridItem[][]): GridItem[] => pages.flat()
 
-/** Dock 功能键（顺序固定：新增 / 个性化 / 广场 / 设置），图标为 iconfont 单色线性风格 */
+/** Dock 功能键（顺序固定：新增 / 个性化 / 设置），图标为 iconfont 单色线性风格 */
 const DOCK_ACTIONS = [
   ['add', '新增', Icon.plus],
   ['personal', '个性化', Icon.palette],
-  ['square', '广场', Icon.compass],
   ['setting', '设置', Icon.gear],
 ] as const
+
+/**
+ * 把皮肤令牌按可见度淡出写回同名变量（边框 / 分隔线、hover 高亮这类只有颜色没有独立图层的项）。
+ * 可见度满格时不写：原值已由皮肤令牌写入，保持与旧外观逐像素一致。
+ */
+const fadeToken = (rt: CSSStyleDeclaration, key: string, color: string | undefined, alpha: number): void => {
+  if (color === undefined || alpha >= 1) return
+  rt.setProperty(key, `color-mix(in srgb, ${color} ${(Math.max(0, alpha) * 100).toFixed(1)}%, transparent)`)
+}
 
 /** 解析要打开的 URL：显式 url → 站点注册表 → null（提示补充） */
 const resolveSiteUrl = (item: GridItem): string | null => {
@@ -89,6 +98,7 @@ export const App = () => {
   const cur = useApp((s) => s.cur)
   const engines = useApp((s) => s.engines)
   const skins = useApp((s) => s.skins)
+  const setWallFocus = useApp((s) => s.setWallFocus)
   const toastMsg = useApp((s) => s.toast)
   const enginePanel = useApp((s) => s.enginePanel)
   const history = useApp((s) => s.history)
@@ -100,6 +110,8 @@ export const App = () => {
   const [pillOpen, setPillOpen] = useState(false)
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; c: number; r: number; moved: boolean } | null>(null)
   const [customWall, setCustomWall] = useState<BgData | null>(null)
+  /* 视口宽高比（只在变化超过 1% 时更新，避免 resize 抖动触发无谓重渲染） */
+  const [vpRatio, setVpRatio] = useState(() => window.innerWidth / Math.max(1, window.innerHeight))
   const inputRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const dockBarRef = useRef<HTMLDivElement | null>(null)
@@ -143,10 +155,16 @@ export const App = () => {
     const rt = document.documentElement.style
     const tokens = skinTokensOf(skins, settings.skinId)
     Object.entries(tokens).forEach(([k, v]) => rt.setProperty(k, v))
+    /* 透明度：玻璃底色保留可读下限（1 − 0.55×值），元素显隐类可直接归零（1 − 值） */
     Object.entries(settings.glass).forEach(([k, v]) => {
-      rt.setProperty(`--ga-${k}`, String(1 - GLASS_ALPHA_FACTOR * v))
-      rt.setProperty(`--blur-${k}`, `${(GLASS_BLUR_PX * v).toFixed(1)}px`)
+      const alpha = GLASS_FADED_KEYS.includes(k) ? 1 - GLASS_ALPHA_FACTOR * v : 1 - v
+      rt.setProperty(`--ga-${k}`, alpha.toFixed(3))
     })
+    /* 边框与分隔线 / 悬停与激活态：由皮肤令牌派生；可见度满格时保持原值不覆盖 */
+    fadeToken(rt, '--line', tokens['--line'], 1 - settings.glass.line)
+    fadeToken(rt, '--menu-hover', tokens['--menu-hover'], 1 - settings.glass.hover)
+    /* 毛玻璃模糊：与透明度解耦，独立一组（px） */
+    Object.entries(settings.blur).forEach(([k, v]) => rt.setProperty(`--blur-${k}`, `${v.toFixed(1)}px`))
     rt.setProperty('--g-alpha', String(settings.gAlpha))
     rt.setProperty('--wp-mask', String(settings.cover))
     rt.setProperty('--wp-blur', settings.cover > WALLPAPER_BLUR_COVER_THRESHOLD ? `${WALLPAPER_BLUR_PX}px` : '0px')
@@ -170,15 +188,28 @@ export const App = () => {
     })
     return () => { alive = false }
   }, [settings.wallpaperRef])
-  /* 无自定义壁纸时 --wallpaper 置 none：由遮罩底色 + 细纹理兜底（系统不内置壁纸） */
+  /* 壁纸渲染不用 CSS 变量：外部壁纸落库为 base64 dataURL（可达数 MB），
+     而单条 CSS 声明值有 200 万字符硬上限，超出后 setProperty 静默失效，
+     表现为「已应用但没有壁纸」。故图片走 <img class="wall-img">，见渲染处。 */
+  /* ---------- 壁纸自适应裁剪焦点：按视口宽高比挑主体最集中的窗口 ---------- */
+  const focusFor = useRef<string | null>(null)
   useEffect(() => {
-    const rt = document.documentElement.style
-    if (customWall !== null && customWall.type === 'image') {
-      rt.setProperty('--wallpaper', `url("${customWall.data}")`)
-    } else {
-      rt.setProperty('--wallpaper', 'none')
-    }
-  }, [customWall])
+    if (customWall === null || customWall.type !== 'image' || vpRatio <= 0) return
+    const ref = settings.wallpaperRef
+    /* 同一张图且视口比例没实质变化就不重算：避免每次 resize 都解码一次图片。
+       判据必须带上壁纸引用——只比比例的话换壁纸会沿用上一张的焦点。 */
+    const stale = focusFor.current !== ref
+      || settings.wallFocus.ratio <= 0
+      || Math.abs(vpRatio - settings.wallFocus.ratio) / settings.wallFocus.ratio >= WALLPAPER_FOCUS_RATIO_TOLERANCE
+    if (!stale) return
+    let alive = true
+    void computeWallFocus(customWall.data, vpRatio).then((f) => {
+      if (!alive) return
+      focusFor.current = ref
+      setWallFocus(f)
+    })
+    return () => { alive = false }
+  }, [customWall, vpRatio, settings.wallFocus, settings.wallpaperRef, setWallFocus])
 
   /* ---------- 时钟 & 整体缩放 ---------- */
   useEffect(() => {
@@ -198,6 +229,8 @@ export const App = () => {
       stage.w = window.innerWidth / s
       stage.h = window.innerHeight / s
       stage.scale = s
+      const r = window.innerWidth / Math.max(1, window.innerHeight)
+      setVpRatio((p) => (p > 0 && Math.abs(r - p) / p <= 0.01 ? p : r))
     }
     fit()
     /* 视口变更监听：resize 事件 + ResizeObserver（布局驱动，覆盖不触发事件的宿主环境）；
@@ -262,7 +295,7 @@ export const App = () => {
         case 'dock-rename': case 'dock-url': case 'dock-remove':
           dockMenuAct(name, v)
           break
-        case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', square: 'square', setting: 'setting' } as const)[v] ?? 'setting'); break
+        case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', setting: 'setting' } as const)[v] ?? 'setting'); break
         case 'open-modal': st.setModal(v as 'theme'); break
         case 'ctx-tog': {
           const k = v as 'labels' | 'mascot' | 'hideSearch'
@@ -434,6 +467,11 @@ export const App = () => {
     <>
       {/* 全窗口壁纸层（固定定位，缩放白边不可见）+ 遮罩 */}
       <div className="wall-layer">
+        {customWall !== null && customWall.type === 'image' && (
+          /* object-fit:cover 负责等比填满不留黑边；object-position 由焦点算法给出，避免主体被居中裁掉 */
+          <img className="wall-img" src={customWall.data} alt=""
+            style={{ objectPosition: `${Math.round(settings.wallFocus.x)}% ${Math.round(settings.wallFocus.y)}%` }} />
+        )}
         {customWall !== null && customWall.type === 'video' && (
           <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline />
         )}
@@ -553,7 +591,7 @@ export const App = () => {
         </div>
       )}
 
-      {/* Dock：用户快捷方式（favicon 图标）+ 功能键 新增/个性化/广场/设置 */}
+      {/* Dock：用户快捷方式（favicon 图标）+ 功能键 新增/个性化/设置 */}
       {settings.mascot && (
         <div className="dock">
           <div className="dock-bar" ref={dockBarRef} onMouseMove={dockMagnify} onMouseLeave={dockMagnifyReset}>

@@ -34,6 +34,34 @@ const blobToDataUrl = (blob: Blob): Promise<string> =>
     reader.readAsDataURL(blob);
   });
 
+/** 下载进度回调（字节；total = 0 表示总量不可知，如经 SW 代理拿不到 Content-Length） */
+export type ProgressFn = (loaded: number, total: number) => void;
+
+/** 流式读取响应体并按字节回报进度（响应不支持流时退化为一次性读取） */
+async function readBlobWithProgress(res: Response, onProgress: ProgressFn): Promise<Blob> {
+  const total = Number(res.headers.get('content-length') ?? 0);
+  const reader = res.body?.getReader();
+  if (reader === undefined) {
+    const whole = await res.blob();
+    onProgress(whole.size, whole.size);
+    return whole;
+  }
+  const parts: BlobPart[] = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value === undefined) continue;
+    /* 拷贝到独立 ArrayBuffer 段：避免把 SharedArrayBuffer 视图直接交给 Blob（类型不兼容） */
+    const seg = new Uint8Array(value.byteLength);
+    seg.set(value);
+    parts.push(seg.buffer);
+    loaded += seg.byteLength;
+    onProgress(loaded, total);
+  }
+  return new Blob(parts, { type: res.headers.get('content-type') ?? 'application/octet-stream' });
+}
+
 /** GET 文本（JSON API） */
 export async function fetchText(url: string): Promise<string> {
   const viaBg = await sendToBackground({ url, kind: 'json' });
@@ -43,11 +71,14 @@ export async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
-/** GET 二进制并转 dataURL（壁纸图片落地用） */
-export async function fetchDataUrl(url: string): Promise<string> {
+/** GET 二进制并转 dataURL（壁纸图片落地用）；直连时按字节回报下载进度 */
+export async function fetchDataUrl(url: string, onProgress?: ProgressFn): Promise<string> {
   const viaBg = await sendToBackground({ url, kind: 'dataurl' });
-  if (viaBg !== null) return viaBg;
+  if (viaBg !== null) {
+    onProgress?.(0, 0);
+    return viaBg;
+  }
   const res = await fetch(url);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return blobToDataUrl(await res.blob());
+  return blobToDataUrl(await readBlobWithProgress(res, onProgress ?? (() => {})));
 }

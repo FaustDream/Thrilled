@@ -53,7 +53,7 @@ const GlobalMenu = () => {
           <SubItem act="open-modal" v="engine">管理搜索引擎</SubItem>
         </div>
       </div>
-      <div className="ctx-item" data-act="ctx-tog" data-v="mascot"><span>吉祥物</span><Sw on={mascot} /></div>
+      <div className="ctx-item" data-act="ctx-tog" data-v="mascot"><span>Dock 快捷栏</span><Sw on={mascot} /></div>
       <div className="ctx-item" data-act="sync"><span>同步数据</span></div>
       <div className="ctx-item" data-act="msg"><span>站内消息</span></div>
       <div className="ctx-item" data-act="open-modal" data-v="log"><span>更新记录</span></div>

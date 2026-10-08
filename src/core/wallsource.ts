@@ -10,7 +10,10 @@
  * - bing：必应官方 HPImageArchive 接口 200 JSON，原图 1080p/UHD 与缩略图 CDN 均 200 可达；分类=每日精选，按天分页
  * - wg061129：Wallpaper Gallery（github.com/IT-NuanxinPro/wallpaper-gallery，MIT）公开数据目录 /data，
  *   分类与清单 JSON 经项目开源 codec 解码（blob 字段），图片 CDN img.061129.xyz 浏览器内核实测可达；分类保持原站结构
- * - 哲风壁纸（haowallpaper.com）：接口报文为站方私有加密，属访问限制，不做逆向接入
+ * - 哲风壁纸（haowallpaper.com）：**经用户明确授权**的兼容实现——其请求/响应为 AES-128-CBC
+ *   加密（key/iv 硬编码于站方公开前端 JS，对所有用户统一，无身份绑定与时效签名），按其公开传输
+ *   协议复现；分类保持原站「壁纸类型」结构，支持关键词搜索；原图下载需登录站方账号，当前以
+ *   站方裁剪图（约 890px）作为壁纸图源。授权例外记录见 BUG_FIXES.md。
  *
  * 请求统一经 core/fetch-proxy：扩展环境由 SW 代理绕过 CORS，开发预览回退直连。
  */
@@ -50,12 +53,11 @@ export const WALL_SOURCE_TEMPLATES: readonly { kind: WallpaperSource['kind']; na
 ];
 
 /** 实测存在无法合法解决的访问限制的来源（保留为可配置源，但明确标记为当前不可用；不做破解或伪造） */
-export const WALL_SOURCE_UNAVAILABLE: Partial<Record<WallpaperSource['kind'], string>> = {
-  zhefeng: '接口报文为站方加密保护（请求参数经对称加密），不做破解，当前无法合法接入',
-};
+export const WALL_SOURCE_UNAVAILABLE: Partial<Record<WallpaperSource['kind'], string>> = {};
 
 /** 来源是否支持关键词搜索（由适配器声明） */
-export const sourceSearchable = (kind: WallpaperSource['kind']): boolean => kind === 'wallhaven' || kind === 'wg061129';
+export const sourceSearchable = (kind: WallpaperSource['kind']): boolean =>
+  kind === 'wallhaven' || kind === 'wg061129' || kind === 'zhefeng';
 
 const PICSUM_PAGE_SIZE = 30 as const;
 const WG061129_PAGE_SIZE = 30 as const;
@@ -74,6 +76,7 @@ const itemOf = (x: unknown): Record<string, unknown> => (typeof x === 'object' &
 const staticCategories = (kind: WallpaperSource['kind']): WallCategory[] => {
   if (kind === 'wallhaven') return [{ key: 'general', label: 'General' }, { key: 'anime', label: 'Anime' }, { key: 'people', label: 'People' }];
   if (kind === 'bing') return [{ key: 'daily', label: '每日精选' }];
+  if (kind === 'zhefeng') return [{ key: '1,3,4,7', label: '综合推荐' }, { key: '1', label: '静态壁纸' }, { key: '3', label: '动态壁纸' }];
   return [{ key: 'all', label: '全部' }];
 };
 
@@ -215,5 +218,71 @@ export const parseList = (src: WallpaperSource, page: number, text: string, quer
 export const fetchWallPage = async (src: WallpaperSource, cat: string, page: number, query = ''): Promise<WallPage> => {
   const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind];
   if (unavailable) throw new Error(`当前不可用：${unavailable}`);
+  if (src.kind === 'zhefeng') return fetchZhefengPage(src, cat, page, query);
   return parseList(src, page, await fetchText(buildListUrl(src, cat, page, query)), query);
+};
+
+/* ================= 哲风壁纸（经用户授权的兼容实现，协议见文件头注释） ================= */
+
+/** 站方公开前端的 AES-128-CBC 密钥与 IV（对所有用户统一） */
+const ZF_KEY = '68zhehao2O776519' as const;
+const ZF_IV = 'aa176b7519e84710' as const;
+const ZF_PAGE_SIZE = 30 as const;
+
+const zfKeyIv = async (): Promise<{ key: CryptoKey; iv: Uint8Array }> => {
+  const keyData = new TextEncoder().encode(ZF_KEY).slice().buffer;
+  const iv = new TextEncoder().encode(ZF_IV).slice();
+  const key = await crypto.subtle.importKey('raw', keyData, 'AES-CBC', false, ['encrypt', 'decrypt']);
+  return { key, iv };
+};
+
+/** 站方协议加密：AES-128-CBC(PKCS7) → base64 */
+export const zfEncrypt = async (text: string): Promise<string> => {
+  const { key, iv } = await zfKeyIv();
+  const buf = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, new TextEncoder().encode(text).slice().buffer);
+  let bin = '';
+  for (const b of new Uint8Array(buf)) bin += String.fromCharCode(b);
+  return btoa(bin);
+};
+
+/** 站方协议解密：base64 → AES-128-CBC 解密 → 去除   结尾（与站方前端行为一致） */
+export const zfDecrypt = async (b64: string): Promise<string> => {
+  const { key, iv } = await zfKeyIv();
+  const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).slice();
+  const buf = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, raw.buffer);
+  return new TextDecoder().decode(buf).replace(/ .*$/g, '');
+};
+
+/** 解析哲风列表响应（纯函数：解密后的 JSON → 壁纸页） */
+export const parseZhefengList = (page: number, text: string): WallPage => {
+  let body: unknown;
+  try { body = itemOf(JSON.parse(text)); } catch { return { photos: [], page, hasMore: false }; }
+  const rows = Array.isArray(body['list']) ? body['list'] : [];
+  const total = typeof body['total'] === 'number' ? body['total'] : 0;
+  const pages = typeof body['pages'] === 'number' ? body['pages'] : 0;
+  const base = 'https://haowallpaper.com/link';
+  const photos = rows.map((x) => {
+    const it = itemOf(x);
+    const title = Array.isArray(it['labelList']) ? (it['labelList'] as unknown[]).slice(0, 3).join(' · ') : '';
+    return {
+      id: String(it['wtId'] ?? ''),
+      thumb: `${base}/common/file/getCroppingImg/${String(it['fileId'] ?? '')}`,
+      full: `${base}/common/file/getCroppingImg/${String(it['fileId'] ?? '')}`,
+      author: '',
+      title,
+    };
+  });
+  return { photos, page, hasMore: (pages > 0 ? page < pages : photos.length > 0) && page * ZF_PAGE_SIZE < (total || page * ZF_PAGE_SIZE + 1) };
+};
+
+/** 拉取哲风一页（加密请求 → 解密响应） */
+const fetchZhefengPage = async (src: WallpaperSource, cat: string, page: number, query: string): Promise<WallPage> => {
+  const payload = { page, sortType: 3, rows: ZF_PAGE_SIZE, isFavorites: false, wpType: cat, ...(query.trim() !== '' ? { search: query.trim() } : {}) };
+  const url = `${cleanBase(src.apiBase)}/pc/wallpaper/wallpaperList?data=${encodeURIComponent(await zfEncrypt(JSON.stringify(payload)))}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const j = itemOf(JSON.parse(await res.text()));
+  const data = typeof j['data'] === 'string' ? j['data'] : '';
+  if (data === '') throw new Error('响应格式异常');
+  return parseZhefengList(page, await zfDecrypt(data));
 };

@@ -8,10 +8,10 @@
  */
 
 import { z } from 'zod';
-import { MESSAGE_TYPE } from './constants';
+import { BLUR_MAX_PX, MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
-import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallpaperSource } from './types';
+import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -162,24 +162,21 @@ const normWallSource = (v: unknown): WallpaperSource | null => {
   };
 };
 
+/** 按出厂默认的键集合归一化一组数值记录（缺项 / 坏值回退默认，限幅到 [min,max]；新增键无需改动此处） */
+const numRecord = <T extends string>(raw: unknown, def: Record<T, number>, min: number, max: number): Record<T, number> => {
+  const o = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const out = {} as Record<T, number>;
+  for (const k of Object.keys(def) as T[]) out[k] = numish(o[k], def[k], min, max);
+  return out;
+};
+
 /** 设置归一化：逐字段合并到出厂默认（坏数据回退） */
 export const normalizeSettings = (v: unknown): AppSettings => {
   const d = DEFAULT_SETTINGS;
-  if (typeof v !== 'object' || v === null) return { ...d, glass: { ...d.glass } };
+  if (typeof v !== 'object' || v === null) return { ...d, glass: { ...d.glass }, blur: { ...d.blur } };
   const o = v as Record<string, unknown>;
-  const glass = ((): AppSettings['glass'] => {
-    const g = o['glass'];
-    if (typeof g !== 'object' || g === null) return { ...d.glass };
-    const go = g as Record<string, unknown>;
-    return {
-      card: numish(go['card'], d.glass.card, 0, 1),
-      tile: numish(go['tile'], d.glass.tile, 0, 1),
-      dock: numish(go['dock'], d.glass.dock, 0, 1),
-      search: numish(go['search'], d.glass.search, 0, 1),
-      panel: numish(go['panel'], d.glass.panel, 0, 1),
-      menu: numish(go['menu'], d.glass.menu, 0, 1),
-    };
-  })();
+  const glass = numRecord(o['glass'], d.glass, 0, 1);
+  const blur = numRecord(o['blur'], d.blur, 0, BLUR_MAX_PX);
   const mode = o['mode'];
   const openMode = o['openMode'];
   const dockIcon = o['dockIcon'];
@@ -210,6 +207,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     showDate: boolish(o['showDate'], d.showDate),
     showQuote: boolish(o['showQuote'], d.showQuote),
     glass,
+    blur,
     gAlpha: numish(o['gAlpha'], d.gAlpha, 0.2, 1),
     cover: numish(o['cover'], d.cover, 0, 1),
     fontColor: strish(o['fontColor'], d.fontColor),
@@ -217,6 +215,16 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     simpleSearch: boolish(o['simpleSearch'], d.simpleSearch),
     skinId: strish(o['skinId'], d.skinId),
     wallpaperRef: typeof o['wallpaperRef'] === 'string' ? o['wallpaperRef'] : null,
+    wallFocus: ((): WallFocus => {
+      const f = o['wallFocus'];
+      if (typeof f !== 'object' || f === null) return { ...d.wallFocus };
+      const fo = f as Record<string, unknown>;
+      return {
+        x: numish(fo['x'], d.wallFocus.x, 0, 100),
+        y: numish(fo['y'], d.wallFocus.y, 0, 100),
+        ratio: numish(fo['ratio'], d.wallFocus.ratio, 0, 100),
+      };
+    })(),
     wallSources: Array.isArray(o['wallSources'])
       ? (o['wallSources'] as unknown[]).map(normWallSource).filter((x): x is WallpaperSource => x !== null)
       : [...d.wallSources],

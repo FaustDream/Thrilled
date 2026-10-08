@@ -14,6 +14,7 @@ import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { ENCOURAGE_QUOTES } from '../core/quotes'
 import { getWeather, type WeatherData } from '../core/weather'
 import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
+import { markActiveWallpaper } from '../core/wallpaper'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
 import { cloudConfigured, cloudPull, cloudPush } from '../core/cloud'
 import { warn } from '../core/logger'
@@ -21,6 +22,7 @@ import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import type {
   AppSettings,
   EngineDef,
+  BlurKey,
   GlassKey,
   GridItem,
   LayoutDoc,
@@ -29,6 +31,7 @@ import type {
   SkinPack,
   StoredDoc,
   ViewMode,
+  WallFocus,
   WallpaperSource,
   WidgetKind,
 } from '../shared/types'
@@ -46,7 +49,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
-export type DrawerKey = 'add' | 'square' | 'personal' | 'setting'
+export type DrawerKey = 'add' | 'personal' | 'setting'
 export type ModalKey = 'theme' | 'engine' | 'addEngine' | 'log' | 'about' | 'editItem' | 'backup' | 'restore' | 'reset'
 
 export interface CtxState {
@@ -92,6 +95,7 @@ interface AppState {
   /** 拖拽排序后提交完整顺序 */
   commitEngineOrder: (ids: string[]) => void
   setGlass: (k: GlassKey, v: number) => void
+  setBlur: (k: BlurKey, v: number) => void
   applySkin: (id: string) => void
   skinNew: () => void
   skinRestore: () => void
@@ -99,6 +103,8 @@ interface AppState {
   skinRename: (name: string) => void
   skinToken: (token: string, value: string) => void
   setWallpaperRef: (ref: string | null) => void
+  /** 写入壁纸自适应裁剪焦点（由 app 层按视口比例算出） */
+  setWallFocus: (f: WallFocus) => void
   /** 添加外部壁纸来源（协议适配器 + 用户可改基址） */
   addWallSource: (src: WallpaperSource) => void
   removeWallSource: (id: string) => void
@@ -260,7 +266,7 @@ const doHydrate = async (): Promise<void> => {
     } else {
       doc = {
         v: 3,
-        settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass } },
+        settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass }, blur: { ...DEFAULT_SETTINGS.blur } },
         pages: clonePages(DEFAULT_PAGES),
         engines: BUILTIN_ENGINES.map((e) => ({ ...e })),
         skins,
@@ -287,7 +293,7 @@ const doHydrate = async (): Promise<void> => {
 export const useApp = create<AppState>()((set, get) => ({
   hydrated: false,
   welcomed: false,
-  settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass } },
+  settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass }, blur: { ...DEFAULT_SETTINGS.blur } },
   pages: clonePages(DEFAULT_PAGES),
   cur: 0,
   engines: BUILTIN_ENGINES.map((e) => ({ ...e })),
@@ -344,6 +350,7 @@ export const useApp = create<AppState>()((set, get) => ({
   }),
 
   setGlass: (k, v) => set((s) => ({ settings: { ...s.settings, glass: { ...s.settings.glass, [k]: v } } })),
+  setBlur: (k, v) => set((s) => ({ settings: { ...s.settings, blur: { ...s.settings.blur, [k]: v } } })),
   applySkin: (id) => set((s) => ({ settings: { ...s.settings, skinId: id } })),
   skinNew: () => set((s) => {
     const cur = s.skins.find((x) => x.id === s.settings.skinId)
@@ -374,6 +381,7 @@ export const useApp = create<AppState>()((set, get) => ({
     skins: s.skins.map((x) => (x.id === s.settings.skinId ? { ...x, tokens: { ...x.tokens, [token]: value } } : x)),
   })),
   setWallpaperRef: (ref) => set((s) => ({ settings: { ...s.settings, wallpaperRef: ref }, toast: ref === null ? '已移除壁纸' : '自定义壁纸已应用' })),
+  setWallFocus: (f) => set((s) => ({ settings: { ...s.settings, wallFocus: f } })),
   addWallSource: (src) => set((s) => ({ settings: { ...s.settings, wallSources: [...s.settings.wallSources, src] }, toast: `已添加壁纸来源：${src.name}` })),
   removeWallSource: (id) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.filter((x) => x.id !== id) }, toast: '已移除壁纸来源' })),
   toggleWallSource: (id) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)) } })),
@@ -607,6 +615,15 @@ export const useApp = create<AppState>()((set, get) => ({
     return { encourage: next[Math.floor(Math.random() * next.length)] ?? s.encourage, toast: '鼓励语已刷新' }
   }),
 }))
+
+/* ---------- 壁纸豁免订阅：当前使用中的引用同步给存储层，淘汰历史时永不删它 ---------- */
+/* 放在这里而不是组件 effect 里：hydrate / 云端恢复 / 重置 / 历史切换都会改写 wallpaperRef，
+   订阅能覆盖全部来源，且不依赖组件挂载时序 */
+useApp.subscribe((state, prev) => {
+  if (state.settings.wallpaperRef !== prev.settings.wallpaperRef) {
+    markActiveWallpaper(state.settings.wallpaperRef)
+  }
+})
 
 /* ---------- 持久化订阅：相关切片变化后防抖落盘 ---------- */
 useApp.subscribe((state, prev) => {
