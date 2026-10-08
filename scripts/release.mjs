@@ -9,7 +9,7 @@
  *   5. 通过 gh CLI 创建 GitHub Release 并上传 releases/<项目名>-<版本>.zip 作为产物
  *
  * 说明：dist/ 不提交到 git 仓库，仅其压缩包作为 Release 产物上传。
- *       releases/ 为本地产物目录，不提交 git。bug 修复汇总见 bugs.md（本地文档，不提交 git）。
+ *       releases/ 为本地产物目录，不提交 git。bug 修复汇总见 BUG_FIXES.md（本地文档，不提交 git）。
  *
  * 用法：node scripts/release.mjs
  */
@@ -79,7 +79,7 @@ function main() {
   console.log(`[release] 已推送 tag ${tag}`);
 
   // 4. 创建 GitHub Release 并上传本地包作为产物（已存在则仅上传产物）
-  const notesFile = join(ROOT, 'bugs.md');
+  const notesFile = join(ROOT, 'BUG_FIXES.md');
   const releaseNotes = existsSync(notesFile) ? readFileSync(notesFile, 'utf8') : `Release ${version}`;
   const tmpNotes = join(ROOT, `.release-notes-${version}.md`);
   mkdirSync(dirname(tmpNotes), { recursive: true });

@@ -4,9 +4,11 @@ dist.zip
 *.map
 *.log
 .DS_Store
-bugs.md
 releases/
 docs/*
 !docs/v4/
 !docs/memory/
 server/data/
+.codebuddy/
+AGENTS.md
+BUG_FIXES.md
