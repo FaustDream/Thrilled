@@ -229,7 +229,8 @@ const ZF_KEY = '68zhehao2O776519' as const;
 const ZF_IV = 'aa176b7519e84710' as const;
 const ZF_PAGE_SIZE = 30 as const;
 
-const zfKeyIv = async (): Promise<{ key: CryptoKey; iv: Uint8Array }> => {
+/** iv 显式声明为 ArrayBuffer 承载：WebCrypto 的 BufferSource 不接受 ArrayBufferLike（SharedArrayBuffer）版视图 */
+const zfKeyIv = async (): Promise<{ key: CryptoKey; iv: Uint8Array<ArrayBuffer> }> => {
   const keyData = new TextEncoder().encode(ZF_KEY).slice().buffer;
   const iv = new TextEncoder().encode(ZF_IV).slice();
   const key = await crypto.subtle.importKey('raw', keyData, 'AES-CBC', false, ['encrypt', 'decrypt']);
@@ -255,9 +256,9 @@ export const zfDecrypt = async (b64: string): Promise<string> => {
 
 /** 解析哲风列表响应（纯函数：解密后的 JSON → 壁纸页） */
 export const parseZhefengList = (page: number, text: string): WallPage => {
-  let body: unknown;
+  let body: Record<string, unknown>;
   try { body = itemOf(JSON.parse(text)); } catch { return { photos: [], page, hasMore: false }; }
-  const rows = Array.isArray(body['list']) ? body['list'] : [];
+  const rows: unknown[] = Array.isArray(body['list']) ? body['list'] : [];
   const total = typeof body['total'] === 'number' ? body['total'] : 0;
   const pages = typeof body['pages'] === 'number' ? body['pages'] : 0;
   const base = 'https://haowallpaper.com/link';
