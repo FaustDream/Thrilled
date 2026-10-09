@@ -53,6 +53,32 @@ export const findSlot = (
 export const itemBox = (it: { c: number; r: number; w: number; h: number }): string =>
   `left:${it.c * CELL + INSET}px;top:${it.r * CELL + INSET}px;width:${it.w * CELL - 2 * INSET}px;height:${it.h * CELL - 2 * INSET}px`;
 
-/** 名称标签定位：顶边 = (row + h) × 60 − 24，宽 = w × 60 */
-export const labelBox = (it: { c: number; r: number; w: number; h: number }): string =>
-  `left:${it.c * CELL}px;top:${(it.r + it.h) * CELL - 24}px;width:${it.w * CELL}px`;
+/** 图标格容器的格子边长上限（px）：避免少格数把图标撑成巨块 */
+const GROUP_TILE_MAX = 64;
+
+/**
+ * 图标格容器（group）自适应行列：在给定可用框内为 n 个格子挑「边长最大」的行列组合，
+ * 行列数乘积 ≥ n（末行可不满），用于把图标铺满卡片而不是挤成一串小字形。
+ */
+export const groupGrid = (
+  n: number,
+  availW: number,
+  availH: number,
+  gap: number,
+): { cols: number; rows: number; cell: number } => {
+  const count = Math.max(1, Math.floor(n));
+  let cols = 1;
+  let rows = count;
+  let cell = 0;
+  for (let c = 1; c <= count; c++) {
+    const r = Math.ceil(count / c);
+    const size = Math.min((availW - (c - 1) * gap) / c, (availH - (r - 1) * gap) / r);
+    if (size > cell) {
+      cell = size;
+      cols = c;
+      rows = r;
+    }
+  }
+  return { cols, rows, cell: Math.max(16, Math.min(Math.floor(cell), GROUP_TILE_MAX)) };
+};
+

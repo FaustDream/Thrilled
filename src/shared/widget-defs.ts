@@ -72,8 +72,9 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
   folder: { t: 'folder', n: '图标文件夹', g: '夹', c: '#94A3B8', s: '把多个图标收进文件夹', units: { w: 2, h: 2 }, fields: [], def: {} },
   group: {
     t: 'group', n: '图标格容器', g: '格', c: '#0EA5E9', s: '一格里放多个网站图标', units: { w: 4, h: 4 },
-    fields: [{ k: 'cols', l: '列数', t: 'num', ph: '2–8' }, { k: 'apps', l: '应用列表', t: 'list', ph: '淘宝, 京东, 知乎' }],
-    def: { cols: 5, apps: [] },
+    /* 行列不再手填：按卡片尺寸自动铺满（shared/grid 的 groupGrid） */
+    fields: [{ k: 'apps', l: '应用列表', t: 'list', ph: '淘宝, 京东, 知乎' }],
+    def: { apps: [] },
   },
 };
 

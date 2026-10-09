@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, uid } from '../src/app/layout'
-import { COLS, ROWS, SIZES, findSlot, overlaps } from '../src/shared/grid'
+import { CELL, COLS, INSET, ROWS, SIZES, findSlot, groupGrid, overlaps } from '../src/shared/grid'
 import type { GridItem } from '../src/shared/types'
 
 const PAGES = DEFAULT_PAGES.map((items, i) => ({ name: `出厂第 ${i + 1} 页`, items }))
@@ -129,5 +129,44 @@ describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', ()
   it('isIconOnlyPage：空页不算图标页', () => {
     expect(isIconOnlyPage([])).toBe(false)
     expect(isIconOnlyPage([icon('A')])).toBe(true)
+  })
+})
+
+describe('图标格容器自适应（groupGrid）', () => {
+  const PAD = 15
+  const GAP = 10
+  /** 卡内标签占位（与 widgets.tsx 的 GROUP_LABEL_STRIP 一致） */
+  const STRIP = 22
+  /** 工厂里图标格容器的可用框（去掉卡片内缩、容器内距与标签条带） */
+  const innerOf = (it: GridItem): { w: number; h: number } => {
+    const label = it.config['label']
+    const strip = typeof label === 'string' && label.trim() !== '' ? STRIP : 0
+    return { w: it.w * CELL - 2 * INSET - PAD * 2, h: it.h * CELL - 2 * INSET - PAD * 2 - strip }
+  }
+
+  it('出厂每个图标格容器：所有应用都装得下，且网格不溢出可用框', () => {
+    const groups = DEFAULT_PAGES.flat().filter((it) => it.t === 'group')
+    expect(groups.length).toBeGreaterThan(0)
+    for (const it of groups) {
+      const apps = Array.isArray(it.config['apps']) ? (it.config['apps'] as string[]) : []
+      const box = innerOf(it)
+      const { cols, rows, cell } = groupGrid(apps.length, box.w, box.h, GAP)
+      expect(cols * rows, `${it.id} 装不下 ${apps.length} 个应用`).toBeGreaterThanOrEqual(apps.length)
+      expect(cols * cell + (cols - 1) * GAP).toBeLessThanOrEqual(box.w + 0.001)
+      expect(rows * cell + (rows - 1) * GAP).toBeLessThanOrEqual(box.h + 0.001)
+    }
+  })
+
+  it('格子边长按「铺满卡片」取值（不再是一排小字形）', () => {
+    const wide = groupGrid(24, 8 * CELL - 2 * INSET - PAD * 2, 4 * CELL - 2 * INSET - PAD * 2, GAP)
+    const square = groupGrid(12, 4 * CELL - 2 * INSET - PAD * 2, 4 * CELL - 2 * INSET - PAD * 2, GAP)
+    expect(wide.cell).toBeGreaterThanOrEqual(46)
+    expect(square.cell).toBeGreaterThanOrEqual(40)
+    expect(wide.cols * wide.rows).toBeGreaterThanOrEqual(24)
+  })
+
+  it('边长有上下限：少格数不撑成巨块，极小卡片不塌成 0', () => {
+    expect(groupGrid(1, 400, 400, GAP).cell).toBe(64)
+    expect(groupGrid(4, 20, 20, GAP).cell).toBe(16)
   })
 })

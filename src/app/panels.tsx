@@ -137,7 +137,7 @@ const AddPanel = () => {
     if (url.trim() !== '' && toDock) addToDock(label, url.trim())
     if (folderName.trim() !== '') {
       // 02 §8：自定义网站可选创建图标格容器
-      place('group', { label: folderName.trim(), cols: 2, apps: [label] })
+      place('group', { label: folderName.trim(), apps: [label] })
     } else {
       place('icon', { label, url, ...(icon !== '' ? { icon } : {}) })
     }

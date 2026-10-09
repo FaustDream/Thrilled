@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react'
 import { CheckIcon, Icon } from './icons'
 import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
+import { CELL, INSET, groupGrid } from '../shared/grid'
 import { getGreetingByHour } from '../core/utils'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
@@ -20,6 +21,9 @@ export const str = (v: unknown, d = ''): string => (typeof v === 'string' ? v : 
 export const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d)
 export const bool = (v: unknown): boolean => v === true
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
+
+/** 卡内名称标签的占位高度（px）：与 .item-label 的 12px 字 / 底部 5px 内距对齐，图标格容器据此留出底部条带 */
+const GROUP_LABEL_STRIP = 22
 
 /** 时段问候（语料与 core/utils 共用） */
 export const greetByHour = getGreetingByHour
@@ -268,18 +272,19 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
         </div>
       )
     case 'group': {
-      const cols = Math.max(1, num(c['cols'], 5))
-      const W = item.w * 60 - 50
-      const H = item.h * 60 - 50
+      /* 图标格容器：格子边长由 shared/grid 的 groupGrid 按卡片实际尺寸算出（铺满卡片，不再挤成一串小字形）；
+         有名称标签时底部留出一条占位（标签在卡内左下角，见 .item-label / GridCard） */
+      const apps = list(c['apps'])
       const pad = 15
       const gap = 10
-      const cell = Math.min((W - pad * 2 - (cols - 1) * gap) / cols, H - pad * 2)
-      const rows = Math.max(1, Math.floor((H - pad * 2 + gap) / (cell + gap)))
-      const apps = list(c['apps']).slice(0, cols * rows)
+      const strip = str(c['label']).trim() === '' ? 0 : GROUP_LABEL_STRIP
+      const W = item.w * CELL - 2 * INSET - pad * 2
+      const H = item.h * CELL - 2 * INSET - pad * 2 - strip
+      const { cols, rows, cell } = groupGrid(apps.length, W, H, gap)
       return (
-        <div className="w-group" style={{ position: 'absolute', inset: 0 }}>
+        <div className="w-group" style={{ position: 'absolute', inset: 0, paddingBottom: pad + strip }}>
           <div className="gcell-grid" style={{ gridTemplateColumns: `repeat(${cols},${cell}px)`, gridTemplateRows: `repeat(${rows},${cell}px)` }}>
-            {apps.map((n) => <TileGlyph key={n} name={n} cls="gtile" fs={Math.round(cell * 0.34)} />)}
+            {apps.map((n) => <TileGlyph key={n} name={n} cls="gtile" fs={Math.round(cell * 0.38)} />)}
           </div>
         </div>
       )

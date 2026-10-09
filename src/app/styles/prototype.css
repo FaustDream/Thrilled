@@ -83,15 +83,19 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* ============ 3. 翻页画布与网格 ============ */
 #pager{position:absolute;left:0;top:0;height:100%;z-index:2;transition:transform .42s var(--ease)}
 .page{position:absolute;top:0;width:1920px;height:100%}
-.grid{position:absolute;left:50%;top:77px;width:1776px;height:740px;margin-left:-888px}
+/* 网格：1776px（24 列 × 74px）居中于 1920 设计稿；顶部 97px 让搜索框（底缘 98px）与首行卡片拉开 24px 间距 */
+.grid{position:absolute;left:50%;top:97px;width:1776px;height:740px;margin-left:-888px}
 .item{position:absolute;border-radius:var(--radius-lg);overflow:hidden;
   background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-card) * 100%),transparent);
   backdrop-filter:blur(var(--blur-card));
   cursor:pointer;transition:transform .14s var(--ease)}
 .item:hover{transform:translateY(-2px)}
-.item-label{position:absolute;height:20px;line-height:20px;font-size:14px;color:var(--label-color);
-  text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.4);white-space:nowrap;overflow:hidden;
+/* 名称标签：并入卡片内部（卡内左下角小字）；颜色随卡片次级文字，不再用贴在壁纸上的投影那套 */
+.item-label{position:absolute;left:12px;right:12px;bottom:6px;font-size:12px;line-height:1;
+  color:var(--card-sub);text-align:left;opacity:.92;white-space:nowrap;overflow:hidden;
   text-overflow:ellipsis;pointer-events:none}
+/* 图标格容器是透明卡（字形直落背景），其卡内标签改用壁纸上的标签色 */
+.item[data-t='group'] .item-label{color:var(--label-color)}
 #stage[data-labels='0'] .item-label{display:none}
 #stage[data-hidetop='1'] .mode-pill{display:none}
 #stage[data-hidesearch='1'] .search-row{display:none}
@@ -570,9 +574,9 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* 入场：渐次浮现（动画只在新挂载时播放一次） */
 @keyframes item-in{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
 .page .item{animation:item-in .5s var(--ease) backwards}
-/* 名称标签：更柔和的投影与悬停强化 */
-.item-label{opacity:.96;letter-spacing:.2px;transition:opacity .18s,transform .18s}
-.item:hover + .item-label{opacity:1;transform:translateY(-1px)}
+/* 名称标签：悬停强化（标签是卡片子元素，不再用相邻选择器） */
+.item-label{opacity:.92;letter-spacing:.2px;transition:opacity .18s}
+.item:hover .item-label{opacity:1}
 
 /* —— 卡片悬浮操作：玻璃小圆钮 —— */
 .ia{background:rgba(15,23,42,.55);backdrop-filter:blur(6px)}
@@ -653,7 +657,9 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .v-icon.lat{font-size:23px}
 .item[data-t='icon']:hover .v-icon{transform:scale(1.1)}
 .v-cell img.v-icon{border-radius:12px}
-.gtile{background:transparent;border:none;box-shadow:none;backdrop-filter:none}
+/* 图标格容器内的格子：保留标准图标容器语言（白底 + 品牌色字形），边长由 shared/grid 的 groupGrid 给出；
+   原先的「透明去卡片化」会让图标格只剩一串散字（见 v4.4 补丁 7） */
+.gtile{border-radius:12px}
 
 /* —— 搜索框：唯一强焦点（去描边、单投影、聚焦光环） —— */
 .search-box{border:1px solid transparent;border-radius:25px;
@@ -667,8 +673,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* —— 小组件内容卡：单一轻投影 + 统一 16px 圆角（无描边、无内高光） —— */
 .item{border-radius:16px;box-shadow:0 8px 24px -12px rgba(15,23,42,.22);outline:none;transition:transform .2s var(--ease-spring),box-shadow .2s var(--ease)}
 .item:hover{transform:translateY(-2px);box-shadow:0 14px 30px -12px rgba(15,23,42,.26)}
-.item-label{text-shadow:none;opacity:.9}
-.item:hover + .item-label{opacity:1}
+.item-label{text-shadow:none;opacity:.92}
+.item:hover .item-label{opacity:1}
 
 /* —— Dock：玻璃磨砂悬浮栏（苹果式尺寸），快捷方式显 favicon、功能键显线性图标 —— */
 .dock-bar{border-radius:24px;padding:9px 12px;

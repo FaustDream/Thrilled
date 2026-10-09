@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
-import { CELL, COLS, INSET, itemBox, labelBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
+import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { stage } from './stage'
 import { WidgetView, SiteIcon, cfg, str } from './widgets'
 import { siteUrlOf } from './brands'
@@ -658,13 +658,13 @@ const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging,
         data-id={item.id} data-t={item.t} data-act={item.t === 'quote' ? undefined : 'item-open'}
         onPointerDown={onDragStart}>
         <WidgetView item={item} now={now} nick={nick} encourage={encourage} playing={playing} weather={weather} />
+        {/* 名称标签并入卡片内部（左下角小字）：不再挂在卡片下方切分行间节奏 */}
+        {label !== '' && item.t !== 'icon' && item.t !== 'folder' ? <div className="item-label">{label}</div> : null}
         <div className="item-acts">
           <div className="ia" data-act="item-edit" title="编辑">{Icon.edit()}</div>
           <div className="ia" data-act="item-del" title="删除">{Icon.trash()}</div>
         </div>
       </div>
-      {/* 应用类卡片不显示名称标签（只显图标）；分区/内容卡保留 */}
-      {label !== '' && item.t !== 'icon' && item.t !== 'folder' ? <div className="item-label" style={parseBox(labelBox(item))}>{label}</div> : null}
     </>
   )
 }
