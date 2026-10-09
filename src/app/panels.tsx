@@ -1061,31 +1061,136 @@ const SettingDataTab = () => (
   </>
 )
 
-/** 关于分区：版本与入口 + 快捷键参考（全为只读内容，集中在同一页签） */
-const SettingAboutTab = () => {
-  const setModal = useApp((st) => st.setModal)
+/* ---------- 更新记录（设置 → 关于）：单行版本表头 + 类型标签条目 ---------- */
+
+/** 条目类型（四类配四色：新增蓝 / 优化绿 / 调整灰 / 移除红） */
+type LogKind = '新增' | '优化' | '调整' | '移除'
+
+/** 类型 → 样式类（中文不放类名） */
+const LOG_KIND_CLASS: Record<LogKind, string> = { 新增: 'k-add', 优化: 'k-opt', 调整: 'k-tune', 移除: 'k-del' }
+
+interface LogItem {
+  /** 类型标签 */
+  k: LogKind
+  /** 一句话摘要（保持单行） */
+  s: string
+  /** 实现细节：点击条目展开 */
+  d?: string
+}
+
+interface LogVersion {
+  v: string
+  /** 发布区间（同日只写一天） */
+  d: string
+  items: readonly LogItem[]
+}
+
+/** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
+const CHANGELOG: readonly LogVersion[] = [
+  {
+    v: '4.4', d: '2026-09-30 – 2026-10-08', items: [
+      { k: '优化', s: '极简页面：胶囊收起只显图标，功能键移入 Dock', d: '模式胶囊悬停展开「极简 / 标准」两个选项（去除说明文字）；右上头像移除，新增 / 个性化 / 设置改由底部 Dock 承载' },
+      { k: '优化', s: 'Dock 改版：手动新增，支持右键改名与移除', d: '出厂快捷方式清空、由用户手动新增（「添加」抽屉勾选「同时添加到底部 Dock」）；图标显示站点 favicon（失败回退品牌字形）；苹果式尺寸与玻璃质感' },
+      { k: '优化', s: '极简模式：日期 / 搜索框 / 鼓励语视觉重做', d: '日期改「2026年9月30日」格式、时钟 84px；搜索框未聚焦为透明胶囊白描边、聚焦展开为白色玻璃卡片；鼓励语悬浮在 Dock 上方；搜索历史与引擎面板跟随新位置' },
+      { k: '调整', s: '壁纸改为外部来源适配器，内置壁纸移除', d: '接入 Wallhaven / Picsum / 必应每日 / 061129 / 哲风；自适应裁剪焦点（主体最集中的窗口）、同一张图去重、最近 12 张历史缩略图带、应用分阶段反馈' },
+      { k: '调整', s: '设置与个性化面板改为分区页签 + 卡片', d: '透明度补至 12 项并与毛玻璃模糊解耦（6 项玻璃底色 + 6 项元素显隐，另有 6 项模糊配对）；个性化「主题」页签压缩为 4 列缩略图 + 12 项色值 4 列密排；说明统一收进标题 ⓘ' },
+      { k: '移除', s: '在线广场（模板分享）整体移除', d: '广场从未接入云端，一直是种子模板示意；个性化里的「主题」（风格皮肤）不受影响；「吉祥物」开关更名为「Dock 快捷栏」' },
+    ],
+  },
+  {
+    v: '4.3', d: '2026-09-29', items: [
+      { k: '移除', s: '登录与账号体系移除，隐私模式并入标准', d: '合并为单套页面（原隐私页在前）；头像菜单去掉「我的」；登录弹窗 / 账号分组 / profile 抽屉删除' },
+      { k: '新增', s: '云端同步：改动自动上传、新环境一键恢复', d: '配置注入式连接，服务器地址与访问令牌只存本机浏览器存储；参考服务端 thrilled-server（零依赖 Node 单文件、Bearer 鉴权、原子落盘）。该能力已在 4.4 补丁中整体移除，当前为纯本地使用' },
+      { k: '优化', s: 'Dock 可编辑、引擎恢复 v3 设置、历史贴框', d: 'Dock 支持编辑与苹果式放大；头像菜单（4.4 随头像移除）；搜索引擎按 v3 偏好裁剪恢复；搜索历史与引擎下拉贴搜索框底缘 8px、鼠标移开自动关闭' },
+    ],
+  },
+  {
+    v: '4.2', d: '2026-09-27', items: [
+      { k: '优化', s: '界面风格升级：光影体系 2.0 与弹簧动效', d: '18px 圆角 / 内高光 / 分层投影；弹窗缩放入场、搜索框聚焦光晕；壁纸与出厂皮肤扩到 6 套' },
+      { k: '优化', s: '修复 v3 迁移与「恢复为默认界面」', d: 'v3 迁移改为「出厂布局在前 + 迁移图标追加成新页」；「恢复为默认界面」支持「保留我的网址图标」' },
+    ],
+  },
+  {
+    v: '4.1', d: '2026-09-27', items: [
+      { k: '新增', s: '按 v4 原型补全五面板与九弹窗', d: '含风格皮肤编辑器与广场三页签（广场已于 4.4 移除）' },
+      { k: '新增', s: '设置 / 布局 / 皮肤接通本地持久化', d: '整存整取到 chrome.storage.local（浏览器预览回退 localStorage），改动防抖落盘；支持 v3 数据一次性迁移' },
+      { k: '新增', s: '壁纸支持本地上传与外链', d: '图片压缩到 1920px / 最大 5MB，支持视频壁纸（mp4 / webm），数据存 IndexedDB' },
+      { k: '新增', s: '天气卡接入 Open-Meteo 实况', d: '30min 缓存、坐标偏移 1° 内有效、定位超时降级北京；搜索 / 卡片 / Dock / 导航点击按打开方式真实跳转' },
+      { k: '新增', s: '收藏夹导入、布局导出导入、确认弹窗', d: 'bookmarks 树 → 去重 → 网址图标批量落位；一键重置等覆盖类操作均二次确认' },
+    ],
+  },
+  {
+    v: '4.0', d: '2026-09-26', items: [
+      { k: '调整', s: '仓库重组为 app / core / background / shared', d: '四层分层：core / background 不引用 React；app 不直接调用 chrome.*，一律经 core 层' },
+      { k: '调整', s: 'React 18 + Vite 重写视图层', d: '落地 v4 内容模型：卡片 = 对小组件定义的一次引用（18 类）' },
+    ],
+  },
+]
+
+/** 更新记录列表：版本表头单行（当前版本默认展开、旧版本折叠成一行），条目细节点击展开 */
+const ChangeLog = () => {
+  const [openV, setOpenV] = useState<string>(CHANGELOG[0]?.v ?? '')
+  const [openItem, setOpenItem] = useState<string>('')
   return (
-    <>
-      <SecCard t="关于">
-        <InfoRow l="版本" r="4.4（v4 重构版）" />
-        <div className="btn-row" style={{ marginTop: 12 }}>
-          <button className="btn sm ghost" onClick={() => setModal('log')}>更新记录</button>
-        </div>
-      </SecCard>
-      <SecCard t="快捷键" info="非输入状态下生效；Ctrl+Shift 组合键在任意位置可用。">
-        {SHORTCUTS.map(([k, d]) => <InfoRow key={k} l={d} r={<kbd className="kbd">{k}</kbd>} />)}
-      </SecCard>
-    </>
+    <div className="log-list">
+      {CHANGELOG.map((ver, i) => {
+        const open = openV === ver.v
+        return (
+          <div className="log-ver" key={ver.v}>
+            <div className="log-head" onClick={() => setOpenV(open ? '' : ver.v)}>
+              <span className="log-v">{ver.v}</span>
+              {i === 0 && <span className="log-chip">当前</span>}
+              <span className="log-sep">·</span>
+              <span className="log-date">{ver.d}</span>
+              <span className="log-sep">·</span>
+              <span className="log-count">{ver.items.length} 项</span>
+              <i className={`log-caret${open ? ' open' : ''}`} />
+            </div>
+            {open && ver.items.map((it, j) => {
+              const key = `${ver.v}-${j}`
+              const on = openItem === key
+              return (
+                <div className="log-item" key={key}>
+                  <div className={`log-line${it.d === undefined ? '' : ' more'}`}
+                    onClick={() => { if (it.d !== undefined) setOpenItem(on ? '' : key) }}>
+                    <span className={`log-kind ${LOG_KIND_CLASS[it.k]}`}>{it.k}</span>
+                    <span className="log-sum">{it.s}</span>
+                    {it.d !== undefined && <i className={`log-caret sm${on ? ' open' : ''}`} />}
+                  </div>
+                  {on && it.d !== undefined && <div className="log-detail">{it.d}</div>}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
+    </div>
   )
 }
+
+/** 关于分区：更新记录（侧边栏内联，不再用弹窗）+ 快捷键参考（全为只读内容，集中在同一页签） */
+const SettingAboutTab = () => (
+  <>
+    <SecCard t="更新记录" info="当前版本与历史版本：点版本行展开条目，点条目展开实现细节。">
+      <ChangeLog />
+    </SecCard>
+    <SecCard t="快捷键" info="非输入状态下生效；Ctrl+Shift 组合键在任意位置可用。">
+      {SHORTCUTS.map(([k, d]) => <InfoRow key={k} l={d} r={<kbd className="kbd">{k}</kbd>} />)}
+    </SecCard>
+  </>
+)
 
 /** 页签序号 → 分区组件（顺序与 SETTING_TABS 一致） */
 const SETTING_PANES: readonly (() => React.ReactElement)[] = [
   SettingSearchTab, SettingGeneralTab, SettingDataTab, SettingAboutTab,
 ]
 
+/** 供外部入口（右键菜单等）跳到指定设置分区：先 setSettingsTab 再 setDrawer('setting') */
+export const settingTabOf = (name: string): number => SETTING_TABS.indexOf(name)
+
 const SettingPanel = () => {
-  const [tab, setTab] = useState(0)
+  const tab = useApp((st) => st.settingsTab)
+  const setTab = useApp((st) => st.setSettingsTab)
   const Pane = SETTING_PANES[tab] ?? SettingSearchTab
   return (
     /* pane-fill：页签 + 卡片按列排布且至少撑满抽屉可视高度，供「数据」分区把危险卡推到面板底部 */
@@ -1123,14 +1228,6 @@ export const Drawer = () => {
 }
 
 /* ============================== 弹窗 ============================== */
-
-const CHANGELOG: readonly { v: string; d: string; l: readonly string[] }[] = [
-  { v: '4.4', d: '2026-09-30 / 2026-10-08', l: ['极简页面优化：模式胶囊收起只显图标、悬停展开极简/标准（去除说明文字）；右上头像移除，新增/个性化/设置移入底部 Dock 功能键', 'Dock 改版：出厂快捷方式清空、用户手动新增（「添加」抽屉勾选「同时添加到底部 Dock」），图标显示站点 favicon，苹果式尺寸与玻璃质感；右键支持改名/改网址/移除', '极简模式：日期改为「2026年9月30日」格式、搜索框未聚焦透明胶囊白描边/聚焦白色玻璃卡片、鼓励语悬浮 Dock 上方', '壁纸整理：内置壁纸全部移除，改为外部来源适配器（Wallhaven / Picsum / 必应每日 / 061129 / 哲风）；自适应裁剪焦点、同一张图去重、最近 12 张历史缩略图带、应用分阶段反馈', '面板整理：设置抽屉改「搜索 / 通用 / 数据 / 云端 / 关于」五分区页签 + 卡片分组；个性化「主题」页签压缩为 4 列缩略图 + 12 项色值 4 列密排；透明度补至 12 项并与毛玻璃模糊解耦', '在线广场模块整体移除（个性化里的「主题」不受影响）；「吉祥物」开关更名为「Dock 快捷栏」'] },
-  { v: '4.3', d: '2026-09-29', l: ['移除登录与账号体系，隐私模式并入标准模式（单套页面）', '新增云端同步：配置注入式连接（地址 / 令牌仅存本机），本地改动自动上传、新环境一键恢复，云端为唯一权威数据源', 'Dock 可编辑 + 苹果式放大、头像菜单、搜索引擎恢复 v3 设置、搜索历史贴框与自动关闭'] },
-  { v: '4.2', d: '2026-09-27', l: ['界面风格重大升级：光影体系 2.0（18px 圆角 / 内高光 / 分层投影）与弹簧动效、弹窗缩放入场、搜索框聚焦光晕；壁纸与出厂皮肤扩到 6 套', '迁移与恢复默认修复：v3 迁移改为「出厂布局在前 + 迁移图标追加成新页」，「恢复为默认界面」支持「保留我的网址图标」'] },
-  { v: '4.1', d: '2026-09-27', l: ['按 v4 原型补全五面板与九弹窗（含风格皮肤编辑器、广场三页签）', '设置 / 布局 / 皮肤接通本地持久化，支持 v3 数据一次性迁移', '壁纸支持本地上传与外链（图片压缩 + 视频壁纸，IndexedDB 存储）', '天气卡接入 Open-Meteo 实况数据；搜索 / 卡片 / Dock 真实打开链接', '新增收藏夹导入、布局导出导入、备份 / 恢复 / 一键重置确认弹窗'] },
-  { v: '4.0', d: '2026-09-26', l: ['仓库重组为 app / core / background / shared 四层', 'React 18 + Vite 重写视图层，落地 v4 内容模型（18 类小组件引用）'] },
-]
 
 const EditCardModal = ({ item }: { item: GridItem }) => {
   const updateConfig = useApp((s) => s.updateConfig)
@@ -1202,7 +1299,7 @@ export const Modal = () => {
   const engImgFile = useRef<HTMLInputElement | null>(null)
   const item = pages[cur]?.find((x) => x.id === itemId) ?? null
   if (!modal) return null
-  const narrow = modal === 'log' || modal === 'backup' || modal === 'restore' || modal === 'reset'
+  const narrow = modal === 'backup' || modal === 'restore' || modal === 'reset'
   const body = () => {
     switch (modal) {
       case 'theme':
@@ -1269,19 +1366,6 @@ export const Modal = () => {
                 setModal(null)
               }}>确定</button>
             </div>
-          </>
-        )
-      case 'log':
-        return (
-          <>
-            <h2>更新记录</h2><p className="sub">当前版本 4.4（v4 重构版）</p>
-            {CHANGELOG.map((c) => (
-              <div className="log-item" key={c.v}>
-                <b>{c.v}<div style={{ fontSize: 11, color: '#9aa4b2', fontWeight: 400 }}>{c.d}</div></b>
-                <ul>{c.l.map((x) => <li key={x}>{x}</li>)}</ul>
-              </div>
-            ))}
-            <div className="btn-row end" style={{ marginTop: 16 }}><button className="btn" onClick={() => setModal(null)}>知道了</button></div>
           </>
         )
       case 'backup':

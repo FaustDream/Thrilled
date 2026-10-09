@@ -12,7 +12,7 @@ import { stage } from './stage'
 import { WidgetView, SiteIcon, cfg, str } from './widgets'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
-import { Drawer, Modal } from './panels'
+import { Drawer, Modal, settingTabOf } from './panels'
 import { Icon } from './icons'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
@@ -278,6 +278,7 @@ export const App = () => {
           st.setEnginePanel(!st.enginePanel)
           break
         case 'engine-manage': st.setEnginePanel(false); st.setDrawer('setting'); st.showToast('已打开设置 · 搜索引擎'); break
+        case 'open-log': st.setSettingsTab(settingTabOf('关于')); st.setDrawer('setting'); st.showToast('已打开设置 · 更新记录'); break
         case 'eng-set': st.setEngine(v); st.showToast('该搜索引擎正在使用中'); break
         case 'eng-hide': st.toggleEngineHidden(v); break
         case 'search-go': runSearch(); setHistoryOpen(false); break

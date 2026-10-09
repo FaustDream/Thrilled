@@ -45,7 +45,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'theme' | 'addEngine' | 'log' | 'editItem' | 'backup' | 'restore' | 'reset'
+export type ModalKey = 'theme' | 'addEngine' | 'editItem' | 'backup' | 'restore' | 'reset'
 
 export interface CtxState {
   x: number
@@ -78,6 +78,8 @@ interface AppState {
   modal: ModalKey | null
   ctx: CtxState | null
   toast: string
+  /** 设置抽屉当前分区下标（供右键菜单等外部入口先切分区再打开抽屉） */
+  settingsTab: number
   enginePanel: boolean
   page: () => GridItem[]
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
@@ -125,6 +127,7 @@ interface AppState {
   clearHistory: () => void
   showToast: (msg: string) => void
   setDrawer: (k: DrawerKey | null) => void
+  setSettingsTab: (i: number) => void
   setModal: (k: ModalKey | null) => void
   openCtx: (ctx: CtxState | null) => void
   setEnginePanel: (open: boolean) => void
@@ -281,6 +284,7 @@ export const useApp = create<AppState>()((set, get) => ({
   modal: null,
   ctx: null,
   toast: '',
+  settingsTab: 0,
   enginePanel: false,
 
   page: () => curPageOf(get()),
@@ -534,6 +538,7 @@ export const useApp = create<AppState>()((set, get) => ({
   clearHistory: () => set({ history: [], toast: '搜索历史已清空' }),
   showToast: (msg) => set({ toast: msg }),
   setDrawer: (k) => set({ drawer: k, ctx: null, enginePanel: false }),
+  setSettingsTab: (i) => set({ settingsTab: i }),
   /* 打开弹窗时收起抽屉：弹窗层级（50）低于抽屉（60），否则被盖住 */
   setModal: (k) => set({ modal: k, ctx: null, enginePanel: false, drawer: k !== null ? null : get().drawer }),
   openCtx: (ctx) => set({ ctx, enginePanel: false }),

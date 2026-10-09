@@ -55,7 +55,7 @@ const GlobalMenu = () => {
       </div>
       <div className="ctx-item" data-act="ctx-tog" data-v="mascot"><span>Dock 快捷栏</span><Sw on={mascot} /></div>
       <div className="ctx-item" data-act="msg"><span>站内消息</span></div>
-      <div className="ctx-item" data-act="open-modal" data-v="log"><span>更新记录</span></div>
+      <div className="ctx-item" data-act="open-log"><span>更新记录</span></div>
     </>
   )
 }

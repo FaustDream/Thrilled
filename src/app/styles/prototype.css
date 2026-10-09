@@ -464,9 +464,31 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .th-prev .t-dock{position:absolute;left:14%;right:14%;bottom:8px;height:10px;border-radius:5px;
   background:rgba(255,255,255,.6)}
 .th-name{font-size:13px;text-align:center}
-.log-item{display:flex;gap:14px;padding:12px 0;border-bottom:1px solid #eef1f6;font-size:13px;color:#4b5563}
-.log-item b{flex:0 0 82px;color:#111827}
-.log-item ul{margin:0;padding-left:18px;line-height:1.8}
+/* 更新记录（设置 → 关于）：版本表头单行 + 类型标签条目；实现细节点击展开 */
+.log-list{font-size:13px;color:var(--panel-text)}
+.log-head,.log-line{display:flex;align-items:center;gap:8px;padding:0 6px;margin:0 -6px;border-radius:8px}
+.log-head{height:30px;cursor:pointer}
+.log-line{min-height:28px}
+.log-line.more{cursor:pointer}
+.log-head:hover,.log-line.more:hover{background:var(--menu-hover)}
+.log-v{font-weight:600}
+.log-chip{flex:0 0 auto;font-size:10px;line-height:15px;padding:0 6px;border-radius:999px;background:var(--accent);color:#fff}
+.log-sep{color:var(--panel-sub);opacity:.65}
+.log-date,.log-count{font-size:12px;color:var(--panel-sub)}
+.log-ver+.log-ver{margin-top:2px}
+.log-kind{flex:0 0 auto;font-size:11px;line-height:16px;padding:0 6px;border-radius:6px;font-weight:500}
+.log-kind.k-add{color:#3b82f6;background:color-mix(in srgb,#3b82f6 14%,transparent)}
+.log-kind.k-opt{color:#10b981;background:color-mix(in srgb,#10b981 14%,transparent)}
+.log-kind.k-tune{color:var(--panel-sub);background:var(--line)}
+.log-kind.k-del{color:#ef4444;background:color-mix(in srgb,#ef4444 14%,transparent)}
+/* 摘要固定单行，保证展开后每个版本的行数等于条目数 */
+.log-sum{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.log-detail{margin:2px 0 6px;padding:8px 10px;border-radius:8px;background:var(--line);
+  font-size:12px;line-height:1.7;color:var(--panel-sub)}
+.log-caret{flex:0 0 auto;margin-left:auto;width:0;height:0;border-left:4px solid transparent;
+  border-right:4px solid transparent;border-top:5px solid var(--panel-sub);opacity:.6;
+  display:inline-block;transition:transform .18s var(--ease)}
+.log-caret.open{transform:rotate(180deg)}
 .toast{position:absolute;left:50%;bottom:160px;transform:translate(-50%,14px);background:rgba(15,23,42,.9);
   color:#fff;font-size:13px;padding:10px 18px;border-radius:10px;opacity:0;pointer-events:none;
   transition:opacity .2s var(--ease),transform .2s var(--ease);z-index:var(--z-toast);white-space:nowrap}
