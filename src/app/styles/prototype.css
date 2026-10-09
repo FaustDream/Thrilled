@@ -329,6 +329,12 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .dw-tab{padding:6px 12px;border-radius:9px;font-size:13px;color:var(--panel-sub);cursor:pointer;white-space:nowrap}
 .dw-tab.active{background:var(--accent);color:#fff}
 .dw-body{flex:1;overflow-y:auto;padding:16px}
+/* 设置面板内容容器：按列排布并至少撑满抽屉可视高度（不写 flex 到 .dw-body 上，避免影响其他抽屉的块级边距行为）。
+   卡片沿用 margin-bottom 间距，末卡去掉外边距让「贴底」精确等于抽屉的 16px 内边距 */
+.pane-fill{display:flex;flex-direction:column;min-height:100%}
+.pane-fill>.sec-card:last-child{margin-bottom:0}
+/* 数据分区的空白隔离带：撑开常规动作与危险动作之间的距离，空间不足时保留 32px 最小间隔 */
+.pane-band{flex:1 1 auto;min-height:32px}
 
 /* ============ 11. 表单与通用控件 ============ */
 .f-row{margin-bottom:14px}
@@ -351,6 +357,16 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .btn.wide{width:100%}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn-row.end{justify-content:flex-end}
+/* 按钮下方带作用域小字时，同一行的按钮按顶对齐（不被拉伸到小字那格的高度） */
+.btn-row.top{align-items:flex-start}
+/* 3 列等宽按钮网格：每行 3 个、右边缘对齐，不再出现按钮按文字宽度流式换行 */
+.btn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:start}
+.btn-grid+.btn-grid{margin-top:8px}
+.btn-grid .btn{width:100%;padding:0 8px}
+/* 按钮 + 其下方 11px 作用域说明（用于区分易混操作的作用范围） */
+.btn-cell{display:flex;flex-direction:column;gap:6px}
+.btn-cell .btn{width:100%}
+.btn-note{font-size:11px;line-height:1.4;color:var(--panel-sub);text-align:center}
 .sec-title{font-size:14px;font-weight:500;margin:24px 0 10px}
 .sec-card{border:0.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 .sec-card .sec-title{margin:0 0 12px}
