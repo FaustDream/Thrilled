@@ -302,7 +302,6 @@ export const App = () => {
           st.toggle(k)
           break
         }
-        case 'sync': st.showToast('正在同步数据…'); break
         case 'msg': st.showToast('暂无消息'); break
         case 'item-edit': st.openCtx(null); st.setModal('editItem'); break
         case 'item-del': st.remove(id); break

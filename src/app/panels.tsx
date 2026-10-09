@@ -20,7 +20,6 @@ import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks } from '../core/bookmark-importer'
 import { resetAllData } from '../core/reset'
 import { saveDoc } from '../core/storage'
-import { getCloudConfig, setCloudConfig, type CloudConfig } from '../core/cloud'
 import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
@@ -900,11 +899,11 @@ const OPEN_MODES: readonly (readonly ['link' | 'tab' | 'search', string])[] = [
 /* ---------- 设置面板：分区页签 + 卡片分组（与个性化同一套分布方式） ---------- */
 
 /**
- * 分区顺序 = 使用频率 × 风险：搜索（高频）→ 通用（常用偏好）→ 数据（低频动作）→ 云端 → 关于（只读参考）。
+ * 分区顺序 = 使用频率 × 风险：搜索（高频）→ 通用（常用偏好）→ 数据（低频动作）→ 关于（只读参考）。
  * 卡片内主次排布：可即时生效的开关与单选项常驻卡片主体；低频动作退到卡片底部按钮行；
  * 说明文案统一收进标题右侧 ⓘ 气泡；覆盖 / 删除类操作单独成卡并标红，不与常规操作混排。
  */
-const SETTING_TABS: readonly string[] = ['搜索', '通用', '数据', '云端', '关于']
+const SETTING_TABS: readonly string[] = ['搜索', '通用', '数据', '关于']
 
 /** 只读信息行：左侧说明 + 右侧值（复用引擎行的分隔线语言，用于「版本」「快捷键」这类参考项） */
 const InfoRow = ({ l, r }: { l: string; r: React.ReactNode }) => (
@@ -1062,13 +1061,6 @@ const SettingDataTab = () => (
   </>
 )
 
-/** 云端分区：连接配置与上传 / 恢复（单卡承载，云端为唯一权威数据源） */
-const SettingCloudTab = () => (
-  <SecCard t="云端同步" info="配置服务器地址与访问令牌后，本地改动自动上传、云端为唯一权威数据源；两项都只保存在本机浏览器存储，不进入代码仓库。">
-    <CloudSyncSection />
-  </SecCard>
-)
-
 /** 关于分区：版本与入口 + 快捷键参考（全为只读内容，集中在同一页签） */
 const SettingAboutTab = () => {
   const setModal = useApp((st) => st.setModal)
@@ -1078,7 +1070,6 @@ const SettingAboutTab = () => {
         <InfoRow l="版本" r="4.4（v4 重构版）" />
         <div className="btn-row" style={{ marginTop: 12 }}>
           <button className="btn sm ghost" onClick={() => setModal('log')}>更新记录</button>
-          <button className="btn sm ghost" onClick={() => setModal('about')}>关于我们</button>
         </div>
       </SecCard>
       <SecCard t="快捷键" info="非输入状态下生效；Ctrl+Shift 组合键在任意位置可用。">
@@ -1090,7 +1081,7 @@ const SettingAboutTab = () => {
 
 /** 页签序号 → 分区组件（顺序与 SETTING_TABS 一致） */
 const SETTING_PANES: readonly (() => React.ReactElement)[] = [
-  SettingSearchTab, SettingGeneralTab, SettingDataTab, SettingCloudTab, SettingAboutTab,
+  SettingSearchTab, SettingGeneralTab, SettingDataTab, SettingAboutTab,
 ]
 
 const SettingPanel = () => {
@@ -1102,44 +1093,6 @@ const SettingPanel = () => {
       <DrawerTabs tabs={SETTING_TABS} value={tab} onChange={setTab} />
       <Pane />
     </div>
-  )
-}
-
-/* ============================== 云端同步（配置仅存本机，不入代码仓库） ============================== */
-
-const CloudSyncSection = () => {
-  const cloudUpload = useApp((st) => st.cloudUpload)
-  const cloudRestore = useApp((st) => st.cloudRestore)
-  const showToast = useApp((st) => st.showToast)
-  const [cfg, setCfg] = useState<CloudConfig>(() => getCloudConfig())
-  const configured = cfg.url.trim() !== ''
-  const save = (): void => {
-    if (cfg.url.trim() !== '' && !/^https?:\/\//.test(cfg.url.trim())) {
-      showToast('服务器地址需以 http(s):// 开头')
-      return
-    }
-    setCloudConfig(cfg)
-    showToast('云端连接配置已保存（仅保存在本机）')
-  }
-  return (
-    <>
-      <div className="f-row"><label className="f-label">服务器地址</label>
-        <input className="f-input" placeholder="例如 https://your-server.example.com" value={cfg.url}
-          onChange={(e) => setCfg({ ...cfg, url: e.target.value })} /></div>
-      <div className="f-row"><label className="f-label">访问令牌</label>
-        <input className="f-input" type="password" placeholder="与服务端 TOKEN 一致，留空则不鉴权" value={cfg.token}
-          onChange={(e) => setCfg({ ...cfg, token: e.target.value })} /></div>
-      <div className="btn-row">
-        <button className="btn sm" onClick={save}>保存配置</button>
-        <button className="btn sm ghost" onClick={() => void cloudUpload()}>上传到云端</button>
-        <button className="btn sm ghost" onClick={() => void cloudRestore()}>从云端恢复</button>
-      </div>
-      <Hint>
-        {configured ? '已配置：改动自动上传云端，云端为唯一权威数据源；换设备时填同一配置即可「从云端恢复」一键还原。'
-          : '未配置：数据仅存本机。配置服务器地址后，本地数据将统一上传云端，其他设备可一键恢复（以云端最新版本为准）。'}
-        服务器地址与令牌只保存在本机浏览器存储，不进入代码仓库。
-      </Hint>
-    </>
   )
 }
 
@@ -1249,7 +1202,7 @@ export const Modal = () => {
   const engImgFile = useRef<HTMLInputElement | null>(null)
   const item = pages[cur]?.find((x) => x.id === itemId) ?? null
   if (!modal) return null
-  const narrow = modal === 'log' || modal === 'about' || modal === 'backup' || modal === 'restore' || modal === 'reset'
+  const narrow = modal === 'log' || modal === 'backup' || modal === 'restore' || modal === 'reset'
   const body = () => {
     switch (modal) {
       case 'theme':
@@ -1331,19 +1284,6 @@ export const Modal = () => {
             <div className="btn-row end" style={{ marginTop: 16 }}><button className="btn" onClick={() => setModal(null)}>知道了</button></div>
           </>
         )
-      case 'about':
-        return (
-          <>
-            <h2>关于我们</h2><p className="sub">Thrilled · 新标签页 4.4</p>
-            <div className="btn-row">
-              <button className="btn ghost" onClick={() => useApp.getState().showToast('问题反馈：请联系工作人员')}>问题反馈</button>
-              <button className="btn ghost" onClick={() => useApp.getState().showToast('隐私协议：尊重用户的隐私权利')}>隐私协议</button>
-              <button className="btn ghost" onClick={() => useApp.getState().showToast('联系作者：请联系工作人员')}>联系作者</button>
-            </div>
-            <Hint>壁纸来源于互联网，如有侵权请联系工作人员；为保障用户的数据安全与用户体验，请及时备份。</Hint>
-            <div className="btn-row end" style={{ marginTop: 16 }}><button className="btn" onClick={() => setModal(null)}>关闭</button></div>
-          </>
-        )
       case 'backup':
         return (
           <>
@@ -1354,7 +1294,7 @@ export const Modal = () => {
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
               <button className="btn" onClick={() => { markBackedUp(); setModal(null) }}>立即备份当前界面</button>
             </div>
-            <Hint>当前为本地备份记录；云端备份在 thrilled-server 接入后可用。</Hint>
+            <Hint>备份记录只保存在本机；换机或重装前先用「导出布局 JSON」留一份文件。</Hint>
           </>
         )
       case 'restore':

@@ -1,5 +1,5 @@
 /**
- * 右键菜单（全局 11 项 + 卡片 6 项，见 docs/v4/02-UI规格.md §7）
+ * 右键菜单（全局 9 项 + 卡片 6 项，见 docs/v4/02-UI规格.md §7）
  * 二级菜单与开关按 UiTab 实测复刻；「更换小组件」是内容模型带来的新入口（可换引用类型）。
  */
 import { useEffect, useRef, useState } from 'react'
@@ -50,14 +50,12 @@ const GlobalMenu = () => {
       <div className="ctx-item"><span>搜索引擎</span><span className="ctx-arrow" />
         <div className="ctx-sub">
           {visible.map((e) => <SubItem key={e.id} on={e.id === engineId} act="eng-set" v={e.id}>{e.name}</SubItem>)}
-          <SubItem act="open-modal" v="engine">管理搜索引擎</SubItem>
+          <SubItem act="engine-manage">管理搜索引擎</SubItem>
         </div>
       </div>
       <div className="ctx-item" data-act="ctx-tog" data-v="mascot"><span>Dock 快捷栏</span><Sw on={mascot} /></div>
-      <div className="ctx-item" data-act="sync"><span>同步数据</span></div>
       <div className="ctx-item" data-act="msg"><span>站内消息</span></div>
       <div className="ctx-item" data-act="open-modal" data-v="log"><span>更新记录</span></div>
-      <div className="ctx-item" data-act="open-modal" data-v="about"><span>关于我们</span></div>
     </>
   )
 }

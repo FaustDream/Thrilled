@@ -16,8 +16,6 @@ import { getWeather, type WeatherData } from '../core/weather'
 import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
 import { markActiveWallpaper } from '../core/wallpaper'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
-import { cloudConfigured, cloudPull, cloudPush } from '../core/cloud'
-import { warn } from '../core/logger'
 import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import type {
   AppSettings,
@@ -47,7 +45,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'theme' | 'addEngine' | 'log' | 'about' | 'editItem' | 'backup' | 'restore' | 'reset'
+export type ModalKey = 'theme' | 'addEngine' | 'log' | 'editItem' | 'backup' | 'restore' | 'reset'
 
 export interface CtxState {
   x: number
@@ -120,10 +118,6 @@ interface AppState {
   importLayout: (data: unknown) => boolean
   /** 恢复出厂布局；keepIcons 时把现有网址图标（与出厂不重复的）追加到新页 */
   restoreDefault: (opts?: { keepIcons?: boolean }) => void
-  /** 把当前全部数据立即上传到云端（需已在设置中配置云端连接） */
-  cloudUpload: () => Promise<void>
-  /** 从云端拉取最新数据覆盖本地（云端为权威数据源） */
-  cloudRestore: () => Promise<void>
   loadWeather: () => Promise<void>
   markBackedUp: () => void
   resetParts: (parts: { layout: boolean; skins: boolean; wallpaper: boolean }) => void
@@ -164,10 +158,7 @@ const scheduleSave = (): void => {
     saveTimer = null
     const s = useApp.getState()
     if (!s.hydrated) return
-    const doc = buildDoc(s)
-    saveDoc(doc)
-    /* 云端为权威数据源：改动自动上传（失败已在 cloud 层 warn，不打断本地流程） */
-    void cloudPush(doc).catch(() => {})
+    saveDoc(buildDoc(s))
   }, 300)
 }
 
@@ -208,21 +199,7 @@ const withEngineRestore = async (doc: StoredDoc): Promise<{ doc: StoredDoc; rest
   }
 }
 
-/** 云端权威协调：已配置云端时以云端文档为准；云端为空则把本地文档首推上去；连接失败回退本地。
- *  启动协调全程静默（不弹 toast），失败仅记诊断日志——手动「上传到云端 / 从云端恢复」的提示不受影响 */
-const reconcileWithCloud = async (localDoc: StoredDoc): Promise<StoredDoc> => {
-  if (!cloudConfigured()) return localDoc
-  try {
-    const remote = await cloudPull()
-    if (remote !== null) return remote
-    await cloudPush(localDoc)
-  } catch (e) {
-    warn('store', '云端协调失败，已使用本地数据', e)
-  }
-  return localDoc
-}
-
-/** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 云端协调 → 开启持久化 */
+/** 启动：初始化存储 → 读文档（无文档则尝试 v3 迁移 / 出厂种入）→ 开启持久化 */
 export const hydrate = (): Promise<void> => {
   if (hydrating !== null) return hydrating
   hydrating = doHydrate()
@@ -273,15 +250,14 @@ const doHydrate = async (): Promise<void> => {
       }
     }
   }
-  const finalDoc = await reconcileWithCloud(doc)
   useApp.setState({
-    settings: finalDoc.settings,
-    pages: finalDoc.pages,
-    engines: finalDoc.engines.length > 0 ? finalDoc.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
-    skins: finalDoc.skins,
-    history: finalDoc.history,
-    backupTime: finalDoc.backupTime,
-    welcomed: finalDoc.welcomed,
+    settings: doc.settings,
+    pages: doc.pages,
+    engines: doc.engines.length > 0 ? doc.engines : BUILTIN_ENGINES.map((e) => ({ ...e })),
+    skins: doc.skins,
+    history: doc.history,
+    backupTime: doc.backupTime,
+    welcomed: doc.welcomed,
     hydrated: true,
     ...(toasts.length > 0 ? { toast: toasts.join('；') } : {}),
   })
@@ -530,48 +506,6 @@ export const useApp = create<AppState>()((set, get) => ({
     }
     return next
   }),
-
-  /** 把当前全部数据立即上传到云端（需已在设置中配置云端连接） */
-  cloudUpload: async () => {
-    const s = get()
-    if (!cloudConfigured()) {
-      set({ toast: '请先在设置中配置云端连接' })
-      return
-    }
-    try {
-      await cloudPush(buildDoc(s))
-      set({ toast: '已上传到云端' })
-    } catch {
-      set({ toast: '上传失败，请检查云端连接配置' })
-    }
-  },
-
-  /** 从云端拉取最新数据覆盖本地（云端为权威数据源） */
-  cloudRestore: async () => {
-    if (!cloudConfigured()) {
-      set({ toast: '请先在设置中配置云端连接' })
-      return
-    }
-    try {
-      const remote = await cloudPull()
-      if (remote === null) {
-        set({ toast: '云端还没有数据，可先「上传到云端」' })
-        return
-      }
-      set({
-        settings: remote.settings,
-        pages: remote.pages,
-        engines: remote.engines.length > 0 ? remote.engines : get().engines,
-        skins: remote.skins,
-        history: remote.history,
-        backupTime: remote.backupTime,
-        cur: 0,
-        toast: '已从云端恢复最新数据',
-      })
-    } catch {
-      set({ toast: '恢复失败，请检查云端连接配置' })
-    }
-  },
 
   loadWeather: async () => {
     const data = await getWeather()
