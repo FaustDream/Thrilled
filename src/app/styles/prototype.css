@@ -419,6 +419,12 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .eng-row.sortable.drag{opacity:.4}
 .kbd{flex:0 0 auto;font-size:11px;padding:2px 7px;border-radius:6px;border:1px solid var(--line);
   background:var(--menu-hover);color:var(--panel-sub);font-family:inherit}
+/* 快捷键键帽按钮：点一下进入采集态（Esc 取消 / Backspace 清除） */
+.kbd-btn{min-width:72px;text-align:center;transition:border-color .16s,color .16s,background .16s}
+.kbd-btn:hover{border-color:var(--accent);color:var(--accent)}
+.kbd-btn.off{opacity:.7}
+.kbd-btn.cap{border-color:var(--accent);color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 14%,transparent)}
 .eng-row .er-ico{width:24px;height:24px;border-radius:7px;display:flex;align-items:center;
   justify-content:center;color:#fff;font-size:11px;font-weight:700;flex:0 0 auto}
 .pager-row{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;font-size:12px;

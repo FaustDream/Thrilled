@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import { BLUR_MAX_PX, MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
+import { normalizeShortcuts } from './shortcuts';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
 import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource } from './types';
 
@@ -228,6 +229,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     wallSources: Array.isArray(o['wallSources'])
       ? (o['wallSources'] as unknown[]).map(normWallSource).filter((x): x is WallpaperSource => x !== null)
       : [...d.wallSources],
+    shortcuts: normalizeShortcuts(o['shortcuts']),
   };
 };
 

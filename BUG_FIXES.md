@@ -3,6 +3,17 @@
 > 本地文档，不提交到 git。
 > 按版本号区分；发布新版本时，上一版本的修复记录即为该新版本的修复汇总。
 
+## v4.4 补丁 6（2026-10-09）——快捷键可自定义 + 动作扩容（用户需求）
+
+- **去掉「切换搜索引擎」**：该条目在上一轮（v4.4 补丁 1：移除数字键快捷切换）已随功能一并删除，当前快捷键清单里不存在任何搜索引擎项（旧构建仍会显示，需重新 `pnpm build` 并重载扩展）
+- **新增共享模块 `src/shared/shortcuts.ts`**：动作清单 `SHORTCUT_DEFS`（id / 动作名 / 出厂组合键 / `typing` 标记）+ 出厂表 `DEFAULT_SHORTCUTS` + 纯函数 `comboOf`（事件 → 规范组合键：修饰键固定 Ctrl→Alt→Shift、字母大写、空格写 `Space`、Cmd 归一到 Ctrl）、`isBareCombo`、`formatCombo`（`ArrowLeft`→`←`、`Escape`→`Esc`、`Space`→`空格`）、`normalizeShortcuts`
+- **动作从 6 条扩到 11 条**（全部可改键）：聚焦搜索框 `/`、上一页 `←`、下一页 `→`、切换极简 / 标准 `Alt+M`、打开添加 `Alt+A`、打开个性化 `Alt+P`、打开设置 `Alt+S`、换一条鼓励语 `Alt+Q`、导出布局 JSON `Ctrl+Shift+E`、一键重置 `Ctrl+Shift+R`、关闭浮层 / 菜单 / 弹窗 `Esc`。避开 Chrome 自身占用（`Ctrl+T/W/N/K/L/F/S`、`Ctrl+1-9` 等）取默认值
+- **键盘处理改为绑定表驱动**：`App.tsx` 的 keydown 不再硬编码按键，改为 `comboOf(e)` → 查 `settings.shortcuts` → 分发动作（`runShortcut`）；生效范围规则——**单按键只在非输入状态触发**（方向键、`/` 不干扰输入），**含修饰键的组合键在任意位置触发**（`Ctrl+Shift+E` 在输入框里也生效，与旧行为一致），`typing` 动作（关闭浮层）输入状态下也可用；命中即 `preventDefault`
+- **设置界面**：关于 → 快捷键改为可编辑清单（`ShortcutCard`）——每行「动作名 + 键帽按钮」，点键帽进入采集态（键帽显示「按下组合键…」并高亮），按下新组合键即改键；`Esc` 取消、`Backspace` / `Delete` 清除（显示「未设置」）、与他人冲突时提示不生效（捕获阶段监听 + `stopPropagation`，不会被页面动作分发吃掉）；卡片底部「恢复默认」一键回出厂，`Hint` 说明固定操作（搜索框回车、双击每日一言卡）；删掉原只读 `SHORTCUTS` 常量与只读信息行组件 `InfoRow`（已无引用）
+- **持久化**：`AppSettings.shortcuts: Record<string, string>` 入出厂默认（`shared/defaults`）与设置归一化（`shared/guards`，只保留已知动作、缺省回退出厂值、空串视为用户主动清除）；store 新增 `setShortcut` / `resetShortcuts`；随文档整存整取，备份 / 快照 / v3 迁移链路自动兼容
+- **测试**：新增 `tests/shortcuts.test.ts` 11 例（组合键归一化 / Cmd→Ctrl / 单按键判定 / 展示文案 / 归一化回退与丢弃未知项 / 出厂清单无搜索引擎项且只有 close-overlay 标记 typing）
+- **验证**：`tsc --noEmit` 0 错误、84 例单测通过（原 73 + 11）、eslint 无新增（仅余既存 `wallsource.ts` 的 `no-control-regex`）；浏览器端到端因审批超时未执行（改键 / 冲突 / 清除 / 生效四项待补测）
+
 ## v4.4 补丁 5（2026-10-09）——更新记录改为侧边栏内联展示（用户需求）
 
 - **入口**：更新记录不再走弹窗——删除 `ModalKey['log']`、`case 'log'` 弹窗体与弹窗宽度判断；内容内联进「设置 → 关于」首张卡片（右右键菜单「更新记录」改为 `data-act="open-log"`，跳设置抽屉的关于分区）。设置分区下标从组件内 `useState` 提升到 store（`settingsTab` / `setSettingsTab`），并导出 `settingTabOf(分区名)` 供外部入口使用，避免硬编码下标

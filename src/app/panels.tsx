@@ -20,6 +20,7 @@ import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks } from '../core/bookmark-importer'
 import { resetAllData } from '../core/reset'
 import { saveDoc } from '../core/storage'
+import { SHORTCUT_DEFS, comboOf, formatCombo } from '../shared/shortcuts'
 import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
@@ -905,20 +906,63 @@ const OPEN_MODES: readonly (readonly ['link' | 'tab' | 'search', string])[] = [
  */
 const SETTING_TABS: readonly string[] = ['搜索', '通用', '数据', '关于']
 
-/** 只读信息行：左侧说明 + 右侧值（复用引擎行的分隔线语言，用于「版本」「快捷键」这类参考项） */
-const InfoRow = ({ l, r }: { l: string; r: React.ReactNode }) => (
-  <div className="eng-row"><span style={{ flex: 1 }}>{l}</span><span style={{ color: 'var(--panel-sub)' }}>{r}</span></div>
-)
-
-/** 快捷键清单（设置 → 关于 → 快捷键） */
-const SHORTCUTS: readonly (readonly [string, string])[] = [
-  ['Enter', '执行搜索'],
-  ['← →', '切换页面'],
-  ['双击每日一言卡', '换一条鼓励语'],
-  ['Esc', '关闭面板 / 菜单 / 搜索历史'],
-  ['Ctrl+Shift+E', '导出布局 JSON'],
-  ['Ctrl+Shift+R', '一键重置（需确认）'],
-]
+/** 快捷键设置卡片：动作清单 + 点键帽采集新组合键（Esc 取消 / Backspace 清除 / 冲突提示） */
+const ShortcutCard = () => {
+  const shortcuts = useApp((st) => st.settings.shortcuts)
+  const setShortcut = useApp((st) => st.setShortcut)
+  const resetShortcuts = useApp((st) => st.resetShortcuts)
+  const showToast = useApp((st) => st.showToast)
+  const [capId, setCapId] = useState<string | null>(null)
+  useEffect(() => {
+    if (capId === null) return
+    /* 采集态在捕获阶段拦下按键：不被页面的动作分发吃掉，同时阻止浏览器默认行为 */
+    const onKey = (e: KeyboardEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.key === 'Escape') { setCapId(null); return }
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        setShortcut(capId, '')
+        setCapId(null)
+        showToast('已清除该快捷键')
+        return
+      }
+      const combo = comboOf(e)
+      if (combo === null) return
+      const conflict = SHORTCUT_DEFS.find((s) => s.id !== capId && shortcuts[s.id] === combo)
+      if (conflict !== undefined) {
+        showToast(`与「${conflict.label}」冲突，请换一组键`)
+        return
+      }
+      setShortcut(capId, combo)
+      setCapId(null)
+      showToast(`已设为 ${formatCombo(combo)}`)
+    }
+    document.addEventListener('keydown', onKey, true)
+    return () => document.removeEventListener('keydown', onKey, true)
+  }, [capId, shortcuts, setShortcut, showToast])
+  return (
+    <>
+      {SHORTCUT_DEFS.map((s) => {
+        const cap = capId === s.id
+        const combo = shortcuts[s.id] ?? ''
+        return (
+          <div className="eng-row" key={s.id}>
+            <span style={{ flex: 1 }}>{s.label}</span>
+            <button className={`kbd kbd-btn${cap ? ' cap' : ''}${combo === '' ? ' off' : ''}`}
+              title={cap ? '按 Esc 取消' : '点击后按下新的组合键'}
+              onClick={() => setCapId(cap ? null : s.id)}>
+              {cap ? '按下组合键…' : combo === '' ? '未设置' : formatCombo(combo)}
+            </button>
+          </div>
+        )
+      })}
+      <div className="btn-row" style={{ marginTop: 12 }}>
+        <button className="btn sm ghost" onClick={resetShortcuts}>恢复默认</button>
+      </div>
+      <Hint>点右侧键帽后按下新的组合键即可改键：Esc 取消、Backspace 清除，与其他动作冲突时不会生效。搜索框内回车执行搜索、双击每日一言卡换鼓励语为固定操作，不可改。</Hint>
+    </>
+  )
+}
 
 /** 导出布局 JSON 并提示 */
 const exportLayoutFile = (): void => {
@@ -1174,8 +1218,8 @@ const SettingAboutTab = () => (
     <SecCard t="更新记录" info="当前版本与历史版本：点版本行展开条目，点条目展开实现细节。">
       <ChangeLog />
     </SecCard>
-    <SecCard t="快捷键" info="非输入状态下生效；Ctrl+Shift 组合键在任意位置可用。">
-      {SHORTCUTS.map(([k, d]) => <InfoRow key={k} l={d} r={<kbd className="kbd">{k}</kbd>} />)}
+    <SecCard t="快捷键" info="每项都可自定义：单按键只在非输入状态生效，含 Ctrl / Alt 的组合键在任意位置生效（「关闭浮层」在输入状态下也可用）。">
+      <ShortcutCard />
     </SecCard>
   </>
 )

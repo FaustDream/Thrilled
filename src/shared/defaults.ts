@@ -5,6 +5,7 @@
  * core/reset 与 app/store 都从这里取默认，避免双份维护。
  */
 import type { AppSettings, DockApp, SkinPack } from './types';
+import { DEFAULT_SHORTCUTS } from './shortcuts';
 
 /** Dock 出厂为空：快捷方式由用户在「添加 → 自定义」手动新增（右键图标可改名 / 改网址 / 移除） */
 export const DEFAULT_DOCK_APPS: readonly DockApp[] = [];
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wallpaperRef: null,
   wallFocus: { x: 50, y: 50, ratio: 0 },
   wallSources: [],
+  shortcuts: { ...DEFAULT_SHORTCUTS },
 };
 
 /** 12 项用户可编辑令牌（风格抽屉取色行，02 §6.1） */

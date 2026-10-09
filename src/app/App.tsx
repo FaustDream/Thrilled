@@ -18,6 +18,7 @@ import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
 import { getWallpaper, type BgData } from '../core/wallpaper'
 import { GLASS_ALPHA_FACTOR, GLASS_FADED_KEYS, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN_DELTA, WALLPAPER_BLUR_COVER_THRESHOLD, WALLPAPER_BLUR_PX, WALLPAPER_FOCUS_RATIO_TOLERANCE } from '../shared/constants'
+import { SHORTCUT_DEFS, comboOf, isBareCombo } from '../shared/shortcuts'
 import { computeWallFocus } from '../core/wallpaper-focus'
 import type { WeatherData } from '../core/weather'
 import type { GridItem } from '../shared/types'
@@ -371,29 +372,42 @@ export const App = () => {
       }
       useApp.getState().openCtx(next)
     }
+    /** 快捷键动作分发：返回 true 表示已处理（调用方负责 preventDefault） */
+    const runShortcut = (id: string): boolean => {
+      const st = useApp.getState()
+      switch (id) {
+        case 'focus-search': inputRef.current?.focus(); return true
+        case 'page-prev': st.goPage(st.cur - 1); return true
+        case 'page-next': st.goPage(st.cur + 1); return true
+        case 'mode-toggle': st.setMode(st.settings.mode === 'minimal' ? 'standard' : 'minimal'); return true
+        case 'open-add': st.setDrawer('add'); return true
+        case 'open-personal': st.setDrawer('personal'); return true
+        case 'open-setting': st.setDrawer('setting'); return true
+        case 'roll-quote': st.rollEncourage(); return true
+        case 'export-layout': {
+          downloadJson('thrilled-layout.json', buildLayoutDoc(st.exportLayout().pages))
+          st.showToast('已导出 thrilled-layout.json')
+          return true
+        }
+        case 'reset-all': st.setModal('reset'); return true
+        case 'close-overlay':
+          st.openCtx(null); st.setModal(null); st.setDrawer(null); st.setEnginePanel(false); setHistoryOpen(false)
+          return true
+        default: return false
+      }
+    }
+    /* 快捷键统一查 settings.shortcuts：单按键只在非输入状态下触发，含修饰键的任意位置触发；
+       typing 动作（关闭浮层）输入状态下也生效。重置走确认弹窗，满足二次确认约束 */
     const key = (e: KeyboardEvent) => {
       const st = useApp.getState()
-      if (e.key === 'Escape') {
-        st.openCtx(null); st.setModal(null); st.setDrawer(null); st.setEnginePanel(false); setHistoryOpen(false)
-        return
-      }
-      /* Ctrl+Shift+E 导出布局 / Ctrl+Shift+R 一键重置（重置走确认弹窗，满足二次确认约束） */
-      if (e.ctrlKey && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
-        e.preventDefault()
-        const doc = st.exportLayout()
-        downloadJson('thrilled-layout.json', buildLayoutDoc(doc.pages))
-        st.showToast('已导出 thrilled-layout.json')
-        return
-      }
-      if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
-        e.preventDefault()
-        st.setModal('reset')
-        return
-      }
+      const combo = comboOf(e)
+      if (combo === null) return
+      const def = SHORTCUT_DEFS.find((d) => st.settings.shortcuts[d.id] === combo)
+      if (def === undefined) return
       const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key === 'ArrowLeft') st.goPage(st.cur - 1)
-      if (e.key === 'ArrowRight') st.goPage(st.cur + 1)
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA'
+      if (typing && def.typing !== true && isBareCombo(combo)) return
+      if (runShortcut(def.id)) e.preventDefault()
     }
     /* 滚轮横向翻页（带冷却，原型同参数） */
     const wheel = (e: WheelEvent) => {

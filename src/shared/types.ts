@@ -233,6 +233,8 @@ export interface AppSettings {
   wallFocus: WallFocus;
   /** 外部壁纸来源清单（用户自主添加；系统不内置任何壁纸资源） */
   wallSources: WallpaperSource[];
+  /** 自定义快捷键（动作 id → 规范组合键，见 shared/shortcuts；空串 = 未设置） */
+  shortcuts: Record<string, string>;
 }
 
 /** 外部壁纸来源（协议适配器 + 用户可改的 API 基址） */

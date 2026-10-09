@@ -17,6 +17,7 @@ import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/stora
 import { markActiveWallpaper } from '../core/wallpaper'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
 import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
+import { DEFAULT_SHORTCUTS } from '../shared/shortcuts'
 import type {
   AppSettings,
   EngineDef,
@@ -84,6 +85,10 @@ interface AppState {
   page: () => GridItem[]
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
   toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'showTime' | 'showDate' | 'showQuote' | 'immersive' | 'simpleSearch') => void
+  /** 设置某个动作的组合键（空串 = 清除该快捷键） */
+  setShortcut: (id: string, combo: string) => void
+  /** 全部恢复出厂快捷键 */
+  resetShortcuts: () => void
   setMode: (m: ViewMode) => void
   goPage: (i: number) => void
   setEngine: (id: string) => void
@@ -291,6 +296,13 @@ export const useApp = create<AppState>()((set, get) => ({
 
   setSetting: (k, v) => set((s) => ({ settings: { ...s.settings, [k]: v } })),
   toggle: (k) => set((s) => ({ settings: { ...s.settings, [k]: !s.settings[k] } })),
+  setShortcut: (id, combo) => set((s) => ({
+    settings: { ...s.settings, shortcuts: { ...s.settings.shortcuts, [id]: combo } },
+  })),
+  resetShortcuts: () => set((s) => ({
+    settings: { ...s.settings, shortcuts: { ...DEFAULT_SHORTCUTS } },
+    toast: '已恢复默认快捷键',
+  })),
   setMode: (m) => {
     const s = get()
     const tip = m === 'minimal' ? '已进入极简模式' : '已回到标准模式'
