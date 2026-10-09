@@ -114,7 +114,7 @@ export interface EngineDef {
   latin?: boolean | undefined;
   /** 搜索地址（query 前拼） */
   base: string;
-  /** 已隐藏（不出现在下拉 / 数字键 / 右键二级菜单） */
+  /** 已隐藏（不出现在下拉 / 右键二级菜单） */
   hidden?: boolean | undefined;
 }
 

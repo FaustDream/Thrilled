@@ -392,12 +392,6 @@ export const App = () => {
       }
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.ctrlKey || e.metaKey || e.altKey) return
-      if (e.key >= '1' && e.key <= '9') {
-        const list = st.engines.filter((x) => !x.hidden)
-        const target = list[Number(e.key) - 1]
-        if (target) { st.setEngine(target.id); st.showToast(`已切换到：${target.name}`) }
-        return
-      }
       if (e.key === 'ArrowLeft') st.goPage(st.cur - 1)
       if (e.key === 'ArrowRight') st.goPage(st.cur + 1)
     }
@@ -551,11 +545,11 @@ export const App = () => {
       )}
       {enginePanel && (
         <div className="engine-panel show" id="enginePanel" style={{ left: (stage.w - settings.searchWidth) / 2 }}>
-          {visibleEngines.map((e, i) => (
+          {visibleEngines.map((e) => (
             <div key={e.id} className={`ep-row${e.id === settings.engineId ? ' on' : ''}`} data-act="eng-set" data-v={e.id}>
               <span className="ep-ico" style={{ background: e.color, fontSize: e.latin ? 9 : 11 }}>{e.glyph}</span>
               <span className="ep-n">{e.name}</span>
-              {e.id === settings.engineId ? <span className="ep-cur">{Icon.check()}</span> : i < 9 ? <span className="ep-key">{i + 1}</span> : null}
+              {e.id === settings.engineId ? <span className="ep-cur">{Icon.check()}</span> : null}
             </div>
           ))}
           <div className="ep-foot" />

@@ -3,6 +3,15 @@
 > 本地文档，不提交到 git。
 > 按版本号区分；发布新版本时，上一版本的修复记录即为该新版本的修复汇总。
 
+## v4.4 补丁 1（2026-10-09）——移除搜索引擎数字键快捷切换（用户需求）
+
+- **需求**：去掉搜索引擎的「数字键快速切换」功能（用户截图为设置 → 搜索 → 搜索引擎里的 1–9 序号）
+- **键盘**：`App.tsx` 的 keydown 处理器删除 `1`–`9` 切换分支（可见引擎第 N 个 → `setEngine` + toast）；Escape / `←→` 翻页 / `Ctrl+Shift+E` 导出 / `Ctrl+Shift+R` 重置不变
+- **界面去暗示**：设置引擎列表行首数字序号删除（含隐藏项的 `—` 占位与可见序号的动态计数 `visibleNo`，拖拽把手 `⋮⋮` 保留）；搜索框引擎下拉每行右侧的数字徽标删除（`i < 9` 判断一并去掉，「管理搜索引擎」行尾的「设置」提示保留）；设置 → 关于的快捷键表删除 `1 – 9` 条目；搜索引擎卡片 ⓘ 文案、引擎管理弹窗副标题去掉数字键表述
+- **清理**：`prototype.css` 删除失去引用的 `.eng-key` 规则；`shared/types.ts` 的 `hidden` 注释去掉「数字键」
+- **未动**：`docs/v4/` 原型与设计文档（记录当初方案的历史产物，其中仍含数字键设计）；隐藏引擎在下拉 / 右键二级菜单的生效范围不变
+- **验证**：`tsc --noEmit` 0 错误；73 例单测通过；eslint 无新增问题（仅余既存 `wallsource.ts` 的 `no-control-regex`）；浏览器端到端（dev 5199）——设置引擎清单 12 行无序号、引擎下拉仅剩「设置」徽标、主界面按 `1` 后 `settings.engineId` 仍为 `baidu` 且无「已切换到」toast、关于页快捷键表已无 `1 – 9`
+
 ## v4.4（2026-09-30 至 2026-10-08）——极简页面优化 / Dock 改版 / 壁纸来源与面板整理（用户需求）
 
 - **`wallsource.ts` 类型错误清零（用户要求）**：9 处 `tsc` 报错全部落在哲风适配器——2 处是 `iv` 的类型标注被放宽成 `Uint8Array`（默认 `ArrayBufferLike`），与 WebCrypto 的 `BufferSource`（要求 `ArrayBufferView<ArrayBuffer>`）不兼容，改为显式 `Uint8Array<ArrayBuffer>`；7 处来自解密后响应体的访问——`let body: unknown` 改 `Record<string, unknown>`（沿用文件内 `itemOf` 的既有约定）、列表声明为 `unknown[]`，消掉 6 处 `TS18046` 与 1 处隐式 `any`。**纯类型改动、运行时零变化**：重新生产构建后与已发布 `thrilled-4.4.zip` 逐文件 SHA-256 比对 **9/9 一致**。`pnpm typecheck` 归零，`pnpm prepack`（typecheck + test + build）链路恢复；`pnpm lint` 仍余 1 条既存 `no-control-regex`（`zfDecrypt` 中匹配 NUL 的正则，属有意匹配，未在本次范围）

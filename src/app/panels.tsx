@@ -859,38 +859,33 @@ const EngineRows = ({ modalMode }: { modalMode: boolean }) => {
   const setModal = useApp((s) => s.setModal)
   const showToast = useApp((s) => s.showToast)
   const [dragId, setDragId] = useState<string | null>(null)
-  let visibleNo = 0
   return (
     <>
-      {engines.map((e, i) => {
-        const no = e.hidden === true ? 0 : ++visibleNo
-        return (
-          <div className="eng-row sortable" key={e.id} draggable
-            onDragStart={() => setDragId(e.id)}
-            onDragEnd={() => setDragId(null)}
-            onDragOver={(ev) => { if (dragId !== null) ev.preventDefault() }}
-            onDrop={() => {
-              if (dragId === null || dragId === e.id) return
-              const ids = engines.map((x) => x.id).filter((x) => x !== dragId)
-              ids.splice(i, 0, dragId)
-              commitEngineOrder(ids)
-              setDragId(null)
-            }}>
-            <span style={{ color: 'var(--panel-sub)', cursor: 'grab' }}>⋮⋮</span>
-            <span className="eng-key">{no !== 0 ? (no <= 9 ? no : '·') : '—'}</span>
-            <div className="er-ico" style={{ background: e.color, opacity: e.hidden ? 0.45 : 1 }}>
-              {e.img !== undefined ? <img src={e.img} alt={e.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 7 }} /> : e.glyph}
-            </div>
-            <span style={{ flex: 1, opacity: e.hidden ? 0.55 : 1 }}>{e.name}</span>
-            {engineId === e.id ? <span className="tb-tag">正在使用中</span>
-              : <button className="btn sm ghost" onClick={() => setEngine(e.id)}>{modalMode ? '设为默认' : '启用'}</button>}
-            <button className="btn sm ghost" onClick={() => {
-              toggleEngineHidden(e.id)
-              showToast(e.hidden === true ? '已显示' : '已隐藏')
-            }}>{e.hidden === true ? '显示' : '隐藏'}</button>
+      {engines.map((e, i) => (
+        <div className="eng-row sortable" key={e.id} draggable
+          onDragStart={() => setDragId(e.id)}
+          onDragEnd={() => setDragId(null)}
+          onDragOver={(ev) => { if (dragId !== null) ev.preventDefault() }}
+          onDrop={() => {
+            if (dragId === null || dragId === e.id) return
+            const ids = engines.map((x) => x.id).filter((x) => x !== dragId)
+            ids.splice(i, 0, dragId)
+            commitEngineOrder(ids)
+            setDragId(null)
+          }}>
+          <span style={{ color: 'var(--panel-sub)', cursor: 'grab' }}>⋮⋮</span>
+          <div className="er-ico" style={{ background: e.color, opacity: e.hidden ? 0.45 : 1 }}>
+            {e.img !== undefined ? <img src={e.img} alt={e.name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 7 }} /> : e.glyph}
           </div>
-        )
-      })}
+          <span style={{ flex: 1, opacity: e.hidden ? 0.55 : 1 }}>{e.name}</span>
+          {engineId === e.id ? <span className="tb-tag">正在使用中</span>
+            : <button className="btn sm ghost" onClick={() => setEngine(e.id)}>{modalMode ? '设为默认' : '启用'}</button>}
+          <button className="btn sm ghost" onClick={() => {
+            toggleEngineHidden(e.id)
+            showToast(e.hidden === true ? '已显示' : '已隐藏')
+          }}>{e.hidden === true ? '显示' : '隐藏'}</button>
+        </div>
+      ))}
       <div className="btn-row" style={{ marginTop: 12 }}>
         <button className="btn sm" onClick={() => setModal('addEngine')}>添加自定义搜索引擎</button>
         {!modalMode && <button className="btn sm ghost" onClick={() => setModal('engine')}>搜索引擎管理</button>}
@@ -919,7 +914,6 @@ const InfoRow = ({ l, r }: { l: string; r: React.ReactNode }) => (
 
 /** 快捷键清单（设置 → 关于 → 快捷键） */
 const SHORTCUTS: readonly (readonly [string, string])[] = [
-  ['1 – 9', '切换搜索引擎（非输入状态）'],
   ['Enter', '执行搜索'],
   ['← →', '切换页面'],
   ['双击每日一言卡', '换一条鼓励语'],
@@ -973,7 +967,7 @@ const SettingSearchTab = () => {
   const toggle = useApp((st) => st.toggle)
   return (
     <>
-      <SecCard t="搜索引擎" info="拖动行首 ⋮⋮ 排序；左侧序号即数字键映射（非输入状态下按 1–9 直接切换）；隐藏的引擎不出现在搜索框下拉与右键二级菜单里。">
+      <SecCard t="搜索引擎" info="拖动行首 ⋮⋮ 排序；隐藏的引擎不出现在搜索框下拉与右键二级菜单里。">
         <EngineRows modalMode={false} />
       </SecCard>
       <SecCard t="搜索框" info="本项目不做搜索联想：输入时不出候选词，只在开启搜索历史时展示历史记录。">
@@ -1279,7 +1273,7 @@ export const Modal = () => {
         return (
           <>
             <h2>搜索引擎管理</h2>
-            <p className="sub">拖动可排序；隐藏后的引擎不会出现在搜索框下拉、数字键切换与右键二级菜单里。</p>
+            <p className="sub">拖动可排序；隐藏后的引擎不会出现在搜索框下拉与右键二级菜单里。</p>
             <EngineRows modalMode />
             <div className="btn-row end" style={{ marginTop: 16 }}>
               <button className="btn" onClick={() => setModal(null)}>完成</button>
