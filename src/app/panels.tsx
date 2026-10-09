@@ -3,7 +3,7 @@
  * 结构与文案按 docs/v4/02-UI规格.md §8、§6.1、§6.3、§7 与原型冻结内容落地。
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useApp, ENGINE_LIMIT, type DrawerKey } from './store'
+import { useApp, type DrawerKey } from './store'
 import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
 import { findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
@@ -850,7 +850,7 @@ const PersonalPanel = () => {
 
 /* ============================== 设置 ============================== */
 
-const EngineRows = ({ modalMode }: { modalMode: boolean }) => {
+const EngineRows = () => {
   const engines = useApp((s) => s.engines)
   const engineId = useApp((s) => s.settings.engineId)
   const setEngine = useApp((s) => s.setEngine)
@@ -879,7 +879,7 @@ const EngineRows = ({ modalMode }: { modalMode: boolean }) => {
           </div>
           <span style={{ flex: 1, opacity: e.hidden ? 0.55 : 1 }}>{e.name}</span>
           {engineId === e.id ? <span className="tb-tag">正在使用中</span>
-            : <button className="btn sm ghost" onClick={() => setEngine(e.id)}>{modalMode ? '设为默认' : '启用'}</button>}
+            : <button className="btn sm ghost" onClick={() => setEngine(e.id)}>启用</button>}
           <button className="btn sm ghost" onClick={() => {
             toggleEngineHidden(e.id)
             showToast(e.hidden === true ? '已显示' : '已隐藏')
@@ -888,7 +888,6 @@ const EngineRows = ({ modalMode }: { modalMode: boolean }) => {
       ))}
       <div className="btn-row" style={{ marginTop: 12 }}>
         <button className="btn sm" onClick={() => setModal('addEngine')}>添加自定义搜索引擎</button>
-        {!modalMode && <button className="btn sm ghost" onClick={() => setModal('engine')}>搜索引擎管理</button>}
       </div>
     </>
   )
@@ -968,7 +967,7 @@ const SettingSearchTab = () => {
   return (
     <>
       <SecCard t="搜索引擎" info="拖动行首 ⋮⋮ 排序；隐藏的引擎不出现在搜索框下拉与右键二级菜单里。">
-        <EngineRows modalMode={false} />
+        <EngineRows />
       </SecCard>
       <SecCard t="搜索框" info="本项目不做搜索联想：输入时不出候选词，只在开启搜索历史时展示历史记录。">
         <SwitchRow l="自动聚焦" d="打开新标签时自动聚焦搜索框" on={s.autoFocus} onToggle={() => toggle('autoFocus')} />
@@ -1241,7 +1240,7 @@ export const Modal = () => {
   const engImgFile = useRef<HTMLInputElement | null>(null)
   const item = pages[cur]?.find((x) => x.id === itemId) ?? null
   if (!modal) return null
-  const narrow = modal === 'log' || modal === 'about' || modal === 'engine' || modal === 'backup' || modal === 'restore' || modal === 'reset'
+  const narrow = modal === 'log' || modal === 'about' || modal === 'backup' || modal === 'restore' || modal === 'reset'
   const body = () => {
     switch (modal) {
       case 'theme':
@@ -1269,22 +1268,11 @@ export const Modal = () => {
             </div>
           </>
         )
-      case 'engine':
-        return (
-          <>
-            <h2>搜索引擎管理</h2>
-            <p className="sub">拖动可排序；隐藏后的引擎不会出现在搜索框下拉与右键二级菜单里。</p>
-            <EngineRows modalMode />
-            <div className="btn-row end" style={{ marginTop: 16 }}>
-              <button className="btn" onClick={() => setModal(null)}>完成</button>
-            </div>
-          </>
-        )
       case 'addEngine':
         return (
           <>
             <h2>添加自定义搜索引擎</h2>
-            <p className="sub">请输入搜索引擎名称与搜索地址（启用数量上限 {ENGINE_LIMIT} 个）。</p>
+            <p className="sub">请输入搜索引擎名称与搜索地址。</p>
             <div className="f-row"><label className="f-label">名称</label>
               <input className="f-input" placeholder="请输入搜索引擎名称" value={engName} onChange={(e) => setEngName(e.target.value)} /></div>
             <div className="f-row"><label className="f-label">图标（可选）</label>
@@ -1308,13 +1296,15 @@ export const Modal = () => {
             <div className="btn-row end">
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
               <button className="btn" onClick={() => {
-                const n = engName || '自定义'
+                const n = engName.trim() || '自定义'
+                const base = engBase.trim()
+                if (base === '') { useApp.getState().showToast('请填写搜索地址'); return }
                 useApp.getState().addEngine({
                   id: `c${Date.now().toString(36)}`, name: n, color: '#0EA5E9', glyph: n.slice(0, 1),
-                  base: engBase, ...(engImg !== '' ? { img: engImg } : {}),
+                  base, ...(engImg !== '' ? { img: engImg } : {}),
                 })
+                setEngName(''); setEngBase(''); setEngImg('')
                 setModal(null)
-                useApp.getState().showToast('添加成功')
               }}>确定</button>
             </div>
           </>

@@ -38,9 +38,6 @@ import type {
 
 export type { SkinPack } from '../shared/types'
 
-/** 引擎启用上限（04 §5.1：展示数量已达上限） */
-export const ENGINE_LIMIT = 12
-
 /** 当前风格的完整令牌（皮肤缺省项回退同组默认） */
 export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, string> => {
   const skin = skins.find((s) => s.id === id) ?? skins[0] ?? BUILTIN_SKINS[0]
@@ -50,7 +47,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'theme' | 'engine' | 'addEngine' | 'log' | 'about' | 'editItem' | 'backup' | 'restore' | 'reset'
+export type ModalKey = 'theme' | 'addEngine' | 'log' | 'about' | 'editItem' | 'backup' | 'restore' | 'reset'
 
 export interface CtxState {
   x: number
@@ -335,9 +332,7 @@ export const useApp = create<AppState>()((set, get) => ({
     const engineId = stillVisible.some((e) => e.id === s.settings.engineId) ? s.settings.engineId : (stillVisible[0]?.id ?? s.settings.engineId)
     return { engines, settings: { ...s.settings, engineId } }
   }),
-  addEngine: (e) => set((s) => (s.engines.filter((x) => !x.hidden).length >= ENGINE_LIMIT
-    ? { toast: '展示数量已达上限 12 个，请先隐藏其他引擎' }
-    : { engines: [...s.engines, e] })),
+  addEngine: (e) => set((s) => ({ engines: [...s.engines, e], toast: `已添加：${e.name}` })),
   commitEngineOrder: (ids) => set((s) => {
     const byId = new Map(s.engines.map((e) => [e.id, e]))
     const next: EngineDef[] = []
