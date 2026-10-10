@@ -423,9 +423,12 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 /* 危险操作卡片：红色描边与标题，与常规设置卡片区隔（覆盖 / 删除类操作单独成卡） */
 .sec-card.danger{border-color:color-mix(in srgb,#ef4444 42%,transparent)}
 .sec-card.danger .sec-title{color:#ef4444}
-.sub-tabs{display:flex;gap:8px;margin-bottom:12px}
-.sub-tab{font-size:12px;padding:5px 10px;border-radius:8px;background:var(--line);color:var(--panel-sub);cursor:pointer}
-.sub-tab.active{background:var(--accent);color:#fff}
+/* 添加抽屉页签：下划线样式（选中 = 下划线 + 字重 500），实心主色只留给主按钮 */
+.sub-tabs{display:flex;gap:16px;margin-bottom:12px;border-bottom:1px solid var(--line)}
+.sub-tab{position:relative;font-size:12px;padding:6px 2px;background:transparent;color:var(--panel-sub);cursor:pointer}
+.sub-tab.active{color:var(--accent);font-weight:500}
+.sub-tab.active::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;
+  background:var(--accent);border-radius:1px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px;
   min-height:56px;padding:0;border-bottom:1px solid var(--line)}
 .switch-row .sr-desc{display:block;font-size:11px;color:var(--panel-sub);margin-top:3px}
@@ -449,13 +452,34 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .cb.on{border-color:var(--accent)}
 
 /* 网址导航 */
-.nv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.nv-item{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 2px;
-  border-radius:10px;cursor:pointer}
-.nv-item:hover{background:var(--line)}
-.nv-ico{width:40px;height:40px;border-radius:12px;font-size:15px}
-.nv-name{font-size:11px;color:var(--panel-sub);max-width:100%;text-align:center;white-space:nowrap;
+.nv-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.nv-item{display:flex;flex-direction:column;align-items:center;gap:7px;padding:12px 4px;
+  border-radius:8px;cursor:pointer;background:color-mix(in srgb,var(--card-bg) 62%,transparent)}
+.nv-item:hover{background:color-mix(in srgb,var(--card-bg) 88%,transparent)}
+/* 已在 Dock 的条目：降透明度提示，点击仍给出「已在 Dock 中」反馈 */
+.nv-item.dis{opacity:.42;cursor:default}
+.nv-item.dis:hover{background:color-mix(in srgb,var(--card-bg) 62%,transparent)}
+.nv-ico{width:56px;height:56px;border-radius:14px;font-size:18px}
+.nv-name{font-size:13px;color:var(--panel-text,var(--card-text));max-width:100%;text-align:center;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
+/* 内容区右上角的文字操作（批量添加 / 全部导入）——不与页签抢主色 */
+.nv-toolbar{display:flex;justify-content:flex-end;margin:0 0 8px}
+.nv-tool{font-size:12px;color:var(--accent);cursor:pointer}
+.nv-tool:hover{text-decoration:underline}
+/* 分类 chips 单行横向滚动（隐藏滚动条） */
+.cats-scroll{display:flex;flex-wrap:nowrap;gap:6px;margin:10px 0;overflow-x:auto;
+  scrollbar-width:none;padding-bottom:2px}
+.cats-scroll::-webkit-scrollbar{display:none}
+/* 添加抽屉内的分类选中态：淡主色底 + 主色字，不再实心蓝（实心蓝只留主按钮） */
+.dw .cat.active{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-weight:600}
+/* Dock 已添加快捷方式的紧凑 chips 行 */
+.dock-chips{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:10px}
+.dock-chip{display:flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:8px;
+  background:var(--line);max-width:150px}
+.dock-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dock-chip i{font-style:normal;cursor:pointer;color:var(--panel-sub)}
+.dock-chip i:hover{color:#e05a6d}
+.dock-chip-count{font-size:11px;color:var(--panel-sub)}
 .cats{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
 /* 卡片详情弹窗：各组件的核心内容视图（天气 / 时钟 / 月历 / 待办 / 书签列表 / 大数字） */
 .dt-now{display:flex;align-items:baseline;gap:12px;margin:4px 0 10px}

@@ -1,0 +1,548 @@
+- generic [ref=e3]:
+  - generic:
+    - generic [ref=e5]:
+      - generic [ref=e6] [cursor=pointer]:
+        - generic [ref=e7]:
+          - generic [ref=e8]: 17:13
+          - generic [ref=e9]: 10月10日 星期六
+        - generic [ref=e10]:
+          - generic "编辑" [ref=e11]
+          - generic "删除" [ref=e14]
+      - generic [ref=e17] [cursor=pointer]:
+        - generic [ref=e18]:
+          - generic [ref=e19]: 20°C
+          - generic [ref=e20]:
+            - generic [ref=e21]: 北京
+            - generic [ref=e22]: 多云转小雨 18°/24° 空气优
+        - generic [ref=e26]:
+          - generic "编辑" [ref=e27]
+          - generic "删除" [ref=e30]
+      - generic [ref=e33] [cursor=pointer]:
+        - generic [ref=e35]:
+          - generic [ref=e36]:
+            - generic [ref=e39]: 待办
+            - generic [ref=e40]: 0/0
+          - generic [ref=e41]: 暂无待办 · 点击卡片添加
+        - generic [ref=e42]:
+          - generic "编辑" [ref=e43]
+          - generic "删除" [ref=e46]
+      - generic [ref=e49] [cursor=pointer]:
+        - generic [ref=e50]: 收藏夹
+        - generic [ref=e54]:
+          - generic "编辑" [ref=e55]
+          - generic "删除" [ref=e58]
+      - generic [ref=e61] [cursor=pointer]:
+        - generic [ref=e62]:
+          - generic [ref=e63]: 距离元旦
+          - generic [ref=e64]:
+            - generic [ref=e65]: "83"
+            - generic [ref=e66]: 天
+        - generic [ref=e67]:
+          - generic "编辑" [ref=e68]
+          - generic "删除" [ref=e71]
+      - generic [ref=e74] [cursor=pointer]:
+        - generic [ref=e75]:
+          - generic [ref=e76]:
+            - generic [ref=e77]: "10"
+            - generic [ref=e78]: 周六
+          - generic [ref=e79]:
+            - generic [ref=e80]: 2026年10月
+            - generic [ref=e81]: 八月十五 · 宜出行
+        - generic [ref=e82]:
+          - generic "编辑" [ref=e83]
+          - generic "删除" [ref=e86]
+      - generic [ref=e89] [cursor=pointer]:
+        - generic [ref=e90]:
+          - generic [ref=e91]:
+            - generic [ref=e92]: 看点
+            - generic [ref=e93]: 百度
+            - generic [ref=e94]: 微博
+            - generic [ref=e95]: 抖音
+            - generic [ref=e96]: »
+          - generic [ref=e97]:
+            - generic [ref=e98]:
+              - generic [ref=e99]: "1"
+              - generic [ref=e100]: 台风“桦加沙”最新路径公布
+            - generic [ref=e101]:
+              - generic [ref=e102]: "2"
+              - generic [ref=e103]: 国庆中秋假期出行全指南
+            - generic [ref=e104]:
+              - generic [ref=e105]: "3"
+              - generic [ref=e106]: 我国成功发射新一组低轨卫星
+            - generic [ref=e107]:
+              - generic [ref=e108]: "4"
+              - generic [ref=e109]: 新能源汽车下乡政策发布
+            - generic [ref=e110]:
+              - generic [ref=e111]: "5"
+              - generic [ref=e112]: 多地气温创入秋以来新低
+        - generic [ref=e113]:
+          - generic "编辑" [ref=e114]
+          - generic "删除" [ref=e117]
+      - generic [ref=e140] [cursor=pointer]:
+        - generic "编辑" [ref=e141]
+        - generic "删除" [ref=e144]
+      - generic [ref=e147] [cursor=pointer]:
+        - generic [ref=e149]:
+          - generic [ref=e150]: 坚持住，距下班只有
+          - generic [ref=e151]: 00:46:48
+          - generic [ref=e152]:
+            - generic [ref=e153]:
+              - generic [ref=e154]: 元旦
+              - generic [ref=e155]: 83天
+            - generic [ref=e158]:
+              - generic [ref=e159]: 春节
+              - generic [ref=e160]: 119天
+            - generic [ref=e163]:
+              - generic [ref=e164]: 清明
+              - generic [ref=e165]: 177天
+            - generic [ref=e168]:
+              - generic [ref=e169]: 劳动节
+              - generic [ref=e170]: 203天
+        - generic [ref=e184]:
+          - generic "编辑" [ref=e185]
+          - generic "删除" [ref=e188]
+      - generic [ref=e191] [cursor=pointer]:
+        - generic [ref=e192]:
+          - generic [ref=e193]: AI
+          - generic [ref=e195]: UiTab AI
+          - generic [ref=e196]: 试试问问这些问题
+        - generic [ref=e197]:
+          - generic "编辑" [ref=e198]
+          - generic "删除" [ref=e201]
+      - generic [ref=e204] [cursor=pointer]:
+        - generic [ref=e206]:
+          - generic [ref=e207]: 微
+          - generic [ref=e209]: Q
+          - generic [ref=e211]: 钉
+          - generic [ref=e213]: 飞
+          - generic [ref=e215]: M
+          - generic [ref=e217]: D
+          - generic [ref=e219]: T
+          - generic [ref=e221]: 语
+          - generic [ref=e223]: "N"
+          - generic [ref=e225]: D
+          - generic [ref=e227]: C
+          - generic [ref=e229]: G
+        - generic [ref=e231]:
+          - generic "编辑" [ref=e232]
+          - generic "删除" [ref=e235]
+      - generic [ref=e238] [cursor=pointer]:
+        - generic [ref=e240]:
+          - generic [ref=e241]: 淘
+          - generic [ref=e243]: 京
+          - generic [ref=e245]: 小
+          - generic [ref=e247]: 豆
+          - generic [ref=e249]: 知
+          - generic [ref=e251]: 微
+          - generic [ref=e253]: 哔
+          - generic [ref=e255]: 快
+          - generic [ref=e257]: S
+          - generic [ref=e259]: "Y"
+          - generic [ref=e261]: G
+          - generic [ref=e263]: F
+          - generic [ref=e265]: M
+          - generic [ref=e267]: R
+          - generic [ref=e269]: V
+          - generic [ref=e271]: "N"
+          - generic [ref=e273]: 语
+          - generic [ref=e275]: 掘
+          - generic [ref=e277]: C
+          - generic [ref=e279]: 少
+          - generic [ref=e281]: P
+          - generic [ref=e283]: D
+          - generic [ref=e285]: S
+          - generic [ref=e287]: "N"
+        - generic [ref=e289]:
+          - generic "编辑" [ref=e290]
+          - generic "删除" [ref=e293]
+      - generic [ref=e296] [cursor=pointer]:
+        - generic [ref=e297]:
+          - generic [ref=e298]: 下午好，主人
+          - generic [ref=e299]: 此刻就是开始的最好时刻。
+        - generic [ref=e301]:
+          - generic "编辑" [ref=e302]
+          - generic "删除" [ref=e305]
+      - generic [ref=e308] [cursor=pointer]:
+        - generic [ref=e309]: "128"
+        - generic [ref=e315]:
+          - generic "编辑" [ref=e316]
+          - generic "删除" [ref=e319]
+      - generic [ref=e322] [cursor=pointer]:
+        - generic [ref=e327]:
+          - generic [ref=e328]: 计算器
+          - generic [ref=e329]: 点击开始计算
+        - generic [ref=e330]:
+          - generic "编辑" [ref=e331]
+          - generic "删除" [ref=e334]
+      - generic [ref=e337] [cursor=pointer]:
+        - generic [ref=e342]:
+          - generic [ref=e343]: 翻译
+          - generic [ref=e344]: 中英互译 · 划词
+        - generic [ref=e345]:
+          - generic "编辑" [ref=e346]
+          - generic "删除" [ref=e349]
+      - generic [ref=e352] [cursor=pointer]:
+        - generic [ref=e354]:
+          - generic [ref=e355]: 百
+          - generic [ref=e357]: 必
+          - generic [ref=e359]: 知
+          - generic [ref=e361]: 豆
+          - generic [ref=e363]: V
+          - generic [ref=e365]: M
+          - generic [ref=e367]: D
+          - generic [ref=e369]: S
+        - generic [ref=e371]:
+          - generic "编辑" [ref=e372]
+          - generic "删除" [ref=e375]
+    - generic [ref=e379]:
+      - generic [ref=e380] [cursor=pointer]:
+        - generic [ref=e381]:
+          - generic [ref=e382]:
+            - generic [ref=e383]: 看点
+            - generic [ref=e384]: 百度
+            - generic [ref=e385]: 微博
+            - generic [ref=e386]: 抖音
+            - generic [ref=e387]: »
+          - generic [ref=e388]:
+            - generic [ref=e389]:
+              - generic [ref=e390]: "1"
+              - generic [ref=e391]: 台风“桦加沙”最新路径公布
+              - generic [ref=e392]: 326.4万
+            - generic [ref=e393]:
+              - generic [ref=e394]: "2"
+              - generic [ref=e395]: 国庆中秋假期出行全指南
+              - generic [ref=e396]: 298.1万
+            - generic [ref=e397]:
+              - generic [ref=e398]: "3"
+              - generic [ref=e399]: 我国成功发射新一组低轨卫星
+              - generic [ref=e400]: 256.7万
+            - generic [ref=e401]:
+              - generic [ref=e402]: "4"
+              - generic [ref=e403]: 新能源汽车下乡政策发布
+              - generic [ref=e404]: 218.3万
+            - generic [ref=e405]:
+              - generic [ref=e406]: "5"
+              - generic [ref=e407]: 多地气温创入秋以来新低
+              - generic [ref=e408]: 196.5万
+        - generic [ref=e409]:
+          - generic "编辑" [ref=e410]
+          - generic "删除" [ref=e413]
+      - generic [ref=e416] [cursor=pointer]:
+        - generic [ref=e417]:
+          - generic [ref=e418]: 20°C
+          - generic [ref=e419]:
+            - generic [ref=e420]: 北京
+            - generic [ref=e421]: 多云转小雨 18°/24° 空气优
+        - generic [ref=e425]:
+          - generic "编辑" [ref=e426]
+          - generic "删除" [ref=e429]
+      - generic [ref=e432] [cursor=pointer]:
+        - generic [ref=e434]:
+          - generic [ref=e435]:
+            - generic [ref=e438]: 待办
+            - generic [ref=e439]: 0/0
+          - generic [ref=e440]: 暂无待办 · 点击卡片添加
+        - generic [ref=e441]:
+          - generic "编辑" [ref=e442]
+          - generic "删除" [ref=e445]
+      - generic [ref=e448] [cursor=pointer]:
+        - generic [ref=e449]:
+          - generic [ref=e450]:
+            - generic [ref=e451]: "10"
+            - generic [ref=e452]: 周六
+          - generic [ref=e453]:
+            - generic [ref=e454]: 2026年10月
+            - generic [ref=e455]: 八月十五 · 宜出行
+        - generic [ref=e456]:
+          - generic "编辑" [ref=e457]
+          - generic "删除" [ref=e460]
+      - generic [ref=e463] [cursor=pointer]:
+        - generic [ref=e464]:
+          - generic [ref=e465]: 距离元旦
+          - generic [ref=e466]:
+            - generic [ref=e467]: "83"
+            - generic [ref=e468]: 天
+        - generic [ref=e469]:
+          - generic "编辑" [ref=e470]
+          - generic "删除" [ref=e473]
+      - generic [ref=e476] [cursor=pointer]:
+        - generic [ref=e477]:
+          - generic [ref=e478]: 17:13
+          - generic [ref=e479]: 10月10日 星期六
+        - generic [ref=e480]:
+          - generic "编辑" [ref=e481]
+          - generic "删除" [ref=e484]
+      - generic [ref=e487] [cursor=pointer]:
+        - generic [ref=e488]: 收藏夹
+        - generic [ref=e492]:
+          - generic "编辑" [ref=e493]
+          - generic "删除" [ref=e496]
+      - generic [ref=e499] [cursor=pointer]:
+        - generic [ref=e500]: M
+        - generic [ref=e503]:
+          - generic "编辑" [ref=e504]
+          - generic "删除" [ref=e507]
+      - generic [ref=e510] [cursor=pointer]:
+        - generic [ref=e511]: G
+        - generic [ref=e514]:
+          - generic "编辑" [ref=e515]
+          - generic "删除" [ref=e518]
+      - generic [ref=e521] [cursor=pointer]:
+        - generic [ref=e522]:
+          - generic [ref=e523]: AI
+          - generic [ref=e525]: UiTab AI
+          - generic [ref=e526]: 试试问问这些问题
+        - generic [ref=e527]:
+          - generic "编辑" [ref=e528]
+          - generic "删除" [ref=e531]
+      - generic [ref=e534] [cursor=pointer]:
+        - generic [ref=e536]:
+          - generic [ref=e537]: 豆
+          - generic [ref=e539]: K
+          - generic [ref=e541]: 秘
+          - generic [ref=e543]: 通
+        - generic [ref=e545]:
+          - generic "编辑" [ref=e546]
+          - generic "删除" [ref=e549]
+      - generic [ref=e552] [cursor=pointer]:
+        - generic [ref=e554]:
+          - generic [ref=e555]: 译
+          - generic [ref=e557]: 算
+          - generic [ref=e559]: 截
+          - generic [ref=e561]: 码
+        - generic [ref=e563]:
+          - generic "编辑" [ref=e564]
+          - generic "删除" [ref=e567]
+      - generic [ref=e570] [cursor=pointer]:
+        - generic [ref=e572]:
+          - generic [ref=e573]: 学
+          - generic [ref=e575]: 公
+          - generic [ref=e577]: 语
+          - generic [ref=e579]: "N"
+        - generic [ref=e581]:
+          - generic "编辑" [ref=e582]
+          - generic "删除" [ref=e585]
+      - generic [ref=e588] [cursor=pointer]:
+        - generic [ref=e590]:
+          - generic [ref=e591]: 爱
+          - generic [ref=e593]: 视
+          - generic [ref=e595]: 网
+          - generic [ref=e597]: "Y"
+        - generic [ref=e599]:
+          - generic "编辑" [ref=e600]
+          - generic "删除" [ref=e603]
+      - generic [ref=e626] [cursor=pointer]:
+        - generic "编辑" [ref=e627]
+        - generic "删除" [ref=e630]
+      - generic [ref=e633] [cursor=pointer]:
+        - generic [ref=e635]:
+          - generic [ref=e636]: 京
+          - generic [ref=e638]: 猫
+          - generic [ref=e640]: 拼
+          - generic [ref=e642]: 唯
+          - generic [ref=e644]: 苏
+        - generic [ref=e646]:
+          - generic "编辑" [ref=e647]
+          - generic "删除" [ref=e650]
+      - generic [ref=e653] [cursor=pointer]:
+        - generic [ref=e655]:
+          - generic [ref=e656]: St
+          - generic [ref=e658]: T
+        - generic [ref=e660]:
+          - generic "编辑" [ref=e661]
+          - generic "删除" [ref=e664]
+      - generic [ref=e667] [cursor=pointer]:
+        - generic [ref=e669]:
+          - generic [ref=e670]: 微
+          - generic [ref=e672]: 知
+        - generic [ref=e674]:
+          - generic "编辑" [ref=e675]
+          - generic "删除" [ref=e678]
+      - generic [ref=e681] [cursor=pointer]:
+        - generic [ref=e683]:
+          - generic [ref=e684]: 微
+          - generic [ref=e686]: V
+        - generic [ref=e688]:
+          - generic "编辑" [ref=e689]
+          - generic "删除" [ref=e692]
+      - generic [ref=e695] [cursor=pointer]:
+        - generic [ref=e696]: 豆
+        - generic [ref=e699]:
+          - generic "编辑" [ref=e700]
+          - generic "删除" [ref=e703]
+      - generic [ref=e706] [cursor=pointer]:
+        - generic [ref=e707]: "128"
+        - generic [ref=e713]:
+          - generic "编辑" [ref=e714]
+          - generic "删除" [ref=e717]
+    - generic [ref=e721]:
+      - generic [ref=e722] [cursor=pointer]:
+        - generic [ref=e724]:
+          - generic [ref=e725]: 坚持住，距下班只有
+          - generic [ref=e726]: 00:46:48
+          - generic [ref=e727]:
+            - generic [ref=e728]:
+              - generic [ref=e729]: 元旦
+              - generic [ref=e730]: 83天
+            - generic [ref=e733]:
+              - generic [ref=e734]: 春节
+              - generic [ref=e735]: 119天
+            - generic [ref=e738]:
+              - generic [ref=e739]: 清明
+              - generic [ref=e740]: 177天
+            - generic [ref=e743]:
+              - generic [ref=e744]: 劳动节
+              - generic [ref=e745]: 203天
+        - generic [ref=e759]:
+          - generic "编辑" [ref=e760]
+          - generic "删除" [ref=e763]
+      - generic [ref=e766] [cursor=pointer]:
+        - generic [ref=e767]:
+          - generic [ref=e768]:
+            - generic [ref=e769]: 与MiNa相识
+            - generic [ref=e770]: 2020-05-20
+          - generic [ref=e771]:
+            - generic [ref=e772]: "2334"
+            - generic [ref=e773]: 天
+        - generic [ref=e774]:
+          - generic "编辑" [ref=e775]
+          - generic "删除" [ref=e778]
+      - generic [ref=e781] [cursor=pointer]:
+        - generic [ref=e782]:
+          - generic [ref=e783]: 下午好，主人
+          - generic [ref=e784]: 此刻就是开始的最好时刻。
+        - generic [ref=e786]:
+          - generic "编辑" [ref=e787]
+          - generic "删除" [ref=e790]
+      - generic [ref=e793] [cursor=pointer]:
+        - generic [ref=e798]:
+          - generic [ref=e799]: 计算器
+          - generic [ref=e800]: 点击开始计算
+        - generic [ref=e801]:
+          - generic "编辑" [ref=e802]
+          - generic "删除" [ref=e805]
+      - generic [ref=e808] [cursor=pointer]:
+        - generic [ref=e813]:
+          - generic [ref=e814]: 翻译
+          - generic [ref=e815]: 中英互译 · 划词
+        - generic [ref=e816]:
+          - generic "编辑" [ref=e817]
+          - generic "删除" [ref=e820]
+      - generic [ref=e823] [cursor=pointer]:
+        - generic [ref=e825]:
+          - generic [ref=e826]: 掘
+          - generic [ref=e828]: C
+          - generic [ref=e830]: S
+          - generic [ref=e832]: G
+          - generic [ref=e834]: F
+          - generic [ref=e836]: D
+          - generic [ref=e838]: 少
+          - generic [ref=e840]: P
+          - generic [ref=e842]: M
+          - generic [ref=e844]: R
+        - generic [ref=e846]:
+          - generic "编辑" [ref=e847]
+          - generic "删除" [ref=e850]
+      - generic [ref=e853] [cursor=pointer]:
+        - generic [ref=e855]:
+          - generic [ref=e856]: 钉
+          - generic [ref=e858]: 飞
+          - generic [ref=e860]: 文
+          - generic [ref=e862]: 石
+        - generic [ref=e864]:
+          - generic "编辑" [ref=e865]
+          - generic "删除" [ref=e868]
+      - generic [ref=e871] [cursor=pointer]:
+        - generic [ref=e873]:
+          - generic [ref=e874]: O
+          - generic [ref=e876]: D
+          - generic [ref=e878]: 印
+          - generic [ref=e880]: 坚
+        - generic [ref=e882]:
+          - generic "编辑" [ref=e883]
+          - generic "删除" [ref=e886]
+      - generic [ref=e889] [cursor=pointer]:
+        - generic [ref=e891]:
+          - generic [ref=e892]: 签
+          - generic [ref=e894]: 递
+          - generic [ref=e896]: 记
+          - generic [ref=e898]: 汇
+        - generic [ref=e900]:
+          - generic "编辑" [ref=e901]
+          - generic "删除" [ref=e904]
+      - generic [ref=e907] [cursor=pointer]:
+        - generic [ref=e909]:
+          - generic [ref=e910]: 得
+          - generic [ref=e912]: 读
+          - generic [ref=e914]: 多
+          - generic [ref=e916]: 起
+        - generic [ref=e918]:
+          - generic "编辑" [ref=e919]
+          - generic "删除" [ref=e922]
+      - generic [ref=e925] [cursor=pointer]:
+        - generic [ref=e927]:
+          - generic [ref=e928]: 优
+          - generic [ref=e930]: 芒
+          - generic [ref=e932]: 咪
+          - generic [ref=e934]: 西
+          - generic [ref=e936]: 快
+        - generic [ref=e938]:
+          - generic "编辑" [ref=e939]
+          - generic "删除" [ref=e942]
+      - generic [ref=e945] [cursor=pointer]:
+        - generic [ref=e947]:
+          - generic [ref=e948]: Ep
+          - generic [ref=e950]: 米
+        - generic [ref=e952]:
+          - generic "编辑" [ref=e953]
+          - generic "删除" [ref=e956]
+      - generic [ref=e959] [cursor=pointer]:
+        - generic [ref=e961]:
+          - generic [ref=e962]: Q
+          - generic [ref=e964]: 酷
+        - generic [ref=e966]:
+          - generic "编辑" [ref=e967]
+          - generic "删除" [ref=e970]
+      - generic [ref=e973] [cursor=pointer]:
+        - generic [ref=e975]:
+          - generic [ref=e976]: 智
+          - generic [ref=e978]: 讯
+          - generic [ref=e980]: D
+          - generic [ref=e982]: 文
+          - generic [ref=e984]: 即
+          - generic [ref=e986]: 可
+          - generic [ref=e988]: G
+          - generic [ref=e990]: C
+        - generic [ref=e992]:
+          - generic "编辑" [ref=e993]
+          - generic "删除" [ref=e996]
+  - generic [ref=e999]:
+    - generic [ref=e1000] [cursor=pointer]
+    - generic [ref=e1001] [cursor=pointer]
+    - generic [ref=e1002] [cursor=pointer]
+  - generic [ref=e1004]:
+    - generic [ref=e1005] [cursor=pointer]: 百
+    - textbox "百度 搜索" [ref=e1006]
+    - generic "搜索" [ref=e1007] [cursor=pointer]
+  - generic [ref=e1011] [cursor=pointer]:
+    - generic:
+      - generic: 极简
+      - generic: 标准
+  - generic [ref=e1020]:
+    - generic "新增" [ref=e1021] [cursor=pointer]
+    - generic "个性化" [ref=e1025] [cursor=pointer]
+    - generic "设置" [ref=e1029] [cursor=pointer]
+  - generic [ref=e1036] [cursor=pointer]
+  - generic [ref=e1041]:
+    - heading "欢迎来到 Thrilled" [level=2] [ref=e1042]
+    - paragraph [ref=e1043]: 选择风格来搭配组件和图标，之后可随时在「个性化 - 主题与风格」中更换。
+    - generic [ref=e1044]:
+      - generic [ref=e1045] [cursor=pointer]: 经典
+      - generic [ref=e1053] [cursor=pointer]: 光感
+      - generic [ref=e1061] [cursor=pointer]: 暗黑
+      - generic [ref=e1069] [cursor=pointer]: 黑紫
+      - generic [ref=e1077] [cursor=pointer]: 晨曦
+      - generic [ref=e1085] [cursor=pointer]: 黛青
+    - generic [ref=e1093]:
+      - button "稍后再说" [ref=e1094] [cursor=pointer]
+      - button "应用风格" [ref=e1095] [cursor=pointer]

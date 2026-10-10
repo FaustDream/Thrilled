@@ -29,7 +29,8 @@ import { SHORTCUT_DEFS, comboOf, formatCombo } from '../shared/shortcuts'
 import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
-  add: ['添加', '在这里添加你喜爱的网站图标'],
+  /* 添加抽屉不带副标题（标题已说明用途，减少顶部行数——用户反馈） */
+  add: ['添加', ''],
   personal: ['个性化', ''],
   /* 设置面板自带分区页签，头部不再重复一句话说明（与个性化同款单行头部） */
   setting: ['设置', ''],
@@ -154,12 +155,28 @@ const AddPanel = () => {
   /* 自定义页书签快速添加的过滤列表 */
   const bmList = (bm ?? []).filter((e) => bkFilter.trim() === '' || e.label.toLowerCase().includes(bkFilter.trim().toLowerCase()))
 
-  /** 加进 Dock 快捷方式（去重，最多 8 个；手动新增入口） */
-  const addToDock = (label: string, link: string): void => {
+  /** 加进 Dock 快捷方式（去重，最多 dockCount 个；返回 ok / dup / full 供调用方提示） */
+  const addToDock = (label: string, link: string): 'ok' | 'dup' | 'full' => {
     const apps = settings.dockApps
-    if (apps.some((a) => a.url === link)) return
-    if (apps.length >= settings.dockCount) { showToast(`Dock 最多 ${settings.dockCount} 个快捷方式，请先移除一些`); return }
+    if (apps.some((a) => a.url === link)) return 'dup'
+    if (apps.length >= settings.dockCount) return 'full'
     setSetting('dockApps', [...apps, { name: label, url: link }])
+    return 'ok'
+  }
+
+  /** 快捷方式页签「全部加到 Dock」：本地累积后一次性落盘（避免循环内用旧快照互相覆盖） */
+  const addAllToDock = (): void => {
+    const apps = [...settings.dockApps]
+    let ok = 0
+    for (const it of nvList) {
+      const url = it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''
+      if (url === '' || apps.some((a) => a.url === url)) continue
+      if (apps.length >= settings.dockCount) break
+      apps.push({ name: it.label, url })
+      ok += 1
+    }
+    if (ok > 0) setSetting('dockApps', apps)
+    showToast(ok > 0 ? `已添加 ${ok} 个快捷方式到 Dock` : '没有可添加的条目（可能已存在或 Dock 已满）')
   }
 
   const addCustom = (): void => {
@@ -190,23 +207,25 @@ const AddPanel = () => {
       </div>
       {tab === 0 && (
         <>
-          <div className="cats">
+          {/* 分类 chips 单行横向滚动（隐藏滚动条），不再折行占两行 */}
+          <div className="cats cats-scroll">
             {cats.map((cc, i) => (
               <div key={cc} className={`cat${i === cat ? ' active' : ''}`} onClick={() => setCat(i)}>{cc}</div>
             ))}
           </div>
-          <div className="btn-row" style={{ marginBottom: 10 }}>
+          {/* 批量操作降为内容区右上角的文字操作，不再独占一行 */}
+          <div className="nv-toolbar">
             {/* 书签分类提供「全部导入」——批量导入能力沿用收藏夹导入同一条 placeMany 通道 */}
-            <button className="btn sm" onClick={() => {
+            <span className="nv-tool" onClick={() => {
               const list = isBmCat ? (bm ?? []) : (NAVI[cat]?.l ?? []).slice(0, 6).map((n) => ({ label: n, url: '' }))
               const n = placeMany(list)
               showToast(isBmCat ? `已从收藏夹导入 ${n} 个网站图标` : `已处理待添加列表，添加 ${n} 个`)
-            }}>{isBmCat ? '全部导入' : '批量添加'}</button>
+            }}>{isBmCat ? '全部导入' : '批量添加'}</span>
           </div>
           <div className="nv-grid">
             {nvList.map((it) => (
-              <div className="nv-item" key={it.label} onClick={() => place('icon', { label: it.label, url: it.url })}>
-                <SiteIcon url={it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''} name={it.label} cls="nv-ico" fs={15} size={40} />
+              <div className="nv-item" key={it.label} title={it.url !== '' ? it.url : it.label} onClick={() => place('icon', { label: it.label, url: it.url })}>
+                <SiteIcon url={it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''} name={it.label} cls="nv-ico" fs={18} size={56} />
                 <div className="nv-name">{it.label}</div>
               </div>
             ))}
@@ -259,26 +278,47 @@ const AddPanel = () => {
       )}
       {tab === 2 && (
         <>
-          <Hint>底部 Dock 快捷方式的集中管理：图标显示站点 favicon；也可在 Dock 图标上直接右键改名 / 改网址 / 移除。</Hint>
-          {settings.dockApps.length === 0 && (
-            <div className="empty-box">{Icon.plus()}<div>还没有快捷方式——从「网址导航 / 自定义」添加时勾选「同时添加到底部 Dock」</div></div>
-          )}
-          {settings.dockApps.map((a, i) => (
-            <div className="eng-row" key={`${a.url}-${i}`}>
-              <SiteIcon url={a.url} name={a.name} cls="dt-ico" fs={13} size={30} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</div>
-                <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hostOf(a.url)}</div>
-              </div>
-              <button className="btn sm ghost" onClick={() => {
-                setSetting('dockApps', settings.dockApps.filter((_, j) => j !== i))
-                showToast('已从 Dock 移除')
-              }}>移除</button>
-            </div>
-          ))}
-          {settings.dockApps.length >= settings.dockCount && (
-            <Hint>Dock 最多 {settings.dockCount} 个快捷方式（个性化 → 背景效果 → 搜索与 Dock 可调），先移除一些再添加。</Hint>
-          )}
+          {/* 已添加的 Dock 快捷方式：紧凑 chips 行（点击 × 移除），不占内容区主空间 */}
+          <div className="dock-chips">
+            <span className="dock-chip-count">已添加 {settings.dockApps.length}/{settings.dockCount}</span>
+            {settings.dockApps.map((a, i) => (
+              <span className="dock-chip" key={`${a.url}-${i}`} title={a.url}>
+                <span>{a.name}</span>
+                <i title="从 Dock 移除" onClick={() => {
+                  setSetting('dockApps', settings.dockApps.filter((_, j) => j !== i))
+                  showToast('已从 Dock 移除')
+                }}>×</i>
+              </span>
+            ))}
+          </div>
+          <div className="cats cats-scroll">
+            {cats.map((cc, i) => (
+              <div key={cc} className={`cat${i === cat ? ' active' : ''}`} onClick={() => setCat(i)}>{cc}</div>
+            ))}
+          </div>
+          <div className="nv-toolbar">
+            <span className="nv-tool" onClick={addAllToDock}>全部加到 Dock</span>
+          </div>
+          {/* 点击条目 = 添加为底部 Dock 快捷方式（去重 + 上限提示）；已在 Dock 的置灰，已添加的见顶部 chips */}
+          <div className="nv-grid">
+            {nvList.map((it) => {
+              const url = it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''
+              const inDock = url !== '' && settings.dockApps.some((a) => a.url === url)
+              return (
+                <div className={`nv-item${inDock ? ' dis' : ''}`} key={it.label} title={url !== '' ? url : it.label}
+                  onClick={() => {
+                    const r = addToDock(it.label, url)
+                    showToast(r === 'ok'
+                      ? `已添加「${it.label}」到 Dock`
+                      : r === 'dup' ? '该站点已在 Dock 中' : `Dock 最多 ${settings.dockCount} 个快捷方式，请先移除一些`)
+                  }}>
+                  <SiteIcon url={url} name={it.label} cls="nv-ico" fs={18} size={56} />
+                  <div className="nv-name">{it.label}</div>
+                </div>
+              )
+            })}
+          </div>
+          <Hint>点击条目添加到底部 Dock 快捷栏（favicon 显示，Dock 图标右键可改名 / 改网址 / 移除）。</Hint>
         </>
       )}
     </>
@@ -1377,6 +1417,7 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '优化', s: '待办条目卡上直读，收藏夹详情高密度化', d: '待办清单条目直接显示在卡片上，勾选框在卡上即可点完成（超出的显示剩余条数）；收藏夹详情改 4 列图标瓦片网格并支持名称 / 网址过滤，减少滚动；所有卡片拖拽加 4px 阈值，点按不再触发位置变动' },
       { k: '优化', s: '壁纸来源列表缓存，反复开关面板不再重复请求', d: '来源列表（分类 + 页码 + 搜索）加 30 分钟会话缓存，壁纸面板反复开关 / 翻页直接读缓存；壁纸本体本就落地 IndexedDB，打开新标签页从本地读取不走网络' },
       { k: '调整', s: '快捷方式集中管理 + 空页自动移除 + 组件库添加态跨页', d: '添加抽屉新增「快捷方式」页签（favicon 列表 + 移除 + 数量提示），Dock 图标右键与全局菜单均可直达；删除卡片后空页自动移除（至少保留一页，序号落回前一保留页）；组件库「已添加」改为跨页判定，移除后才能再次添加' },
+      { k: '优化', s: '添加抽屉版式重排：3 列瓦片 + 下划线页签 + 单行分类', d: '内容区改 3 列圆角卡面瓦片（图标 56px、名称 13px 单行截断），一屏可见条目数翻倍；分类 chips 单行横向滚动、批量操作降为右上角文字操作、抽屉副标题删除；页签改下划线样式，实心主色只留「确认添加」主按钮；「快捷方式」页签接入分类网格——点击预设站点或书签即添加为底部 Dock 快捷方式（去重 / 上限提示 / 已在 Dock 置灰 / 全部加到 Dock）' },
       { k: '新增', s: '组件尺寸自适应：字体图标随卡片等比缩放', d: '卡片即 CSS 查询容器（container-type:size），--u = max(1px, min(100cqw/自然宽, 100cqh/自然高)) × 字号缩放；比自然尺寸大的卡片等比放大（字体、图标、图标格、圆角、间距一起），更小的保持设计字号不缩小。自然尺寸下逐像素等于设计稿；小档位由「尺寸能力下限」（如新闻 4×4 起、时钟因时间裁切 4×2 起）与 @container 密度降级（窄卡隐热度值 / 熊猫 / 日期 / AI 副标题）兜住' },
       { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
       { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },
