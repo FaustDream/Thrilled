@@ -123,7 +123,9 @@ const AddPanel = () => {
   const settings = useApp((s) => s.settings)
   const setSetting = useApp((s) => s.setSetting)
   const showToast = useApp((s) => s.showToast)
-  const [tab, setTab] = useState(0)
+  /* 页签状态放 store：Dock 右键「配置快捷方式」等入口需要先切页签再开抽屉 */
+  const tab = useApp((s) => s.addTab)
+  const setTab = useApp((s) => s.setAddTab)
   const [cat, setCat] = useState(0)
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
@@ -182,7 +184,7 @@ const AddPanel = () => {
   return (
     <>
       <div className="sub-tabs">
-        {['网址导航', '自定义'].map((t, i) => (
+        {['网址导航', '自定义', '快捷方式'].map((t, i) => (
           <div key={t} className={`sub-tab${i === tab ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</div>
         ))}
       </div>
@@ -253,6 +255,30 @@ const AddPanel = () => {
           <div className="btn-row end" style={{ marginTop: 14 }}>
             <button className="btn" onClick={addCustom}>确认添加</button>
           </div>
+        </>
+      )}
+      {tab === 2 && (
+        <>
+          <Hint>底部 Dock 快捷方式的集中管理：图标显示站点 favicon；也可在 Dock 图标上直接右键改名 / 改网址 / 移除。</Hint>
+          {settings.dockApps.length === 0 && (
+            <div className="empty-box">{Icon.plus()}<div>还没有快捷方式——从「网址导航 / 自定义」添加时勾选「同时添加到底部 Dock」</div></div>
+          )}
+          {settings.dockApps.map((a, i) => (
+            <div className="eng-row" key={`${a.url}-${i}`}>
+              <SiteIcon url={a.url} name={a.name} cls="dt-ico" fs={13} size={30} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</div>
+                <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{hostOf(a.url)}</div>
+              </div>
+              <button className="btn sm ghost" onClick={() => {
+                setSetting('dockApps', settings.dockApps.filter((_, j) => j !== i))
+                showToast('已从 Dock 移除')
+              }}>移除</button>
+            </div>
+          ))}
+          {settings.dockApps.length >= settings.dockCount && (
+            <Hint>Dock 最多 {settings.dockCount} 个快捷方式（个性化 → 背景效果 → 搜索与 Dock 可调），先移除一些再添加。</Hint>
+          )}
         </>
       )}
     </>
@@ -604,7 +630,8 @@ const ComponentLibraryTab = () => {
   const setModal = useApp((st) => st.setModal)
   const [dragId, setDragId] = useState<string | null>(null)
   const page = pages[cur] ?? EMPTY_PAGE
-  const added = new Set(page.map((it) => it.t))
+  /* 已添加判定跨页：任意页存在该类型即「已添加」——防止一处已放、另一处再点添加造成状态冲突（用户需求） */
+  const added = new Set(pages.flat().map((it) => it.t))
   /** 配置：复用编辑弹窗（打开弹窗前先定位到该实例） */
   const openConfig = (id: string): void => {
     useApp.setState({ itemId: id })
@@ -671,6 +698,7 @@ const ComponentLibraryTab = () => {
                   <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
                 </div>
                 <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
+                  title={isAdded ? '该组件已在页面上；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
                   onClick={() => place(w.t as WidgetKind)}>{isAdded ? '已添加' : '添加'}</button>
               </div>
             )
@@ -1347,6 +1375,8 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '调整', s: '界面不再显示小组件名称标签', d: '卡片左下角的组件名小字整体移除（含「显示标题」与「隐藏图标标签」两个失效开关）；图标格容器不再为标签预留底部条带，格子铺满可用空间；名称仅保留数据用途——网址图标站点名与文件夹卡内名称' },
       { k: '调整', s: '倒计时接入节日倒数列表，移除演示占位', d: '内置节日库（元旦 / 春节 / 清明 / 劳动节 / 端午 / 中秋 / 国庆）自动取下一次发生日期，农历节日按公历对照表覆盖 2026–2030；支持自定义倒数日（名称 / 目标日期 / 备注），按剩余天数排序并带进度条；移除「发薪日 / 周五 / 日赚」等演示占位；熊猫吉祥物可换任意 emoji 或隐藏' },
       { k: '优化', s: '待办条目卡上直读，收藏夹详情高密度化', d: '待办清单条目直接显示在卡片上，勾选框在卡上即可点完成（超出的显示剩余条数）；收藏夹详情改 4 列图标瓦片网格并支持名称 / 网址过滤，减少滚动；所有卡片拖拽加 4px 阈值，点按不再触发位置变动' },
+      { k: '优化', s: '壁纸来源列表缓存，反复开关面板不再重复请求', d: '来源列表（分类 + 页码 + 搜索）加 30 分钟会话缓存，壁纸面板反复开关 / 翻页直接读缓存；壁纸本体本就落地 IndexedDB，打开新标签页从本地读取不走网络' },
+      { k: '调整', s: '快捷方式集中管理 + 空页自动移除 + 组件库添加态跨页', d: '添加抽屉新增「快捷方式」页签（favicon 列表 + 移除 + 数量提示），Dock 图标右键与全局菜单均可直达；删除卡片后空页自动移除（至少保留一页，序号落回前一保留页）；组件库「已添加」改为跨页判定，移除后才能再次添加' },
       { k: '新增', s: '组件尺寸自适应：字体图标随卡片等比缩放', d: '卡片即 CSS 查询容器（container-type:size），--u = max(1px, min(100cqw/自然宽, 100cqh/自然高)) × 字号缩放；比自然尺寸大的卡片等比放大（字体、图标、图标格、圆角、间距一起），更小的保持设计字号不缩小。自然尺寸下逐像素等于设计稿；小档位由「尺寸能力下限」（如新闻 4×4 起、时钟因时间裁切 4×2 起）与 @container 密度降级（窄卡隐热度值 / 熊猫 / 日期 / AI 副标题）兜住' },
       { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
       { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },

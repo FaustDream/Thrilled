@@ -3,7 +3,7 @@
  * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, uid } from '../src/app/layout'
+import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, INSET, LIBRARY_SIZES, ROWS, SIZES, findSlot, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
 import {
   WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
@@ -314,5 +314,36 @@ describe('图标格容器自适应（groupGrid）', () => {
   it('边长有上下限：少格数不撑成巨块，极小卡片不塌成 0', () => {
     expect(groupGrid(1, 400, 400, GAP).cell).toBe(64)
     expect(groupGrid(4, 20, 20, GAP).cell).toBe(16)
+  })
+})
+describe('prunePages：删除卡片后的空页修剪', () => {
+  const P = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `x${i}`, c: 0, r: 0, w: 2, h: 2, t: 'clock' as const, config: {} }))
+
+  it('无空页时原样返回', () => {
+    const pages = [P(3), P(2)]
+    expect(prunePages(pages, 1)).toEqual({ pages, cur: 1, removed: 0 })
+  })
+
+  it('当前页删空后移除该页，序号落到前一保留页', () => {
+    const pages = [P(3), [], P(2)]
+    const r = prunePages(pages, 1)
+    expect(r.pages).toHaveLength(2)
+    expect(r.pages[0]).toEqual(pages[0])
+    expect(r.pages[1]).toEqual(pages[2])
+    expect(r.cur).toBe(0)
+    expect(r.removed).toBe(1)
+  })
+
+  it('中间页删空：序号落回前一保留页；无空页时原样返回（至少保留一页由调用方保证）', () => {
+    const pages = [P(2), [], P(3)]
+    const r = prunePages(pages, 1)
+    expect(r.pages).toHaveLength(2)
+    expect(r.cur).toBe(0)
+    expect(r.removed).toBe(1)
+    const last = [P(2), P(1)]
+    const r2 = prunePages(last, 1)
+    expect(r2.pages).toEqual(last)
+    expect(r2.cur).toBe(1)
+    expect(r2.removed).toBe(0)
   })
 })

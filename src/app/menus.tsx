@@ -42,7 +42,7 @@ const GlobalMenu = () => {
           <SubItem act="open-drawer" v="personal">栏透明度</SubItem>
           <SubItem act="open-drawer" v="personal">栏应用数量</SubItem>
           <SubItem act="open-drawer" v="personal">栏图标</SubItem>
-          <SubItem act="open-drawer" v="add">添加快捷方式</SubItem>
+          <SubItem act="open-add-tab" v="2">添加 / 配置快捷方式</SubItem>
         </div>
       </div>
       <div className="ctx-item" data-act="set-mode" data-v="minimal"><span>极简模式</span><Sw on={mode === 'minimal'} /></div>
@@ -106,6 +106,7 @@ const DockMenu = ({ idx }: { idx: number }) => {
       <div className="ctx-item" data-act="dock-rename" data-v={String(idx)}><span>修改名称</span></div>
       <div className="ctx-item" data-act="dock-url" data-v={String(idx)}><span>修改网址</span></div>
       <div className="ctx-item" data-act="dock-remove" data-v={String(idx)}><span>从 Dock 移除</span></div>
+      <div className="ctx-item" data-act="dock-config"><span>配置快捷方式…</span></div>
     </>
   )
 }

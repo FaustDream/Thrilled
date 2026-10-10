@@ -93,6 +93,10 @@ const dockMenuAct = (name: string, v: string): boolean => {
   } else if (name === 'dock-remove') {
     st.setSetting('dockApps', apps.filter((_, i) => i !== idx))
     st.showToast('已从 Dock 移除')
+  } else if (name === 'dock-config') {
+    /* 集中管理入口：打开添加抽屉的「快捷方式」页签 */
+    st.setAddTab(2)
+    st.setDrawer('add')
   } else return false
   st.openCtx(null)
   return true
@@ -330,9 +334,11 @@ export const App = () => {
           else st.showToast('未配置网址，右键图标可补充链接')
           break
         }
-        case 'dock-rename': case 'dock-url': case 'dock-remove':
+        case 'dock-rename': case 'dock-url': case 'dock-remove': case 'dock-config':
           dockMenuAct(name, v)
           break
+        /* 菜单入口：打开添加抽屉并切到指定页签（快捷方式集中管理） */
+        case 'open-add-tab': st.setAddTab(Number(v) || 0); st.setDrawer('add'); break
         case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', setting: 'setting' } as const)[v] ?? 'setting'); break
         case 'open-modal': st.setModal(v as 'theme'); break
         case 'ctx-tog': {

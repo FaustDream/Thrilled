@@ -6,7 +6,7 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { DEFAULT_PAGES, clonePages, mergeIconPages, readLayoutDoc } from './layout'
+import { DEFAULT_PAGES, clonePages, mergeIconPages, prunePages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
@@ -83,6 +83,8 @@ interface AppState {
   toast: string
   /** 设置抽屉当前分区下标（供右键菜单等外部入口先切分区再打开抽屉） */
   settingsTab: number
+  /** 添加抽屉当前页签（供 Dock 菜单「配置快捷方式」等外部入口先切页签再开抽屉） */
+  addTab: number
   enginePanel: boolean
   page: () => GridItem[]
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
@@ -147,6 +149,7 @@ interface AppState {
   showToast: (msg: string) => void
   setDrawer: (k: DrawerKey | null) => void
   setSettingsTab: (i: number) => void
+  setAddTab: (i: number) => void
   setModal: (k: ModalKey | null) => void
   openCtx: (ctx: CtxState | null) => void
   setEnginePanel: (open: boolean) => void
@@ -304,6 +307,7 @@ export const useApp = create<AppState>()((set, get) => ({
   ctx: null,
   toast: '',
   settingsTab: 0,
+  addTab: 0,
   enginePanel: false,
 
   page: () => curPageOf(get()),
@@ -542,7 +546,15 @@ export const useApp = create<AppState>()((set, get) => ({
 
   remove: (id) => set((s) => {
     const list = s.pages.map((pg) => pg.filter((x) => x.id !== id))
-    return { pages: list, ctx: null, itemId: null, toast: '删除成功' }
+    /* 空页自动移除：页面删空后不再保留空页点（至少保留一页），当前页序号落到邻近保留页 */
+    const pruned = prunePages(list, s.cur)
+    return {
+      pages: pruned.pages,
+      cur: pruned.cur,
+      ctx: null,
+      itemId: null,
+      toast: pruned.removed > 0 ? `删除成功，已自动移除 ${pruned.removed} 个空页面` : '删除成功',
+    }
   }),
 
   swapKind: (id, kind) => set((s) => {
@@ -640,6 +652,7 @@ export const useApp = create<AppState>()((set, get) => ({
   showToast: (msg) => set({ toast: msg }),
   setDrawer: (k) => set({ drawer: k, ctx: null, enginePanel: false }),
   setSettingsTab: (i) => set({ settingsTab: i }),
+  setAddTab: (i) => set({ addTab: i }),
   /* 打开弹窗时收起抽屉：弹窗层级（50）低于抽屉（60），否则被盖住 */
   setModal: (k) => set({ modal: k, ctx: null, enginePanel: false, drawer: k !== null ? null : get().drawer }),
   openCtx: (ctx) => set({ ctx, enginePanel: false }),

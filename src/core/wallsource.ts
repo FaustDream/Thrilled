@@ -214,12 +214,30 @@ export const parseList = (src: WallpaperSource, page: number, text: string, quer
   return parseWallhaven(page, text);
 };
 
-/** 拉取一页壁纸（分类 + 页码 + 可选搜索关键词） */
+/* ================= 列表缓存（会话级内存，TTL 30 分钟；壁纸本体本就落地 IndexedDB） ================= */
+
+const PAGE_CACHE_TTL = 30 * 60 * 1000;
+const pageCache = new Map<string, { at: number; page: WallPage }>();
+
+/** 清空来源列表缓存（切换来源配置 / 排查数据问题时用） */
+export const clearWallSourceCache = (): void => {
+  pageCache.clear();
+  wgCategoryCache.clear();
+};
+
+/** 拉取一页壁纸（分类 + 页码 + 可选搜索关键词）；命中 30 分钟内缓存时直接复用，避免反复网络请求 */
 export const fetchWallPage = async (src: WallpaperSource, cat: string, page: number, query = ''): Promise<WallPage> => {
   const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind];
   if (unavailable) throw new Error(`当前不可用：${unavailable}`);
-  if (src.kind === 'zhefeng') return fetchZhefengPage(src, cat, page, query);
-  return parseList(src, page, await fetchText(buildListUrl(src, cat, page, query)), query);
+  const key = `${src.kind}:${cleanBase(src.apiBase)}:${cat}:${page}:${query.trim()}`;
+  const hit = pageCache.get(key);
+  if (hit !== undefined && Date.now() - hit.at < PAGE_CACHE_TTL) return hit.page;
+  const res =
+    src.kind === 'zhefeng'
+      ? await fetchZhefengPage(src, cat, page, query)
+      : parseList(src, page, await fetchText(buildListUrl(src, cat, page, query)), query);
+  pageCache.set(key, { at: Date.now(), page: res });
+  return res;
 };
 
 /* ================= 哲风壁纸（经用户授权的兼容实现，协议见文件头注释） ================= */

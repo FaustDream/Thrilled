@@ -156,3 +156,27 @@ export const mergeIconPages = (standard: ModePages): ModePages | null => {
   if (page.length > 0) pages.push(page)
   return pages.length > 0 ? pages : null
 }
+
+/* ---------- 空页修剪（删除卡片后自动移除空页面） ---------- */
+
+/**
+ * 删除卡片后修剪空页（纯函数，可单测）：空页自动移除、至少保留一页、
+ * 当前页序号落到邻近的保留页；无空页时原样返回。
+ */
+export const prunePages = (
+  pages: GridItem[][],
+  cur: number,
+): { pages: GridItem[][]; cur: number; removed: number } => {
+  const kept = pages.filter((pg) => pg.length > 0)
+  if (kept.length === 0 || kept.length === pages.length) return { pages, cur, removed: 0 }
+  const pos = new Map<GridItem[], number>()
+  kept.forEach((pg, i) => pos.set(pg, i))
+  const keptCur = pos.get(pages[cur] ?? [])
+  /* 当前页被移除时落回它之前最近的保留页（更符合「从哪来、回哪去」的翻页习惯），没有则落在第 0 页 */
+  const keptBefore = pages.slice(0, cur).filter((pg) => pg.length > 0).length
+  return {
+    pages: kept,
+    cur: keptCur !== undefined ? keptCur : keptBefore > 0 ? keptBefore - 1 : 0,
+    removed: pages.length - kept.length,
+  }
+}
