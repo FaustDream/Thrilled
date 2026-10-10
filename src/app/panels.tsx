@@ -5,7 +5,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp, type DrawerKey } from './store'
 import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
-import { findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
+import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
 import { WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
@@ -730,6 +730,18 @@ const PersonalPanel = () => {
   const preview = enabledSources.find((x) => x.id === previewId) ?? enabledSources[0]
   const pendingSources = WALL_SOURCE_TEMPLATES.filter((t) => !s.wallSources.some((ws) => ws.kind === t.kind))
 
+  /* 可清理的历史 = 除当前使用中那张以外的全部记录（当前壁纸不参与清理） */
+  const otherWallCount = history.filter((h) => h.ref !== s.wallpaperRef).length
+
+  /** 一键清空历史壁纸记录：保留当前使用中的那张，删除本机已下载的其余图片 */
+  const clearWallHistory = async (): Promise<void> => {
+    if (otherWallCount === 0) return
+    if (!window.confirm(`将清空 ${otherWallCount} 张历史壁纸记录（当前壁纸保留），已下载的图片会从本机删除，且不可撤销。确定继续？`)) return
+    const removed = await clearWallpaperHistory()
+    setHistory(await listWallpapers())
+    showToast(removed === 0 ? '没有可清理的历史壁纸' : `已清空历史壁纸（${removed} 张）`)
+  }
+
   /** 点行名预览该来源；禁用态不发起请求，仅提示 */
   const previewSource = (ws: WallpaperSource): void => {
     if (!ws.enabled) { showToast(`「${ws.name}」已禁用，请先打开右侧开关`); return }
@@ -771,11 +783,13 @@ const PersonalPanel = () => {
         </div>
         <input ref={wallFile} type="file" accept="image/*,video/mp4,video/webm" style={{ display: 'none' }}
           onChange={(e) => { void upload(e.target.files?.[0]); e.target.value = '' }} />
-        {history.length > 1 && (
+        {otherWallCount > 0 && (
           <>
-            <div className="sr-desc" style={{ marginTop: 12 }}>
-              历史壁纸（保留最近 {WALLPAPER_HISTORY_LIMIT} 张，点缩略图直接切换）
+            <div className="wp-hist-head" style={{ marginTop: 12 }}>
+              <span className="sr-desc">历史壁纸（保留最近 {WALLPAPER_HISTORY_LIMIT} 张，点缩略图直接切换）</span>
+              <button className="btn sm ghost" onClick={() => void clearWallHistory()}>清空历史</button>
             </div>
+            {history.length > 1 && (
             <div className="wp-history">
               {history.map((h) => (
                 <div key={h.ref}
@@ -788,6 +802,7 @@ const PersonalPanel = () => {
                 </div>
               ))}
             </div>
+            )}
           </>
         )}
         <div className="wall-src-list">
@@ -1069,6 +1084,8 @@ const pickJson = (e: React.ChangeEvent<HTMLInputElement>, ok: (v: unknown) => vo
 const SettingSearchTab = () => {
   const s = useApp((st) => st.settings)
   const toggle = useApp((st) => st.toggle)
+  const history = useApp((st) => st.history)
+  const clearHistory = useApp((st) => st.clearHistory)
   return (
     <>
       <SecCard t="搜索引擎" info="拖动行首 ⋮⋮ 排序；隐藏的引擎不出现在搜索框下拉与右键二级菜单里。">
@@ -1079,6 +1096,12 @@ const SettingSearchTab = () => {
         <SwitchRow l="保留搜索内容" d="搜索后不清空输入框内容" on={s.searchKeep} onToggle={() => toggle('searchKeep')} />
         <SwitchRow l="隐藏搜索按钮" d="仅通过 Enter 键触发搜索" on={s.hideBtn} onToggle={() => toggle('hideBtn')} />
         <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')} />
+        {/* 一键清空：历史为空时不可点（与搜索框下拉里逐条删除同一份数据） */}
+        <div className="btn-row" style={{ marginTop: 12 }}>
+          <button className="btn sm ghost" disabled={history.length === 0} onClick={clearHistory}>
+            清空搜索历史{history.length > 0 ? `（${history.length} 条）` : ''}
+          </button>
+        </div>
       </SecCard>
     </>
   )
@@ -1221,6 +1244,7 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '优化', s: '图标格容器按卡铺满，标签收进卡内', d: '图标格行列改由卡片可用框自动决定（24 应用卡由一格 5 个变 8×3、格子 55px），「列数」假开关删除；卡下标签改为卡内左下角小字；搜索框与首行卡片间距 4px → 24px' },
       { k: '调整', s: '个性化页签由 6 个收敛为 4 个', d: '「搜索与 Dock」并入「背景效果」（搜索框宽度 / 圆角、沉浸式、Dock 数量 / 图标形状 / 快捷栏开关），「显示」并入「主题」（时间颜色、隐藏顶部区域 / 搜索框 / 图标标签）；功能项本身不变' },
       { k: '优化', s: '引擎添加失效修复，数据分区改网格并贴底', d: '「添加自定义搜索引擎」原先被「可见引擎数 ≥ 12 即拒绝」的恒真上限判断静默丢弃，现已移除上限并补空地址校验；数字键 1–9 快捷切换与列表序号删除；数据分区 6 颗按钮改 3 列等宽网格、按作用域分两行，「重置与清理」贴面板底部并复用同一网格，中部空白放「上次备份 + 查看快照」状态行，作用范围写进标题 ⓘ 清单' },
+      { k: '新增', s: '历史记录一键清空：搜索历史与历史壁纸', d: '设置 → 搜索 → 「搜索框」卡底部新增「清空搜索历史（N 条）」（无可清时置灰不可点，与搜索框下拉里逐条删除同一份数据）；个性化 → 壁纸的历史缩略图带标题行新增「清空历史」——保留当前使用中的那张，其余记录连本机图片一并删除（二次确认，库内只剩当前壁纸）' },
     ],
   },
   {

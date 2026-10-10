@@ -833,7 +833,10 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .eng-row>div{min-width:0}
 .eng-row>div>div:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* 历史壁纸带：横向滚动缩略图，当前使用中的加主题色描边 */
+/* 历史壁纸带：标题行（说明 + 一键清空）+ 横向滚动缩略图，当前使用中的加主题色描边 */
+.wp-hist-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* 标题行里的按钮不参与收缩（否则文字被压成竖排） */
+.wp-hist-head .btn{flex:0 0 auto;white-space:nowrap}
 .wp-history{display:flex;gap:6px;overflow-x:auto;margin-top:8px;padding-bottom:4px}
 .wp-history::-webkit-scrollbar{height:4px}
 .wp-history::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--panel-sub) 32%,transparent);border-radius:999px}

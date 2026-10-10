@@ -5,12 +5,13 @@
  * - fetchDataUrl 直连路径的进度累计（有 Content-Length 的确定态 / 无 Content-Length 的不确定态）
  * - fetchDataUrl 上游非 2xx 的错误
  * - storeRemoteWallpaper 的体积上限与入库失败分支
+ * - wallpapersToClear：一键清空历史壁纸时保留当前使用中的那张
  *
  * 环境为 node，无 DOM：FileReader 与 fetch 用最小桩件替代。
  */
 import { describe, expect, it, vi } from 'vitest'
 import { fetchDataUrl } from '../src/core/fetch-proxy'
-import { findWallpaperBySource, storeRemoteWallpaper, wallpaperRefOf, WALLPAPER_REF_PREFIX } from '../src/core/wallpaper'
+import { findWallpaperBySource, storeRemoteWallpaper, wallpapersToClear, wallpaperRefOf, WALLPAPER_REF_PREFIX } from '../src/core/wallpaper'
 
 /* ---------- 环境桩件 ---------- */
 
@@ -92,6 +93,25 @@ describe('storeRemoteWallpaper 入库校验', () => {
   it('node 环境无 indexedDB 时抛出存储失败（不静默成功）', async () => {
     await expect(storeRemoteWallpaper('https://x.test/small.jpg', 'data:image/jpeg;base64,AAAA', 'Test'))
       .rejects.toThrow('壁纸保存失败');
+  });
+});
+
+/* ---------- 清空历史壁纸：挑选规则 ---------- */
+
+describe('wallpapersToClear（清空历史壁纸的挑选规则）', () => {
+  const all = [{ ref: 'idb:a' }, { ref: 'idb:b' }, { ref: 'idb:c' }];
+
+  it('保留当前使用中的那张，其余全部待清理', () => {
+    expect(wallpapersToClear(all, 'idb:b')).toEqual(['idb:a', 'idb:c']);
+  });
+
+  it('没有当前壁纸（已移除壁纸）时全部待清理', () => {
+    expect(wallpapersToClear(all, null)).toEqual(['idb:a', 'idb:b', 'idb:c']);
+  });
+
+  it('只有当前壁纸时无可清理项；空库同样返回空', () => {
+    expect(wallpapersToClear([{ ref: 'idb:a' }], 'idb:a')).toEqual([]);
+    expect(wallpapersToClear([], null)).toEqual([]);
   });
 });
 

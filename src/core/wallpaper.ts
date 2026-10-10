@@ -232,6 +232,26 @@ export async function deleteWallpaper(ref: string): Promise<void> {
   await idbRemove(ref);
 }
 
+/**
+ * 历史清理的挑选规则（纯函数，便于单测）：除当前使用中的引用外全部待删。
+ * @param all 全部已落地记录
+ * @param active 当前使用中的引用（null 表示无壁纸）
+ */
+export const wallpapersToClear = (all: readonly { ref: string }[], active: string | null): string[] =>
+  all.filter((x) => x.ref !== active).map((x) => x.ref);
+
+/**
+ * 一键清空历史壁纸记录：删除本机已落地的全部壁纸，**当前使用中的那张保留**
+ *（否则主界面背景会指向已删除的数据）。
+ * @returns 实际删除的张数
+ */
+export async function clearWallpaperHistory(): Promise<number> {
+  const targets = wallpapersToClear(await listWallpapers(), activeRef);
+  for (const ref of targets) await idbRemove(ref);
+  if (targets.length > 0) info(MODULE, '历史壁纸已清空', { count: targets.length });
+  return targets.length;
+}
+
 /* ================= 上传处理 ================= */
 
 /** 校验并读取上传文件为 dataURL */
