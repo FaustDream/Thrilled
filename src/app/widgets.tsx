@@ -9,7 +9,7 @@ import { CheckIcon, Icon } from './icons'
 import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
 import { CELL, INSET, groupGrid } from '../shared/grid'
-import { getGreetingByHour } from '../core/utils'
+import { daysUntil, getGreetingByHour } from '../core/utils'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
 import { weatherText } from '../core/weather'
@@ -165,15 +165,19 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
         </div>
       )
     }
-    case 'clock':
+    case 'clock': {
+      /* 专属配置：时间显示（24 / 12 小时 / 隐藏）、显示日期、显示秒数 */
+      const mode = str(c['timeMode'], '24 小时')
+      const h = now.getHours()
+      const hm = mode === '12 小时' ? `${p2(h % 12 === 0 ? 12 : h % 12)}:${p2(now.getMinutes())}` : `${p2(h)}:${p2(now.getMinutes())}`
+      const time = `${hm}${bool(c['showSeconds']) ? `:${p2(now.getSeconds())}` : ''}${mode === '12 小时' ? (h < 12 ? ' AM' : ' PM') : ''}`
       return (
         <div className="w-clock" style={{ position: 'absolute', inset: 0 }}>
-          <div className="ck-time">
-            {`${p2(now.getHours())}:${p2(now.getMinutes())}${bool(c['showSeconds']) ? `:${p2(now.getSeconds())}` : ''}`}
-          </div>
-          <div className="ck-date">{dateText(now)}</div>
+          {mode !== '隐藏' && <div className="ck-time">{time}</div>}
+          {bool(c['showDate']) && <div className="ck-date">{dateText(now)}</div>}
         </div>
       )
+    }
     case 'cal':
       return (
         <div className="w-cal" style={{ position: 'absolute', inset: 0 }}>
@@ -250,13 +254,19 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
           <span className="fish-num">{num(c['count'], 0)}</span>
         </div>
       )
-    case 'countday':
+    case 'countday': {
+      /* 专属配置：目标日期——剩余天数由日期算出（今天 0 天、已过为「天前」） */
+      const left = daysUntil(str(c['date']), now)
       return (
         <div className="w-count" style={{ position: 'absolute', inset: 0 }}>
-          <div className="ct-top">{str(c['title'], '距离国庆假期')}</div>
-          <div className="ct-mid"><span className="ct-num">{num(c['days'], 0)}</span><span className="ct-unit">天</span></div>
+          <div className="ct-top">{str(c['title'], '距离目标日')}</div>
+          <div className="ct-mid">
+            <span className="ct-num">{left === null ? '--' : Math.abs(left)}</span>
+            <span className="ct-unit">{left !== null && left < 0 ? '天前' : '天'}</span>
+          </div>
         </div>
       )
+    }
     case 'calc':
       return (
         <div className="w-mini" style={{ position: 'absolute', inset: 0 }}>

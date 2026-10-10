@@ -17,8 +17,13 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     def: { source: '看点', count: 5 },
   },
   clock: {
-    t: 'clock', n: '时钟', g: '钟', c: '#3B82F6', s: '数字时钟 · 时分秒可调', units: { w: 4, h: 4 },
-    fields: [{ k: 'showSeconds', l: '显示秒数', t: 'bool' }], def: { showSeconds: false },
+    t: 'clock', n: '时钟', g: '钟', c: '#3B82F6', s: '大号数字时间，可切换 12/24 小时', units: { w: 4, h: 4 },
+    fields: [
+      { k: 'timeMode', l: '时间显示', t: 'sel', o: ['24 小时', '12 小时', '隐藏'] },
+      { k: 'showDate', l: '显示日期', t: 'bool' },
+      { k: 'showSeconds', l: '显示秒数', t: 'bool' },
+    ],
+    def: { timeMode: '24 小时', showDate: true, showSeconds: false },
   },
   cal: { t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '公历 / 农历 / 宜忌', units: { w: 4, h: 2 }, fields: [], def: {} },
   weather: {
@@ -35,9 +40,12 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     def: { title: '与MiNa相识', date: '2020-05-20' },
   },
   countday: {
-    t: 'countday', n: '倒数日', g: '倒', c: '#A855F7', s: '距离某天还有多久', units: { w: 4, h: 2 },
-    fields: [{ k: 'title', l: '标题', t: 'text', ph: '距离国庆假期' }, { k: 'days', l: '剩余天数', t: 'num', ph: '5' }],
-    def: { title: '距离国庆假期', days: 5 },
+    t: 'countday', n: '倒数日', g: '倒', c: '#A855F7', s: '距离目标日期的天数', units: { w: 4, h: 2 },
+    fields: [
+      { k: 'title', l: '标题', t: 'text', ph: '距离目标日' },
+      { k: 'date', l: '目标日期', t: 'text', ph: '2026-10-01' },
+    ],
+    def: { title: '距离元旦', date: '2027-01-01' },
   },
   countdown: {
     t: 'countdown', n: '下班倒计时', g: '班', c: '#FB923C', s: '进度 / 工资 / 任务', units: { w: 8, h: 4 },
@@ -81,7 +89,23 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
 /** 全部小组件类型键集合（导入 / 持久化校验用） */
 export const WIDGET_KINDS: ReadonlySet<string> = new Set(Object.keys(WIDGET_DEFS));
 
-/** 添加面板清单（定义表生成 + 同类型别名入口「经典语录」） */
+/* ---------- 组件库分组（个性化 → 组件库：信息 / 工具 / 内容 / 导航） ---------- */
+
+/** 组件库分组名 */
+export type WidgetGroup = '信息' | '工具' | '内容' | '导航';
+
+/** 分组展示顺序 */
+export const WIDGET_GROUPS_ORDER: readonly WidgetGroup[] = ['信息', '工具', '内容', '导航'];
+
+/** 每类小组件归属的分组（组件库按此分组浏览；每类只属一组） */
+export const WIDGET_GROUPS: Readonly<Record<WidgetKind, WidgetGroup>> = {
+  clock: '信息', cal: '信息', weather: '信息', countday: '信息', countdown: '信息', ann: '信息',
+  todo: '工具', calc: '工具', trans: '工具', ai: '工具', fav: '工具',
+  news: '内容', quote: '内容', music: '内容', woodfish: '内容',
+  icon: '导航', folder: '导航', group: '导航',
+};
+
+/** 组件库清单（定义表生成 + 同类型别名入口「经典语录」） */
 export const WIDGET_LIST: readonly WidgetDefinition[] = [
   ...Object.keys(WIDGET_DEFS).map((k) => WIDGET_DEFS[k as WidgetKind]),
   { ...WIDGET_DEFS.quote, n: '经典语录', g: '语', c: '#8B5CF6', s: '随机经典语录' },

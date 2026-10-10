@@ -99,9 +99,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 #stage[data-labels='0'] .item-label{display:none}
 #stage[data-hidetop='1'] .mode-pill{display:none}
 #stage[data-hidesearch='1'] .search-row{display:none}
-#stage[data-showtime='0'] .ck-time{display:none}
-#stage[data-showdate='0'] .ck-date{display:none}
-#stage[data-showquote='0'] .item[data-t='quote']{display:none}
+/* 时间 / 日期 / 每日一言 已改为组件自身配置（组件库 → 通用 / 专属），不再是舞台级开关 */
 #stage[data-mode='minimal'] #pager{display:none}
 #stage[data-mode='minimal'] .minimal-clock{display:block}
 #stage[data-mode='minimal'] .search-box{border-radius:12px;background:transparent}
@@ -359,6 +357,7 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .btn.danger{background:#ef4444}
 .btn.sm{height:30px;padding:0 12px;font-size:12px}
 .btn.wide{width:100%}
+.btn:disabled{opacity:.45;cursor:default;filter:none;transform:none}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn-row.end{justify-content:flex-end}
 /* 按钮下方带作用域小字时，同一行的按钮按顶对齐（不被拉伸到小字那格的高度） */
@@ -416,6 +415,9 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .nv-name{font-size:11px;color:var(--panel-sub);max-width:100%;text-align:center;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .cats{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+/* 组件库：已放置组件的三档尺寸胶囊（小 / 宽 / 大），比通用胶囊更紧 */
+.lib-size{display:flex;gap:4px;flex:0 0 auto}
+.lib-size .cat{padding:4px 8px;font-size:11px;margin:0}
 .cat{font-size:12px;padding:5px 10px;border-radius:8px;background:var(--line);color:var(--panel-sub);cursor:pointer}
 .cat.active{background:var(--accent);color:#fff}
 .eng-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}

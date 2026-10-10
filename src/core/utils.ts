@@ -50,3 +50,22 @@ export function getGreetingByHour(hour: number): string {
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
+
+/* ===== 日期工具 ===== */
+
+/**
+ * 距离目标日期还有几天：今天为 0、已过为负；日期写法支持 2026-10-01 / 2026/10/1 / 2026.10.1。
+ * 无法解析（空串 / 形状不对）返回 null，交给调用方决定兜底显示。
+ */
+export function daysUntil(date: string, now: Date = new Date()): number | null {
+  const m = /^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/.exec(date.trim());
+  if (m === null) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const target = new Date(y, mo - 1, d);
+  if (target.getFullYear() !== y || target.getMonth() !== mo - 1 || target.getDate() !== d) return null;
+  const a = new Date(y, mo - 1, d).getTime();
+  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return Math.round((a - b) / 86400000);
+}

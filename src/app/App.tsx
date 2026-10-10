@@ -121,6 +121,8 @@ export const App = () => {
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
+  /* 极简模式的鼓励语跟随「每日一言」组件是否存在（组件库管放什么：移除该组件即不再显示） */
+  const hasQuote = pages.some((pg) => pg.some((it) => it.t === 'quote'))
   /* ---------- Dock 苹果式悬停放大（指针接近度 → 余弦衰减缩放，图标原点贴底向上生长） ---------- */
   const dockMagnify = (e: ReactMouseEvent) => {
     const bar = dockBarRef.current
@@ -487,9 +489,7 @@ export const App = () => {
       <div className="wall-mask" />
 
       <div id="stage" ref={stageRef} data-mode={settings.mode} data-labels={settings.labels ? '1' : '0'}
-        data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}
-        data-showtime={settings.showTime ? '1' : '0'} data-showdate={settings.showDate ? '1' : '0'}
-        data-showquote={settings.showQuote ? '1' : '0'}>
+        data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}>
 
       {/* 翻页画布 */}
       <div id="pager" style={{ transform: `translateX(-${cur * PAGE_W}px)` }}>
@@ -579,7 +579,7 @@ export const App = () => {
         <div className="mc-time">{`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`}</div>
         <div className="mc-date">{`${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`}</div>
       </div>
-      {settings.mode === 'minimal' && settings.showQuote && (
+      {settings.mode === 'minimal' && hasQuote && (
         <div className="minimal-quote">{encourage}</div>
       )}
 
@@ -647,19 +647,23 @@ const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging,
   dragging: { x: number; y: number; moved: boolean } | null
   onDragStart: (e: ReactPointerEvent) => void
 }) => {
-  const label = str(cfg(item)['label'], str(cfg(item)['name']))
+  const c = cfg(item)
+  const label = str(c['label'], str(c['name']))
+  /* 通用配置：卡片透明度（config.opacity 为数字时覆盖全局 --ga-card，未设置则跟随全局） */
+  const ov = c['opacity']
+  const cardVars = typeof ov === 'number' ? { ['--ga-card' as string]: (1 - GLASS_ALPHA_FACTOR * ov).toFixed(3) } : {}
   const draggingStyle = dragging !== null && dragging.moved
   const style = draggingStyle
     ? { left: dragging.x, top: dragging.y, zIndex: 20, transition: 'none' }
     : { animationDelay: `${Math.min(idx * 22, 440)}ms` }
   return (
     <>
-      <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...style }}
+      <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...style }}
         data-id={item.id} data-t={item.t} data-act={item.t === 'quote' ? undefined : 'item-open'}
         onPointerDown={onDragStart}>
         <WidgetView item={item} now={now} nick={nick} encourage={encourage} playing={playing} weather={weather} />
-        {/* 名称标签并入卡片内部（左下角小字）：不再挂在卡片下方切分行间节奏 */}
-        {label !== '' && item.t !== 'icon' && item.t !== 'folder' ? <div className="item-label">{label}</div> : null}
+        {/* 名称标签并入卡片内部（左下角小字）：不再挂在卡片下方切分行间节奏；标题显隐见通用配置 */}
+        {label !== '' && c['hideLabel'] !== true && item.t !== 'icon' && item.t !== 'folder' ? <div className="item-label">{label}</div> : null}
         <div className="item-acts">
           <div className="ia" data-act="item-edit" title="编辑">{Icon.edit()}</div>
           <div className="ia" data-act="item-del" title="删除">{Icon.trash()}</div>

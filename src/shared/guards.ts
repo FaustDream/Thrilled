@@ -204,9 +204,6 @@ export const normalizeSettings = (v: unknown): AppSettings => {
       ? (o['dockApps'] as unknown[]).map(normDockApp).filter((x): x is DockApp => x !== null)
       : [...d.dockApps],
     clockColor: strish(o['clockColor'], d.clockColor),
-    showTime: boolish(o['showTime'], d.showTime),
-    showDate: boolish(o['showDate'], d.showDate),
-    showQuote: boolish(o['showQuote'], d.showQuote),
     glass,
     blur,
     gAlpha: numish(o['gAlpha'], d.gAlpha, 0.2, 1),

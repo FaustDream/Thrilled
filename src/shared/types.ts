@@ -210,9 +210,6 @@ export interface AppSettings {
   /** Dock 快捷应用（用户手动新增；图标显示站点 favicon，右键可改名 / 改网址 / 移除） */
   dockApps: DockApp[];
   clockColor: string;
-  showTime: boolean;
-  showDate: boolean;
-  showQuote: boolean;
   glass: GlassSettings;
   /** 毛玻璃模糊半径（px，0–20）；与透明度分开设置，互不影响 */
   blur: BlurSettings;

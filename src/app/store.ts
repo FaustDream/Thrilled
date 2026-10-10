@@ -84,7 +84,9 @@ interface AppState {
   enginePanel: boolean
   page: () => GridItem[]
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
-  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'showTime' | 'showDate' | 'showQuote' | 'immersive' | 'simpleSearch') => void
+  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'immersive' | 'simpleSearch') => void
+  /** 组件库：按给定顺序重排当前页组件（只改数组顺序，不动各自坐标） */
+  reorderItems: (ids: string[]) => void
   /** 设置某个动作的组合键（空串 = 清除该快捷键） */
   setShortcut: (id: string, combo: string) => void
   /** 全部恢复出厂快捷键 */
@@ -296,6 +298,21 @@ export const useApp = create<AppState>()((set, get) => ({
 
   setSetting: (k, v) => set((s) => ({ settings: { ...s.settings, [k]: v } })),
   toggle: (k) => set((s) => ({ settings: { ...s.settings, [k]: !s.settings[k] } })),
+  reorderItems: (ids) => set((s) => {
+    const list = s.pages.map((pg) => [...pg])
+    const page = list[s.cur]
+    if (!page) return {}
+    const byId = new Map(page.map((it) => [it.id, it]))
+    const next: GridItem[] = []
+    for (const id of ids) {
+      const it = byId.get(id)
+      if (it) { next.push(it); byId.delete(id) }
+    }
+    for (const it of byId.values()) next.push(it)
+    if (next.length !== page.length) return {}
+    list[s.cur] = next
+    return { pages: list, toast: '组件顺序已更新' }
+  }),
   setShortcut: (id, combo) => set((s) => ({
     settings: { ...s.settings, shortcuts: { ...s.settings.shortcuts, [id]: combo } },
   })),
@@ -384,12 +401,12 @@ export const useApp = create<AppState>()((set, get) => ({
       config: { label: def.n, ...config },
     }
     const slot = findSlot(page, item.w, item.h)
-    if (slot) {
+    if (slot !== null) {
       item.c = slot.c
       item.r = slot.r
       page.push(item)
       list[curIdx] = page
-      return { pages: list, toast: `已添加${def.n}` }
+      return { pages: list, toast: '已添加到页面' }
     }
     if (list.length < MAX_PAGES) {
       list.push([item])

@@ -8,12 +8,12 @@ import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchW
 import { findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
-import { WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
-import { SIZES } from '../shared/grid'
+import { WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
+import { LIBRARY_SIZES, SIZES } from '../shared/grid'
 import { SKIN_FIELDS } from '../shared/defaults'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
 import { Icon } from './icons'
-import { SiteIcon } from './widgets'
+import { SiteIcon, cfg } from './widgets'
 import { siteUrlOf } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
@@ -24,7 +24,7 @@ import { SHORTCUT_DEFS, comboOf, formatCombo } from '../shared/shortcuts'
 import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
-  add: ['添加', '在这里添加你喜爱的网站图标和小组件'],
+  add: ['添加', '在这里添加你喜爱的网站图标'],
   personal: ['个性化', ''],
   /* 设置面板自带分区页签，头部不再重复一句话说明（与个性化同款单行头部） */
   setting: ['设置', ''],
@@ -114,7 +114,6 @@ const AddPanel = () => {
   const setSetting = useApp((s) => s.setSetting)
   const showToast = useApp((s) => s.showToast)
   const [tab, setTab] = useState(0)
-  const [kw, setKw] = useState('')
   const [cat, setCat] = useState(0)
   const [name, setName] = useState('')
   const [url, setUrl] = useState('')
@@ -122,7 +121,6 @@ const AddPanel = () => {
   const [toDock, setToDock] = useState(true)
   const [folderName, setFolderName] = useState('')
   const iconFile = useRef<HTMLInputElement | null>(null)
-  const ws = WIDGET_LIST.filter((w) => !kw || w.n.includes(kw) || w.s.includes(kw))
 
   /** 加进 Dock 快捷方式（去重，最多 8 个；手动新增入口） */
   const addToDock = (label: string, link: string): void => {
@@ -153,29 +151,12 @@ const AddPanel = () => {
 
   return (
     <>
-      <div className="f-row"><input className="f-input" placeholder="本地搜索：输入网站和小组件描述" value={kw} onChange={(e) => setKw(e.target.value)} /></div>
       <div className="sub-tabs">
-        {['小组件', '网址导航', '自定义'].map((t, i) => (
+        {['网址导航', '自定义'].map((t, i) => (
           <div key={t} className={`sub-tab${i === tab ? ' active' : ''}`} onClick={() => setTab(i)}>{t}</div>
         ))}
       </div>
       {tab === 0 && (
-        <>
-          <Hint>清单由小组件定义表驱动；「添加」会放到当前页空白位置，当前页满了自动新建一页（每种模式最多 5 页）</Hint>
-          {ws.map((w) => (
-            <div className="eng-row" key={w.n + w.t}>
-              <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div>{w.n}</div>
-                <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
-              </div>
-              <button className="btn sm" onClick={() => place(w.t as WidgetKind)}>添加</button>
-            </div>
-          ))}
-          {ws.length === 0 && <div className="empty-box">{Icon.search()}<div>暂无结果</div></div>}
-        </>
-      )}
-      {tab === 1 && (
         <>
           <div className="cats">
             {NAVI.map((c, i) => (
@@ -199,7 +180,7 @@ const AddPanel = () => {
           </div>
         </>
       )}
-      {tab === 2 && (
+      {tab === 1 && (
         <>
           <div className="f-row"><label className="f-label">网站名称</label>
             <input className="f-input" placeholder="请输入网站名称" value={name} onChange={(e) => setName(e.target.value)} /></div>
@@ -554,8 +535,94 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
   )
 }
 
+/* ---------- 个性化 → 组件库：页面已放置的组件（排序 / 尺寸 / ···）+ 目录（4 组浏览添加） ---------- */
+
+/** 稳定的空页引用（避免选择器每次返回新数组） */
+const EMPTY_PAGE: GridItem[] = []
+
+/** 组件库：管「放什么」——已放置列表（拖拽排序、三档尺寸、··· 配置 / 移除）+ 目录（已添加显示灰态） */
+const ComponentLibraryTab = () => {
+  const pages = useApp((st) => st.pages)
+  const cur = useApp((st) => st.cur)
+  const place = useApp((st) => st.place)
+  const remove = useApp((st) => st.remove)
+  const resize = useApp((st) => st.resize)
+  const reorderItems = useApp((st) => st.reorderItems)
+  const setModal = useApp((st) => st.setModal)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const page = pages[cur] ?? EMPTY_PAGE
+  const added = new Set(page.map((it) => it.t))
+  /** 配置：复用编辑弹窗（打开弹窗前先定位到该实例） */
+  const openConfig = (id: string): void => {
+    useApp.setState({ itemId: id })
+    setModal('editItem')
+  }
+  return (
+    <>
+      <Hint>按需添加页面组件，拖动排序，点 ··· 单独配置</Hint>
+      <SecCard t="页面组件" info={`管理当前第 ${cur + 1} 页的组件：行首 ⋮⋮ 拖动只调整组件列表顺序（页面上的位置仍在页面里拖动）；尺寸三档 = 小 2×2 / 宽 4×2 / 大 4×4。`}>
+        {page.length === 0 && (
+          <div className="empty-box">{Icon.plus()}<div>页面暂无组件，从下面挑一个</div></div>
+        )}
+        {page.map((it, i) => {
+          const def = WIDGET_DEFS[it.t]
+          const label = String(cfg(it)['label'] ?? def.n)
+          return (
+            <div className="eng-row sortable" key={it.id} draggable
+              onDragStart={() => setDragId(it.id)}
+              onDragEnd={() => setDragId(null)}
+              onDragOver={(ev) => { if (dragId !== null) ev.preventDefault() }}
+              onDrop={() => {
+                if (dragId === null || dragId === it.id) return
+                const ids = page.map((x) => x.id).filter((x) => x !== dragId)
+                ids.splice(i, 0, dragId)
+                reorderItems(ids)
+                setDragId(null)
+              }}>
+              <span style={{ color: 'var(--panel-sub)', cursor: 'grab' }}>⋮⋮</span>
+              <div className="er-ico" style={{ background: def.c }}>{def.g}</div>
+              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+              <div className="lib-size">
+                {LIBRARY_SIZES.map((sz) => (
+                  <div key={sz.k} title={`${sz.w}×${sz.h}`}
+                    className={`cat${it.w === sz.w && it.h === sz.h ? ' active' : ''}`}
+                    onClick={() => resize(it.id, sz.w, sz.h)}>{sz.k}</div>
+                ))}
+              </div>
+              <OverflowMenu
+                trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
+                items={[
+                  { label: '配置', onClick: () => openConfig(it.id) },
+                  { label: '移除', onClick: () => remove(it.id) },
+                ]} />
+            </div>
+          )
+        })}
+      </SecCard>
+      {WIDGET_GROUPS_ORDER.map((g) => (
+        <SecCard key={g} t={g}>
+          {WIDGET_LIST.filter((w) => WIDGET_GROUPS[w.t] === g).map((w) => {
+            const isAdded = added.has(w.t)
+            return (
+              <div className="eng-row" key={w.n + w.t}>
+                <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div>{w.n}</div>
+                  <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
+                </div>
+                <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
+                  onClick={() => place(w.t as WidgetKind)}>{isAdded ? '已添加' : '添加'}</button>
+              </div>
+            )
+          })}
+        </SecCard>
+      ))}
+    </>
+  )
+}
+
 /** 个性化面板导航页签（分组导航，避免单页堆全部设置） */
-const PANEL_TABS: readonly string[] = ['壁纸', '背景效果', '显示', '搜索与Dock', '主题']
+const PANEL_TABS: readonly string[] = ['壁纸', '背景效果', '显示', '搜索与Dock', '主题', '组件库']
 
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
@@ -780,16 +847,12 @@ const PersonalPanel = () => {
       )
       }
       {tab === 2 && (
-      <SecCard t="显示">
-        <SwitchRow l="展示时间" d="时钟以 24 小时制显示" on={s.showTime} onToggle={() => toggle('showTime')} />
-        <SwitchRow l="展示日期" d="显示公历与星期" on={s.showDate} onToggle={() => toggle('showDate')} />
-        <SwitchRow l="展示每日一言" on={s.showQuote} onToggle={() => toggle('showQuote')} />
+      <SecCard t="显示" info="页面内容由「组件库」管理（时间 / 日期 / 每日一言 都是组件自身的配置），这里只留与具体组件无关的整页显示项。">
         <ColorField label="时间颜色" value={s.clockColor} onChange={(hex) => setSetting('clockColor', hex)} />
         <div style={{ height: 10 }} />
         <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
         <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
         <SwitchRow l="隐藏图标标签" d="只保留图标" on={!s.labels} onToggle={() => toggle('labels')} />
-        <SwitchRow l="Dock 快捷栏" d="隐藏底部快捷栏" on={s.mascot} onToggle={() => toggle('mascot')} />
       </SecCard>
       )
       }
@@ -803,6 +866,7 @@ const PersonalPanel = () => {
         <SliderRow l="Dock 应用数量" min={4} max={8} value={s.dockCount} display={`${s.dockCount} 个`} onInput={(v) => setSetting('dockCount', v)} />
         <SwitchRow l="圆形 Dock 图标" on={s.dockIcon === 'circle'}
           onToggle={() => setSetting('dockIcon', s.dockIcon === 'circle' ? 'rect' : 'circle')} />
+        <SwitchRow l="Dock 快捷栏" d="隐藏底部快捷栏" on={s.mascot} onToggle={() => toggle('mascot')} />
       </SecCard>
       )
       }
@@ -844,6 +908,8 @@ const PersonalPanel = () => {
       </SecCard>
       </>
       )}
+
+      {tab === 5 && <ComponentLibraryTab />}
     </>
   )
 }
@@ -1300,11 +1366,22 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
   }
   return (
     <>
-      <h2>编辑 · {def.n}</h2>
-      <p className="sub">这张卡片是「{def.n}」小组件的实例：位置与尺寸属于布局，下面的字段只改本实例的内容。</p>
+      <h2>配置 · {def.n}</h2>
+      <p className="sub">这张卡片是「{def.n}」组件的实例：位置与尺寸属于布局，下面的字段只改本实例的内容。</p>
+      <div className="sec-title">通用</div>
       <div className="f-row"><label className="f-label">名称标签</label>
         <input className="f-input" value={String(c['label'] ?? '')} placeholder="留空则不显示名称"
           onChange={(e) => updateConfig(item.id, { label: e.target.value })} /></div>
+      <SwitchRow l="显示标题" d="卡片内左下角的名称小字" on={c['hideLabel'] !== true}
+        onToggle={() => updateConfig(item.id, { hideLabel: c['hideLabel'] !== true })} />
+      <SwitchRow l="透明度跟随全局" d="关掉后可单独设置这张卡片的透明度" on={typeof c['opacity'] !== 'number'}
+        onToggle={() => updateConfig(item.id, { opacity: typeof c['opacity'] === 'number' ? null : 0.6 })} />
+      {typeof c['opacity'] === 'number' && (
+        <SliderRow l="单独透明度" min={0} max={100} value={Math.round(Number(c['opacity']) * 100)}
+          display={`${Math.round(Number(c['opacity']) * 100)}%`}
+          onInput={(v) => updateConfig(item.id, { opacity: v / 100 })} />
+      )}
+      {def.fields.length > 0 && <div className="sec-title">专属</div>}
       {def.fields.map(field)}
       <div className="f-row"><label className="f-label">尺寸</label>
         <div className="cats">{SIZES.map((sz) => (

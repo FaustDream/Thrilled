@@ -4,7 +4,8 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, uid } from '../src/app/layout'
-import { CELL, COLS, INSET, ROWS, SIZES, findSlot, groupGrid, overlaps } from '../src/shared/grid'
+import { CELL, COLS, INSET, LIBRARY_SIZES, ROWS, SIZES, findSlot, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
+import { WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST } from '../src/shared/widget-defs'
 import type { GridItem } from '../src/shared/types'
 
 const PAGES = DEFAULT_PAGES.map((items, i) => ({ name: `出厂第 ${i + 1} 页`, items }))
@@ -129,6 +130,35 @@ describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', ()
   it('isIconOnlyPage：空页不算图标页', () => {
     expect(isIconOnlyPage([])).toBe(false)
     expect(isIconOnlyPage([icon('A')])).toBe(true)
+  })
+})
+
+describe('组件库数据（分组 / 三档尺寸 / 配置项上限）', () => {
+  it('每类小组件都归入唯一分组，四组都非空且覆盖全部类型', () => {
+    const kinds = Object.keys(WIDGET_DEFS)
+    const groups: Record<string, string | undefined> = WIDGET_GROUPS
+    expect(kinds.filter((k) => groups[k] === undefined)).toEqual([])
+    for (const g of WIDGET_GROUPS_ORDER) {
+      expect(WIDGET_LIST.filter((w) => WIDGET_GROUPS[w.t] === g).length, `${g} 组为空`).toBeGreaterThan(0)
+    }
+    expect(WIDGET_GROUPS_ORDER).toEqual(['信息', '工具', '内容', '导航'])
+  })
+
+  it('尺寸三档都是合法尺寸（小 / 宽 / 大）', () => {
+    expect(LIBRARY_SIZES.map((s) => `${s.k}${s.w}x${s.h}`)).toEqual(['小2x2', '宽4x2', '大4x4'])
+    for (const s of LIBRARY_SIZES) expect(isLegalSize(s.w, s.h), `${s.k} 不是合法档位`).toBe(true)
+  })
+
+  it('配置项不超过 5 项（通用 2 项 + 专属 ≤3 项）', () => {
+    for (const w of WIDGET_LIST) {
+      expect(w.fields.length, `${w.n} 的专属配置超过 3 项`).toBeLessThanOrEqual(3)
+      expect(w.fields.length + 2, `${w.n} 的配置项超过 5 项`).toBeLessThanOrEqual(5)
+    }
+  })
+
+  it('组件说明为一行短句（≤20 字）', () => {
+    const over = WIDGET_LIST.filter((w) => w.s.length > 20).map((w) => `${w.n}:${w.s}`)
+    expect(over).toEqual([])
   })
 })
 

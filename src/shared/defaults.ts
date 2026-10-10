@@ -29,9 +29,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dockIcon: 'rect',
   dockApps: [...DEFAULT_DOCK_APPS],
   clockColor: '#1f2937',
-  showTime: true,
-  showDate: true,
-  showQuote: true,
   /* 透明度：前六项等同旧「玻璃质感」的视觉，后六项默认 0（不改变出厂外观） */
   glass: {
     card: 0.6, tile: 0.35, dock: 0.7, search: 0.45, panel: 0.65, menu: 0.65,

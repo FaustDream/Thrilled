@@ -28,6 +28,16 @@ export const SIZES: readonly { w: number; h: number }[] = [
 /** 网格单位尺寸是否合法（仅六档） */
 export const isLegalSize = (w: number, h: number): boolean => SIZES.some((s) => s.w === w && s.h === h);
 
+/**
+ * 组件库的尺寸三档：小 / 宽 / 大（映射到六档规范里的 2×2 / 4×2 / 4×4）。
+ * 用户口语的「1×1 / 2×1 / 2×2」即这三档；六档校验与既有卡片尺寸不受影响。
+ */
+export const LIBRARY_SIZES: readonly { k: string; w: number; h: number }[] = [
+  { k: '小', w: 2, h: 2 },
+  { k: '宽', w: 4, h: 2 },
+  { k: '大', w: 4, h: 4 },
+];
+
 /** 两张卡片是否重叠 */
 export const overlaps = (
   a: { c: number; r: number; w: number; h: number },
