@@ -211,13 +211,36 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .cd-hint{font-size:calc(13 * var(--u));color:var(--card-sub)}
 .cd-time{font-size:calc(38 * var(--u));font-weight:700;line-height:1.15;letter-spacing:2px;
   font-variant-numeric:tabular-nums}
-.cd-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;
-  gap:calc(2 * var(--u)) calc(14 * var(--u));margin-top:calc(6 * var(--u))}
-.cd-entry{display:flex;align-items:center;gap:calc(6 * var(--u))}
+.cd-grid{flex:1;display:grid;grid-template-columns:1fr 1fr;grid-auto-rows:1fr;
+  gap:calc(2 * var(--u)) calc(14 * var(--u));margin-top:calc(6 * var(--u));align-content:start;overflow:hidden}
+.cd-entry{display:flex;align-items:center;gap:calc(6 * var(--u));min-width:0}
+.cd-entry .cd-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cd-label{font-size:calc(12 * var(--u));color:var(--card-sub)}
-.cd-val{font-size:calc(16 * var(--u));font-weight:600}
-.cd-val.money{color:var(--accent)}
+.cd-val{font-size:calc(16 * var(--u));font-weight:600;flex:0 0 auto}
+/* 倒数条目进度条： festivals 按上次→下次发生、自定义按创建→目标日 */
+.cd-bar{flex:1;height:calc(4 * var(--u));min-width:calc(20 * var(--u));border-radius:calc(2 * var(--u));
+  background:var(--line);overflow:hidden}
+.cd-bar i{display:block;height:100%;background:var(--accent,#FB923C);border-radius:inherit;
+  transition:width .3s var(--ease)}
+/* 吉祥物：内置熊猫为 SVG，自定义时渲染为 emoji 文本 */
+.cd-emoji{font-size:calc(96 * var(--u));line-height:1}
 .cd-mascot{width:calc(132 * var(--u));flex:0 0 auto;align-self:center}
+
+/* 待办清单卡：条目直接外显（勾选框可点，编辑在详情弹窗） */
+.td-panel{flex:1;min-width:0;display:flex;flex-direction:column;gap:calc(5 * var(--u));
+  padding:calc(10 * var(--u)) calc(14 * var(--u));justify-content:center}
+.td-head{display:flex;align-items:center;gap:calc(8 * var(--u));color:#38A29E}
+.td-head svg{width:calc(18 * var(--u));height:calc(18 * var(--u));flex:0 0 auto}
+.td-title{font-size:calc(15 * var(--u));font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.td-count{margin-left:auto;font-size:calc(11 * var(--u));color:var(--card-sub);flex:0 0 auto}
+.td-row{display:flex;align-items:center;gap:calc(8 * var(--u));min-width:0}
+.td-box{flex:0 0 auto;width:calc(15 * var(--u));height:calc(15 * var(--u));border:calc(1.5 * var(--u)) solid #38A29E;
+  border-radius:calc(4 * var(--u));display:flex;align-items:center;justify-content:center;
+  font-size:calc(10 * var(--u));color:#fff;cursor:pointer}
+.td-box.on{background:#38A29E}
+.td-txt{font-size:calc(12 * var(--u));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--card-text)}
+.td-txt.done{text-decoration:line-through;color:var(--card-sub)}
+.td-more,.td-empty{font-size:calc(11 * var(--u));color:var(--card-sub)}
 
 /* 纪念日 */
 .w-ann{padding:calc(20 * var(--u)) calc(24 * var(--u));display:flex;align-items:center;
@@ -467,8 +490,14 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .dt-todo-txt.done{text-decoration:line-through;color:var(--panel-sub)}
 .dt-row-del{margin-left:auto;flex:0 0 auto;width:22px;height:22px;display:flex;align-items:center;
   justify-content:center;border-radius:6px;color:var(--panel-sub);cursor:pointer;opacity:0}
-.dt-todo-row:hover .dt-row-del{opacity:1}
+.dt-todo-row:hover .dt-row-del,.cd-edit:hover .dt-row-del{opacity:1}
 .dt-row-del:hover{background:var(--line);color:#e05a6d}
+/* 自定义倒数日编辑行：名称 / 日期 / 备注 + 删除 */
+.cd-edit{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.cd-edit .f-input{margin:0}
+/* 列表条目的来源标签：节日（橙）/ 自定义（灰） */
+.dt-tag{flex:0 0 auto;font-size:10px;padding:2px 6px;border-radius:6px;background:var(--line);color:var(--panel-sub)}
+.dt-tag.fest{background:rgba(251,146,60,.16);color:#d97706}
 /* 组件库：已放置组件的三档尺寸胶囊（小 / 宽 / 大），比通用胶囊更紧 */
 .lib-size{display:flex;gap:4px;flex:0 0 auto}
 .lib-size .cat{padding:4px 8px;font-size:11px;margin:0}

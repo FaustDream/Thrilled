@@ -11,6 +11,7 @@ import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/gri
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
 import { WidgetView, SiteIcon, cfg, str, num, styleVarsOf } from './widgets'
+import { normTodoItems } from '../core/utils'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
 import { Drawer, Modal, settingTabOf } from './panels'
@@ -116,7 +117,7 @@ export const App = () => {
   const [now, setNow] = useState(() => new Date())
   const [historyOpen, setHistoryOpen] = useState(false)
   const [pillOpen, setPillOpen] = useState(false)
-  const [drag, setDrag] = useState<{ id: string; x: number; y: number; c: number; r: number; moved: boolean } | null>(null)
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number; scx: number; scy: number; c: number; r: number; moved: boolean } | null>(null)
   const [customWall, setCustomWall] = useState<BgData | null>(null)
   /* 视口宽高比（只在变化超过 1% 时更新，避免 resize 抖动触发无谓重渲染） */
   const [vpRatio, setVpRatio] = useState(() => window.innerWidth / Math.max(1, window.innerHeight))
@@ -275,6 +276,16 @@ export const App = () => {
       const item = allItems(st.pages).find((x) => x.id === id) ?? null
       switch (name) {
         case 'hot-tab': if (id) st.updateConfig(id, { source: v }); break
+        /* 待办卡上的勾选框：直接翻转完成态（编辑仍在详情弹窗） */
+        case 'todo-card': {
+          if (item === null) break
+          const items = normTodoItems(cfg(item)['items'])
+          const i = Number(v)
+          if (i >= 0 && i < items.length) {
+            st.updateConfig(item.id, { items: items.map((x, j) => (j === i ? { ...x, done: !x.done } : x)) })
+          }
+          break
+        }
         case 'hot-refresh': st.showToast('已换一批热点'); break
         case 'hot-open': st.showToast(`打开链接：${v}`); break
         case 'music-list': st.showToast(`播放列表：${item ? str(cfg(item)['station'], '熊猫Dj') : '熊猫Dj'}`); break
@@ -471,6 +482,9 @@ export const App = () => {
         if (!d) return d
         const x = (e.clientX - r.left) / s
         const y = (e.clientY - r.top) / s
+        /* 拖拽阈值：屏幕位移 ≤4px 视为点按（修「点击卡片左上角导致组件被移动」），不进入拖拽态
+           （用屏幕坐标比较——stage 坐标在整体缩放下会被放大） */
+        if (!d.moved && Math.abs(e.clientX - d.scx) <= 4 && Math.abs(e.clientY - d.scy) <= 4) return d
         const it = allItems(useApp.getState().pages).find((v) => v.id === d.id)
         if (!it) return d
         const c = Math.max(0, Math.min(COLS - it.w, Math.round((x - INSET) / CELL)))
@@ -533,6 +547,7 @@ export const App = () => {
                     setDrag({
                       id: it.id, moved: false,
                       x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s, c: it.c, r: it.r,
+                      scx: e.clientX, scy: e.clientY,
                     })
                   }} />
               ))}

@@ -76,15 +76,15 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     def: { title: '距离元旦', date: '2027-01-01', accent: '' },
   },
   countdown: {
-    t: 'countdown', n: '下班倒计时', g: '班', c: '#FB923C', s: '进度 / 工资 / 任务', units: { w: 8, h: 4 },
-    /* 大号计时 + 四格额度 + 熊猫：短边小于 4 格时同样无法阅读 */
+    t: 'countdown', n: '下班倒计时', g: '班', c: '#FB923C', s: '下班倒计时 + 节日倒数', units: { w: 8, h: 4 },
+    /* 大号计时 + 节日倒数列表 + 吉祥物：短边小于 4 格时同样无法阅读 */
     min: { w: 4, h: 4 },
     fields: [
       { k: 'at', l: '下班时刻', t: 'text', ph: '18:00' },
-      { k: 'showGrid', l: '显示额度格', t: 'bool' },
-      { k: 'showMascot', l: '显示熊猫', t: 'bool' },
+      { k: 'showFestivals', l: '显示节日倒数', t: 'bool' },
+      { k: 'mascotEmoji', l: '吉祥物图形', t: 'text', ph: '留空熊猫 / emoji / 无' },
     ],
-    def: { at: '18:00', showGrid: true, showMascot: true },
+    def: { at: '18:00', showFestivals: true, mascotEmoji: '' },
   },
   fav: {
     t: 'fav', n: '收藏夹', g: '藏', c: '#F59E0B', s: '管理浏览器书签收藏夹', units: { w: 2, h: 4 },

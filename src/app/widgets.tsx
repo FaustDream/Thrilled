@@ -10,7 +10,8 @@ import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
 import { CELL, GROUP_GAP, GROUP_PAD, INSET, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
-import { daysUntil, getGreetingByHour } from '../core/utils'
+import { daysUntil, getGreetingByHour, normTodoItems } from '../core/utils'
+import { normCountdownEntries, upcomingRows } from '../core/festivals'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
 import { weatherText } from '../core/weather'
@@ -230,33 +231,69 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
           <div className="fav-text">{str(c['folder'], '收藏夹')}</div>
         </div>
       )
-    case 'todo':
+    case 'todo': {
+      /* 待办清单卡：条目直接在卡上可见（用户需求），勾选框可点（todo-card 动作），编辑在详情弹窗 */
+      const items = normTodoItems(c['items'])
+      const done = items.filter((x) => x.done).length
+      const maxRows = item.h >= 4 ? 4 : 2
+      const shown = items.slice(0, maxRows)
       return (
-        <div className="w-todo2" style={{ position: 'absolute', inset: 0 }}>
-          {bool(c['showCheck']) && CheckIcon()}
-          <span className="td-txt2">{str(c['title'], '待办')}</span>
+        <div className="w-todo2" style={{ position: 'absolute', inset: 0, justifyContent: 'stretch' }}>
+          <div className="td-panel">
+            <div className="td-head">
+              {bool(c['showCheck']) && CheckIcon()}
+              <span className="td-title">{str(c['title'], '待办')}</span>
+              <span className="td-count">{done}/{items.length}</span>
+            </div>
+            {items.length === 0 ? (
+              <div className="td-empty">暂无待办 · 点击卡片添加</div>
+            ) : (
+              <>
+                {shown.map((t, i) => (
+                  <div className="td-row" key={`${i}-${t.txt}`}>
+                    <span className={`td-box${t.done ? ' on' : ''}`} data-act="todo-card" data-v={String(i)}>{t.done ? '✓' : ''}</span>
+                    <span className={`td-txt${t.done ? ' done' : ''}`}>{t.txt}</span>
+                  </div>
+                ))}
+                {items.length > shown.length && <div className="td-more">还有 {items.length - shown.length} 项，点击查看</div>}
+              </>
+            )}
+          </div>
         </div>
       )
+    }
     case 'countdown': {
+      /* 下班倒计时 + 倒数列表（节日 + 用户自定义，按剩余天数升序；发薪 / 工资等隐私占位已移除） */
       const at = str(c['at'], '18:00').split(':')
       const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
       const left = Math.max(0, Math.floor((end.getTime() - now.getTime()) / 1000))
       const t = `${p2(Math.floor(left / 3600))}:${p2(Math.floor(left / 60) % 60)}:${p2(left % 60)}`
+      const rows = upcomingRows(normCountdownEntries(c['entries']), bool(c['showFestivals']), now)
+        .slice(0, item.h >= 4 ? 4 : 2)
+      /* 吉祥物三态：留空 = 内置熊猫 SVG（兼容旧配置 showMascot:false）；填「无」隐藏；填 emoji 自定义 */
+      const mascot = str(c['mascotEmoji'], bool(c['showMascot']) === false ? '无' : '').trim()
       return (
         <div className="w-cd" style={{ position: 'absolute', inset: 0 }}>
           <div className="cd-l">
             <div className="cd-hint">坚持住，距下班只有</div>
             <div className="cd-time">{t}</div>
-            {bool(c['showGrid']) && (
+            {rows.length > 0 && (
               <div className="cd-grid">
-                <div className="cd-entry"><span className="cd-label">发薪日</span><span className="cd-val">21天</span></div>
-                <div className="cd-entry"><span className="cd-label">周五</span><span className="cd-val">1天</span></div>
-                <div className="cd-entry"><span className="cd-label">中秋节</span><span className="cd-val">0天</span></div>
-                <div className="cd-entry"><span className="cd-label">日赚</span><span className="cd-val money">745.896￥</span></div>
+                {rows.map((r, i) => (
+                  <div className="cd-entry" key={String(i)} title={r.note ?? ''}>
+                    <span className="cd-label">{r.name}</span>
+                    <span className="cd-val">{Math.abs(r.days)}{r.days < 0 ? '天前' : '天'}</span>
+                    {r.progress !== null && <span className="cd-bar"><i style={{ width: `${Math.round(r.progress * 100)}%` }} /></span>}
+                  </div>
+                ))}
               </div>
             )}
           </div>
-          {bool(c['showMascot']) && <div className="cd-mascot">{panda()}</div>}
+          {mascot !== '无' && (
+            <div className="cd-mascot">
+              {mascot === '' ? panda() : <span className="cd-emoji">{mascot}</span>}
+            </div>
+          )}
         </div>
       )
     }
