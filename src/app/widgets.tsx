@@ -8,7 +8,8 @@ import { useEffect, useState } from 'react'
 import { CheckIcon, Icon } from './icons'
 import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
-import { CELL, INSET, groupGrid } from '../shared/grid'
+import { CELL, INSET, groupGrid, groupOverflows } from '../shared/grid'
+import { normStyle } from '../shared/widget-style'
 import { daysUntil, getGreetingByHour } from '../core/utils'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
@@ -26,26 +27,19 @@ const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is st
 const GROUP_LABEL_STRIP = 22
 
 /**
- * 实例级样式（通用「样式」段）→ CSS 变量：字号缩放 / 图标缩放 / 卡片圆角 / 文字颜色 / 强调色。
- * 非法值或不写即交给皮肤令牌兜底（跟随主题）；比例夹在 0.6–1.6，避免极端值把卡片撑坏。
+ * 实例级样式（配置弹窗「样式」段）→ CSS 变量：字号缩放 / 图标缩放 / 卡片圆角 / 文字颜色 / 强调色。
+ * 归一化统一走 shared/widget-style（非法值与越界一律丢弃，交给皮肤令牌兜底即跟随主题）。
  */
 export const styleVarsOf = (c: Record<string, unknown>): Record<string, string> => {
   const out: Record<string, string> = {}
-  const ratio = (k: string): number | null => {
-    const v = c[k]
-    return typeof v === 'number' && Number.isFinite(v) ? Math.min(1.6, Math.max(0.6, v)) : null
-  }
-  const fs = ratio('fontScale')
-  if (fs !== null && fs !== 1) out['--w-fs'] = fs.toFixed(3)
-  const ico = ratio('iconScale')
-  if (ico !== null && ico !== 1) out['--w-ico'] = ico.toFixed(3)
-  const r = c['radius']
-  if (typeof r === 'number' && Number.isFinite(r)) out['--w-radius'] = String(Math.min(32, Math.max(0, Math.round(r))))
-  const hexOk = (v: string): boolean => /^#[0-9a-f]{6}$/i.test(v)
-  const text = str(c['textColor'])
-  if (hexOk(text)) out['--card-text'] = text
+  const s = normStyle(c)
+  if (s.fontScale !== undefined && s.fontScale !== 1) out['--w-fs'] = s.fontScale.toFixed(3)
+  if (s.iconScale !== undefined && s.iconScale !== 1) out['--w-ico'] = s.iconScale.toFixed(3)
+  if (s.radius !== undefined) out['--w-radius'] = String(s.radius)
+  if (s.textColor !== undefined) out['--card-text'] = s.textColor
+  /* 强调色是组件专属字段（如倒数日的「强调色」），与样式段同一套颜色校验 */
   const accent = str(c['accent'])
-  if (hexOk(accent)) out['--accent'] = accent
+  if (/^#[0-9a-f]{6}$/i.test(accent)) out['--accent'] = accent
   return out
 }
 
@@ -153,7 +147,7 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
               <div key={h[0]} className={`news-row${i === 0 ? ' top' : ''}`} data-act="hot-open" data-v={h[0]}>
                 <span className="news-idx">{i + 1}</span>
                 <span className="news-title">{h[0]}</span>
-                <span className="news-heat">{h[1]}</span>
+                {bool(c['showHeat']) && <span className="news-heat">{h[1]}</span>}
               </div>
             ))}
           </div>
@@ -182,10 +176,16 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
         </div>
       )
     case 'weather': {
-      const temp = weather !== null ? `${weather.currentTemp}°C` : '20°C'
+      /* 专属配置：城市 / 温度单位（摄氏 · 华氏）/ 是否显示温度区间 */
+      const toF = str(c['unit'], '摄氏 °C') === '华氏 °F'
+      const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
+      const temp = weather !== null ? `${conv(weather.currentTemp)}°${toF ? 'F' : 'C'}` : '20°C'
+      const range = weather !== null
+        ? `${conv(weather.daily[0]?.min ?? 0)}°/${conv(weather.daily[0]?.max ?? 0)}°`
+        : '18°/24°'
       const desc = weather !== null
-        ? `${weatherText(weather.currentCode)} ${weather.daily[0]?.min ?? '--'}°/${weather.daily[0]?.max ?? '--'}°`
-        : '多云转小雨 18°/24° 空气优'
+        ? `${weatherText(weather.currentCode)}${bool(c['showRange']) ? ` ${range}` : ''}`
+        : `多云转小雨${bool(c['showRange']) ? ` ${range}` : ''} 空气优`
       return (
         <div className="w-weather" style={{ position: 'absolute', inset: 0 }}>
           <div className="wx-temp">{temp}</div>
@@ -218,22 +218,22 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
             <div className="cal-wd">周{'日一二三四五六'[now.getDay()]}</div>
           </div>
           <div className="cal-body">
-            <div className="cal-month">{`${now.getFullYear()}年${now.getMonth() + 1}月`}</div>
-            <div className="cal-lunar">八月十五 · 宜出行</div>
+            {bool(c['showMonth']) && <div className="cal-month">{`${now.getFullYear()}年${now.getMonth() + 1}月`}</div>}
+            {bool(c['showLunar']) && <div className="cal-lunar">八月十五 · 宜出行</div>}
           </div>
         </div>
       )
     case 'fav':
       return (
         <div className="w-fav" style={{ position: 'absolute', inset: 0 }}>
-          {Icon.bookmark()}
+          {bool(c['showIcon']) && Icon.bookmark()}
           <div className="fav-text">{str(c['folder'], '收藏夹')}</div>
         </div>
       )
     case 'todo':
       return (
         <div className="w-todo2" style={{ position: 'absolute', inset: 0 }}>
-          {CheckIcon()}
+          {bool(c['showCheck']) && CheckIcon()}
           <span className="td-txt2">{str(c['title'], '待办')}</span>
         </div>
       )
@@ -247,14 +247,16 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
           <div className="cd-l">
             <div className="cd-hint">坚持住，距下班只有</div>
             <div className="cd-time">{t}</div>
-            <div className="cd-grid">
-              <div className="cd-entry"><span className="cd-label">发薪日</span><span className="cd-val">21天</span></div>
-              <div className="cd-entry"><span className="cd-label">周五</span><span className="cd-val">1天</span></div>
-              <div className="cd-entry"><span className="cd-label">中秋节</span><span className="cd-val">0天</span></div>
-              <div className="cd-entry"><span className="cd-label">日赚</span><span className="cd-val money">745.896￥</span></div>
-            </div>
+            {bool(c['showGrid']) && (
+              <div className="cd-grid">
+                <div className="cd-entry"><span className="cd-label">发薪日</span><span className="cd-val">21天</span></div>
+                <div className="cd-entry"><span className="cd-label">周五</span><span className="cd-val">1天</span></div>
+                <div className="cd-entry"><span className="cd-label">中秋节</span><span className="cd-val">0天</span></div>
+                <div className="cd-entry"><span className="cd-label">日赚</span><span className="cd-val money">745.896￥</span></div>
+              </div>
+            )}
           </div>
-          <div className="cd-mascot">{panda()}</div>
+          {bool(c['showMascot']) && <div className="cd-mascot">{panda()}</div>}
         </div>
       )
     }
@@ -268,14 +270,16 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
             <div className="ann-title">{str(c['title'], '与MiNa相识')}</div>
             <div className="ann-date">{date}</div>
           </div>
-          <div className="ann-r"><span className="ann-num">{days}</span><span className="ann-unit">天</span></div>
+          <div className="ann-r"><span className="ann-num">{days}</span><span className="ann-unit">{str(c['unitLabel'], '天')}</span></div>
         </div>
       )
     }
     case 'quote':
       return (
         <div className="w-quote" style={{ position: 'absolute', inset: 0 }} data-act="quote-refresh">
-          <div className="qt-hi">{`${greetByHour(now.getHours())}，${nick}`}</div>
+          {bool(c['showGreeting']) && (
+            <div className="qt-hi">{`${greetByHour(now.getHours())}，${str(c['nick']) === '' ? nick : str(c['nick'])}`}</div>
+          )}
           <div className="qt-enc"><span className="qt-enc-t">{encourage}</span></div>
         </div>
       )
@@ -303,13 +307,13 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       return (
         <div className="w-mini" style={{ position: 'absolute', inset: 0 }}>
           {Icon.calc()}
-          <div className="mini-l"><div className="mini-t">计算器</div><div className="mini-s">点击开始计算</div></div>
+          <div className="mini-l"><div className="mini-t">计算器</div><div className="mini-s">{str(c['desc'], '点击开始计算')}</div></div>
         </div>
       )
     case 'trans':
       return (
         <div className="w-mini" style={{ position: 'absolute', inset: 0 }}>
-          {Icon.trans()}
+          {bool(c['showIcon']) && Icon.trans()}
           <div className="mini-l"><div className="mini-t">翻译</div><div className="mini-s">{str(c['pair'], '中英互译 · 划词')}</div></div>
         </div>
       )
@@ -323,16 +327,25 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       const W = item.w * CELL - 2 * INSET - pad * 2
       const H = item.h * CELL - 2 * INSET - pad * 2 - strip
       const { cols, rows, cell } = groupGrid(apps.length, W, H, gap)
+      /* 太少格数会撑成巨块、太多格数在窄卡里会溢出：溢出时容器改为可滚动，格子保持 16px 下限 */
+      const over = groupOverflows(apps.length, W, H, gap)
       return (
         <div className="w-group" style={{ position: 'absolute', inset: 0, paddingBottom: pad + strip }}>
-          <div className="gcell-grid" style={{ gridTemplateColumns: `repeat(${cols},${cell}px)`, gridTemplateRows: `repeat(${rows},${cell}px)` }}>
+          <div className={`gcell-grid${over ? ' scroll' : ''}`}
+            style={{ gridTemplateColumns: `repeat(${cols},${cell}px)`, gridTemplateRows: `repeat(${rows},${cell}px)` }}>
             {apps.map((n) => <TileGlyph key={n} name={n} cls="gtile" fs={Math.round(cell * 0.38)} />)}
           </div>
         </div>
       )
     }
     case 'folder':
-      return <div className="w-folder" style={{ position: 'absolute', inset: 0 }}>{Icon.folder()}</div>
+      /* 专属配置：显示名称——文件夹卡是透明卡（卡外标签不渲染），名称直接在图标下方给出 */
+      return (
+        <div className="w-folder" style={{ position: 'absolute', inset: 0 }}>
+          {Icon.folder()}
+          {bool(c['showName']) && str(c['label']).trim() !== '' && <div className="folder-name">{str(c['label'])}</div>}
+        </div>
+      )
     case 'icon':
     default: {
       // 真实 favicon（缓存优先）→ 品牌字形占位；自定义上传图标（dataURL）最优先

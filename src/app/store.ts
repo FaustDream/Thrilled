@@ -18,6 +18,7 @@ import { markActiveWallpaper } from '../core/wallpaper'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
 import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import { DEFAULT_SHORTCUTS } from '../shared/shortcuts'
+import { isBlankStyle, styleSliceOf, withoutStyle, withoutStyleDefault } from '../shared/widget-style'
 import type {
   AppSettings,
   EngineDef,
@@ -91,6 +92,14 @@ interface AppState {
   setShortcut: (id: string, combo: string) => void
   /** 全部恢复出厂快捷键 */
   resetShortcuts: () => void
+  /** 一键套用样式预设（先清空四个样式键再写入，避免上一份预设残留；patch 一律经 normStyle 归一化） */
+  applyStyle: (id: string, patch: unknown) => void
+  /** 把当前卡片的样式存为该组件类型的默认样式（空样式 = 取消默认） */
+  saveStyleDefault: (id: string) => void
+  /** 清除某组件类型的默认样式 */
+  clearStyleDefault: (t: WidgetKind) => void
+  /** 把当前卡片的样式复制到本页同类型卡片 */
+  applyStyleToKind: (id: string) => void
   setMode: (m: ViewMode) => void
   goPage: (i: number) => void
   setEngine: (id: string) => void
@@ -320,6 +329,51 @@ export const useApp = create<AppState>()((set, get) => ({
     settings: { ...s.settings, shortcuts: { ...DEFAULT_SHORTCUTS } },
     toast: '已恢复默认快捷键',
   })),
+
+  /* ---------- 实例样式（配置弹窗「样式」段） ---------- */
+  applyStyle: (id, patch) => set((s) => ({
+    pages: s.pages.map((pg) => pg.map((it) => (it.id === id
+      ? { ...it, config: { ...withoutStyle(it.config), ...styleSliceOf(patch) } }
+      : it))),
+  })),
+  saveStyleDefault: (id) => set((s) => {
+    const it = s.pages.flat().find((x) => x.id === id)
+    if (it === undefined) return {}
+    const style = styleSliceOf(it.config)
+    const blank = isBlankStyle(style)
+    const next = blank
+      ? withoutStyleDefault(s.settings.styleDefaults, it.t)
+      : { ...s.settings.styleDefaults, [it.t]: style }
+    return {
+      settings: { ...s.settings, styleDefaults: next },
+      toast: blank
+        ? `已取消「${WIDGET_DEFS[it.t].n}」的默认样式`
+        : `当前样式已设为「${WIDGET_DEFS[it.t].n}」的默认（新放置的实例自动套用）`,
+    }
+  }),
+  clearStyleDefault: (t) => set((s) => ({
+    settings: { ...s.settings, styleDefaults: withoutStyleDefault(s.settings.styleDefaults, t) },
+    toast: `已取消「${WIDGET_DEFS[t].n}」的默认样式`,
+  })),
+  applyStyleToKind: (id) => set((s) => {
+    const list = s.pages.map((pg) => [...pg])
+    const idx = list.findIndex((pg) => pg.some((it) => it.id === id))
+    const page = list[idx]
+    if (page === undefined) return {}
+    const src = page.find((it) => it.id === id)
+    if (src === undefined) return {}
+    const style = styleSliceOf(src.config)
+    let n = 0
+    list[idx] = page.map((it) => {
+      if (it.id === src.id || it.t !== src.t) return it
+      n += 1
+      return { ...it, config: { ...withoutStyle(it.config), ...style } }
+    })
+    return {
+      pages: list,
+      toast: n === 0 ? '本页没有同类卡片' : `已复制样式到本页 ${n} 张同类卡片`,
+    }
+  }),
   setMode: (m) => {
     const s = get()
     const tip = m === 'minimal' ? '已进入极简模式' : '已回到标准模式'
@@ -398,7 +452,8 @@ export const useApp = create<AppState>()((set, get) => ({
     const page = [...(list[curIdx] ?? [])]
     const item: GridItem = {
       id: `i${Date.now().toString(36)}`, c: 0, r: 0, w: def.units.w, h: def.units.h, t: kind,
-      config: { label: def.n, ...config },
+      /* 新实例先套该类组件的默认样式（「设为该组件默认」写入的），再叠放置时的显式配置 */
+      config: { label: def.n, ...(s.settings.styleDefaults[kind] ?? {}), ...config },
     }
     const slot = findSlot(page, item.w, item.h)
     if (slot !== null) {

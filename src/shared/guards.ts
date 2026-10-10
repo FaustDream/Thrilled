@@ -11,8 +11,10 @@ import { z } from 'zod';
 import { BLUR_MAX_PX, MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
 import { normalizeShortcuts } from './shortcuts';
+import { isBlankStyle, normStyle } from './widget-style';
+import { WIDGET_KINDS } from './widget-defs';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
-import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource } from './types';
+import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource, WidgetStyle } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -227,7 +229,23 @@ export const normalizeSettings = (v: unknown): AppSettings => {
       ? (o['wallSources'] as unknown[]).map(normWallSource).filter((x): x is WallpaperSource => x !== null)
       : [...d.wallSources],
     shortcuts: normalizeShortcuts(o['shortcuts']),
+    styleDefaults: normStyleDefaults(o['styleDefaults']),
   };
+};
+
+/**
+ * 按类型的默认样式归一化：只认已知组件类型，样式项按 shared/widget-style 归一化，
+ * 空样式（四个键都没设）丢弃——`{}` 即「该类没有默认样式」。
+ */
+const normStyleDefaults = (v: unknown): Record<string, WidgetStyle> => {
+  if (typeof v !== 'object' || v === null) return {};
+  const out: Record<string, WidgetStyle> = {};
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (!WIDGET_KINDS.has(k)) continue;
+    const s = normStyle(raw);
+    if (!isBlankStyle(s)) out[k] = s;
+  }
+  return out;
 };
 
 /** 网格坐标归一化（数字 + 边界钳制） */

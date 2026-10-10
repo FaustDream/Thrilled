@@ -46,6 +46,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   wallFocus: { x: 50, y: 50, ratio: 0 },
   wallSources: [],
   shortcuts: { ...DEFAULT_SHORTCUTS },
+  /* 按组件类型的默认样式：出行为空（跟随主题），用户可在配置弹窗「样式」段里设为默认 */
+  styleDefaults: {},
 };
 
 /** 12 项用户可编辑令牌（风格抽屉取色行，02 §6.1） */

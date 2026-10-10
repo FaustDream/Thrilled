@@ -246,6 +246,20 @@ export interface AppSettings {
   wallSources: WallpaperSource[];
   /** 自定义快捷键（动作 id → 规范组合键，见 shared/shortcuts；空串 = 未设置） */
   shortcuts: Record<string, string>;
+  /** 按组件类型的默认样式（新放置的实例继承；键为 WidgetKind，值为 shared/widget-style 的样式项） */
+  styleDefaults: Record<string, WidgetStyle>;
+}
+
+/**
+ * 实例级样式（配置弹窗「样式」段；也用作某类组件的默认样式）。
+ * 四个键的合法范围与归一化在 shared/widget-style：fontScale / iconScale 为 0.6–1.6 的比例，
+ * radius 为 0–32px，textColor 为 #rrggbb（缺省即跟随主题）。
+ */
+export interface WidgetStyle {
+  fontScale?: number;
+  iconScale?: number;
+  radius?: number;
+  textColor?: string;
 }
 
 /** 外部壁纸来源（协议适配器 + 用户可改的 API 基址） */

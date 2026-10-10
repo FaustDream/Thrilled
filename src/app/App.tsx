@@ -10,7 +10,7 @@ import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type Drawer
 import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
-import { WidgetView, SiteIcon, cfg, str, styleVarsOf } from './widgets'
+import { WidgetView, SiteIcon, cfg, str, num, styleVarsOf } from './widgets'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
 import { Drawer, Modal, settingTabOf } from './panels'
@@ -276,7 +276,8 @@ export const App = () => {
         case 'music-next': st.showToast('下一首'); break
         case 'music-toggle': st.setPlaying(!st.playing); break
         case 'quote-refresh': st.rollEncourage(); break
-        case 'fish-hit': if (item) st.updateConfig(item.id, { count: Number(cfg(item)['count'] ?? 0) + 1 }); break
+        /* 每次功课的功德数可配置（默认 +1） */
+        case 'fish-hit': if (item) st.updateConfig(item.id, { count: Number(cfg(item)['count'] ?? 0) + Math.max(1, num(cfg(item)['step'], 1)) }); break
         case 'engine-open':
           setHistoryOpen(false)
           st.setEnginePanel(!st.enginePanel)

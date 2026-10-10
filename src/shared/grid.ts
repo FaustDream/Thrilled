@@ -92,3 +92,12 @@ export const groupGrid = (
   return { cols, rows, cell: Math.max(16, Math.min(Math.floor(cell), GROUP_TILE_MAX)) };
 };
 
+/**
+ * 图标格容器是否装不下：格子边长有 16px 下限（太少格数撑成巨块 / 太小看不清），
+ * 格子多而卡片小时网格会超出可用框——此时容器改为可滚动，而不是把格子继续压小。
+ */
+export const groupOverflows = (n: number, availW: number, availH: number, gap: number): boolean => {
+  const { cols, rows, cell } = groupGrid(n, availW, availH, gap);
+  return cols * cell + (cols - 1) * gap > availW + 0.001 || rows * cell + (rows - 1) * gap > availH + 0.001;
+};
+

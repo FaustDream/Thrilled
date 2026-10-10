@@ -12,6 +12,7 @@ import { WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, WIDGET_DEFS, maxSizeOf
 import { LIBRARY_SIZES, SIZES } from '../shared/grid'
 import { SKIN_FIELDS } from '../shared/defaults'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
+import { STYLE_PRESETS, isBlankStyle } from '../shared/widget-style'
 import { Icon } from './icons'
 import { SiteIcon, cfg, num } from './widgets'
 import { siteUrlOf } from './brands'
@@ -1251,6 +1252,7 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '新增', s: '历史记录一键清空：搜索历史与历史壁纸', d: '设置 → 搜索 → 「搜索框」卡底部新增「清空搜索历史（N 条）」（无可清时置灰不可点，与搜索框下拉里逐条删除同一份数据）；个性化 → 壁纸的历史缩略图带标题行新增「清空历史」——保留当前使用中的那张，其余记录连本机图片一并删除（二次确认，库内只剩当前壁纸）' },
       { k: '新增', s: '组件尺寸自适应：字体图标随卡片等比缩放', d: '卡片即 CSS 查询容器（container-type:size），--u = max(1px, min(100cqw/自然宽, 100cqh/自然高)) × 字号缩放；比自然尺寸大的卡片等比放大（字体、图标、图标格、圆角、间距一起），更小的保持设计字号不缩小。自然尺寸下逐像素等于设计稿；小档位由「尺寸能力下限」（如新闻 4×4 起、时钟因时间裁切 4×2 起）与 @container 密度降级（窄卡隐热度值 / 熊猫 / 日期 / AI 副标题）兜住' },
       { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
+      { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },
     ],
   },
   {
@@ -1390,6 +1392,11 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
   const resize = useApp((s) => s.resize)
   const setModal = useApp((s) => s.setModal)
   const showToast = useApp((s) => s.showToast)
+  const applyStyle = useApp((s) => s.applyStyle)
+  const saveStyleDefault = useApp((s) => s.saveStyleDefault)
+  const clearStyleDefault = useApp((s) => s.clearStyleDefault)
+  const applyStyleToKind = useApp((s) => s.applyStyleToKind)
+  const styleDefault = useApp((s) => s.settings.styleDefaults[item.t])
   const def = WIDGET_DEFS[item.t]
   const c = { ...def.def, ...item.config }
   const field = (f: WidgetField) => {
@@ -1456,6 +1463,19 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
       <ColorField label="文字颜色" auto="跟随风格"
         value={/^#[0-9a-f]{6}$/i.test(String(c['textColor'] ?? '')) ? String(c['textColor']) : '#1f2937'}
         onAuto={() => updateConfig(item.id, { textColor: '' })} onChange={(x) => updateConfig(item.id, { textColor: x })} />
+      {/* 一键预设 + 默认样式：预设先清空四个样式键再写入，避免上一份残留 */}
+      <div className="btn-row" style={{ marginTop: 12 }}>
+        {STYLE_PRESETS.map(([label, patch]) => (
+          <button key={label} className="btn sm ghost" onClick={() => applyStyle(item.id, patch)}>{label}</button>
+        ))}
+      </div>
+      <div className="btn-row" style={{ marginTop: 8 }}>
+        <button className="btn sm ghost" onClick={() => saveStyleDefault(item.id)}>设为该组件默认</button>
+        {styleDefault !== undefined && !isBlankStyle(styleDefault) && (
+          <button className="btn sm ghost" onClick={() => clearStyleDefault(item.t)}>取消默认</button>
+        )}
+        <button className="btn sm ghost" onClick={() => applyStyleToKind(item.id)}>复制到同类卡片</button>
+      </div>
       {def.fields.length > 0 && <div className="sec-title">专属</div>}
       {def.fields.map(field)}
       <div className="f-row"><label className="f-label">尺寸</label>

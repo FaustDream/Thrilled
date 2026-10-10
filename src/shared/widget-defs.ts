@@ -16,8 +16,9 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     fields: [
       { k: 'source', l: '热榜来源', t: 'sel', o: ['看点', '百度', '微博', '抖音'] },
       { k: 'count', l: '显示条数', t: 'range', min: 1, max: 6, step: 1, unit: ' 条' },
+      { k: 'showHeat', l: '显示热度值', t: 'bool' },
     ],
-    def: { source: '看点', count: 5 },
+    def: { source: '看点', count: 5, showHeat: true },
   },
   clock: {
     t: 'clock', n: '时钟', g: '钟', c: '#3B82F6', s: '大号数字时间，可切换 12/24 小时', units: { w: 4, h: 4 },
@@ -30,22 +31,39 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     ],
     def: { timeMode: '24 小时', showDate: true, showSeconds: false },
   },
-  cal: { t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '公历 / 农历 / 宜忌', units: { w: 4, h: 2 }, min: { w: 4, h: 2 }, fields: [], def: {} },
+  cal: {
+    t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '公历 / 农历 / 宜忌', units: { w: 4, h: 2 }, min: { w: 4, h: 2 },
+    fields: [
+      { k: 'showMonth', l: '显示年月', t: 'bool' },
+      { k: 'showLunar', l: '显示农历与宜忌', t: 'bool' },
+    ],
+    def: { showMonth: true, showLunar: true },
+  },
   weather: {
     t: 'weather', n: '天气', g: '天', c: '#38BDF8', s: '实况天气 · 城市可调', units: { w: 4, h: 2 },
     min: { w: 4, h: 2 },
-    fields: [{ k: 'city', l: '城市', t: 'text', ph: '北京' }], def: { city: '北京' },
+    fields: [
+      { k: 'city', l: '城市', t: 'text', ph: '北京' },
+      { k: 'unit', l: '温度单位', t: 'sel', o: ['摄氏 °C', '华氏 °F'] },
+      { k: 'showRange', l: '显示温度区间', t: 'bool' },
+    ],
+    def: { city: '北京', unit: '摄氏 °C', showRange: true },
   },
   todo: {
     t: 'todo', n: '待办清单', g: '待', c: '#38A29E', s: '多清单 · 今日任务', units: { w: 4, h: 2 },
-    fields: [{ k: 'title', l: '清单名称', t: 'text', ph: '待办' }], def: { title: '待办' },
+    fields: [{ k: 'title', l: '清单名称', t: 'text', ph: '待办' }, { k: 'showCheck', l: '显示勾选图标', t: 'bool' }],
+    def: { title: '待办', showCheck: true },
   },
   ann: {
     t: 'ann', n: '纪念日', g: '纪', c: '#F472B6', s: '在一起 · 生日 · 倒数', units: { w: 8, h: 4 },
     /* 左右分栏（标题 + 大号天数）：短边小于 4 格时字号会掉到个位数 */
     min: { w: 4, h: 4 },
-    fields: [{ k: 'title', l: '标题', t: 'text', ph: '与 MiNa 相识' }, { k: 'date', l: '起始日期', t: 'text', ph: '2020-05-20' }],
-    def: { title: '与MiNa相识', date: '2020-05-20' },
+    fields: [
+      { k: 'title', l: '标题', t: 'text', ph: '与 MiNa 相识' },
+      { k: 'date', l: '起始日期', t: 'text', ph: '2020-05-20' },
+      { k: 'unitLabel', l: '天数单位', t: 'text', ph: '天' },
+    ],
+    def: { title: '与MiNa相识', date: '2020-05-20', unitLabel: '天' },
   },
   countday: {
     t: 'countday', n: '倒数日', g: '倒', c: '#A855F7', s: '距离目标日期的天数', units: { w: 4, h: 2 },
@@ -61,38 +79,70 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     t: 'countdown', n: '下班倒计时', g: '班', c: '#FB923C', s: '进度 / 工资 / 任务', units: { w: 8, h: 4 },
     /* 大号计时 + 四格额度 + 熊猫：短边小于 4 格时同样无法阅读 */
     min: { w: 4, h: 4 },
-    fields: [{ k: 'at', l: '下班时刻', t: 'text', ph: '18:00' }], def: { at: '18:00' },
+    fields: [
+      { k: 'at', l: '下班时刻', t: 'text', ph: '18:00' },
+      { k: 'showGrid', l: '显示额度格', t: 'bool' },
+      { k: 'showMascot', l: '显示熊猫', t: 'bool' },
+    ],
+    def: { at: '18:00', showGrid: true, showMascot: true },
   },
   fav: {
     t: 'fav', n: '收藏夹', g: '藏', c: '#F59E0B', s: '管理浏览器书签收藏夹', units: { w: 2, h: 4 },
-    fields: [{ k: 'folder', l: '收藏夹', t: 'text', ph: '收藏夹' }], def: { folder: '收藏夹' },
+    fields: [{ k: 'folder', l: '收藏夹', t: 'text', ph: '收藏夹' }, { k: 'showIcon', l: '显示图标', t: 'bool' }],
+    def: { folder: '收藏夹', showIcon: true },
   },
-  quote: { t: 'quote', n: '每日一言', g: '言', c: '#6366F1', s: '时段问候 + 昵称 + 鼓励语', units: { w: 8, h: 2 }, fields: [], def: {} },
+  quote: {
+    t: 'quote', n: '每日一言', g: '言', c: '#6366F1', s: '时段问候 + 昵称 + 鼓励语', units: { w: 8, h: 2 },
+    fields: [
+      { k: 'showGreeting', l: '显示问候行', t: 'bool' },
+      { k: 'nick', l: '昵称', t: 'text', ph: '留空跟随设置' },
+    ],
+    def: { showGreeting: true, nick: '' },
+  },
   music: {
     t: 'music', n: '音乐', g: '乐', c: '#EC4899', s: '熊猫Dj · 在线电台', units: { w: 4, h: 4 },
     /* 唱片盘 + 三颗播放键需要足够的方块：矮于 4 格时按短边缩到按钮不可点，故下限 4×4 */
     min: { w: 4, h: 4 },
-    fields: [{ k: 'station', l: '电台', t: 'text', ph: '熊猫Dj' }], def: { station: '熊猫Dj' },
+    fields: [{ k: 'station', l: '电台', t: 'text', ph: '熊猫Dj' }, { k: 'showDisc', l: '显示唱片盘', t: 'bool' }],
+    def: { station: '熊猫Dj', showDisc: true },
   },
   trans: {
     t: 'trans', n: '翻译', g: '译', c: '#3B82F6', s: '多语种即时翻译', units: { w: 4, h: 2 },
     min: { w: 4, h: 2 },
-    fields: [{ k: 'pair', l: '语言对', t: 'text', ph: '中 ⇄ 英' }], def: { pair: '中英互译 · 划词' },
+    fields: [{ k: 'pair', l: '语言对', t: 'text', ph: '中 ⇄ 英' }, { k: 'showIcon', l: '显示图标', t: 'bool' }],
+    def: { pair: '中英互译 · 划词', showIcon: true },
   },
-  calc: { t: 'calc', n: '计算器', g: '算', c: '#8B5CF6', s: '科学计算 / 单位换算', units: { w: 4, h: 2 }, min: { w: 4, h: 2 }, fields: [], def: {} },
+  calc: {
+    t: 'calc', n: '计算器', g: '算', c: '#8B5CF6', s: '科学计算 / 单位换算', units: { w: 4, h: 2 }, min: { w: 4, h: 2 },
+    fields: [{ k: 'desc', l: '副标题', t: 'text', ph: '点击开始计算' }],
+    def: { desc: '点击开始计算' },
+  },
   woodfish: {
     t: 'woodfish', n: '木鱼', g: '鱼', c: '#C98A4B', s: '功德 +1 · 可关后台敲击', units: { w: 2, h: 2 },
-    fields: [{ k: 'count', l: '起始功德', t: 'num', ph: '128' }], def: { count: 128 },
+    fields: [
+      { k: 'count', l: '起始功德', t: 'num', ph: '128' },
+      { k: 'step', l: '每次功课', t: 'num', ph: '1' },
+    ],
+    def: { count: 128, step: 1 },
   },
   ai: {
     t: 'ai', n: 'AI 对话', g: 'AI', c: '#111827', s: '智能问答入口', units: { w: 4, h: 4 },
-    fields: [{ k: 'provider', l: '提供方', t: 'text', ph: 'UiTab AI' }], def: { provider: 'UiTab AI' },
+    fields: [
+      { k: 'provider', l: '提供方', t: 'text', ph: 'UiTab AI' },
+      { k: 'sub', l: '副标题', t: 'text', ph: '试试问问这些问题' },
+    ],
+    def: { provider: 'UiTab AI', sub: '试试问问这些问题' },
   },
   icon: {
     t: 'icon', n: '网站图标', g: '网', c: '#64748B', s: '添加单个网站到桌面', units: { w: 2, h: 2 },
     fields: [{ k: 'url', l: '网站链接', t: 'text', ph: 'https://' }], def: { url: '' },
   },
-  folder: { t: 'folder', n: '图标文件夹', g: '夹', c: '#94A3B8', s: '把多个图标收进文件夹', units: { w: 2, h: 2 }, fields: [], def: {} },
+  folder: {
+    t: 'folder', n: '图标文件夹', g: '夹', c: '#94A3B8', s: '把多个图标收进文件夹', units: { w: 2, h: 2 },
+    /* 文件夹卡默认去卡片化（透明底 + 居中图标）：名称在卡内显示，而非卡外标签 */
+    fields: [{ k: 'showName', l: '显示名称', t: 'bool' }],
+    def: { showName: true },
+  },
   group: {
     t: 'group', n: '图标格容器', g: '格', c: '#0EA5E9', s: '一格里放多个网站图标', units: { w: 4, h: 4 },
     /* 图标格按卡片尺寸自动铺满：宽 2 格（98px）放不下一行图标，高度上 2 格起即可（出厂布局即有 8×2 的容器） */
