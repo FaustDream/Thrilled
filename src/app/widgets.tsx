@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { CheckIcon, Icon } from './icons'
 import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
-import { CELL, GROUP_GAP, GROUP_LABEL_STRIP, GROUP_PAD, INSET, groupGrid, groupOverflows } from '../shared/grid'
+import { CELL, GROUP_GAP, GROUP_PAD, INSET, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
 import { daysUntil, getGreetingByHour } from '../core/utils'
 import { resolveFavicon } from '../core/favicon'
@@ -321,16 +321,15 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       )
     case 'group': {
       /* 图标格容器：格子边长由 shared/grid 的 groupGrid 按卡片实际尺寸算出（铺满卡片，不再挤成一串小字形）；
-         有名称标签时底部留出一条占位（标签在卡内左下角，见 .item-label / GridCard） */
+         名称标签已移除（用户需求），卡片高度全部留给图标格 */
       const apps = list(c['apps'])
-      const strip = str(c['label']).trim() === '' ? 0 : GROUP_LABEL_STRIP
       const W = item.w * CELL - 2 * INSET - GROUP_PAD * 2
-      const H = item.h * CELL - 2 * INSET - GROUP_PAD * 2 - strip
+      const H = item.h * CELL - 2 * INSET - GROUP_PAD * 2
       const { cols, rows, cell } = groupGrid(apps.length, W, H, GROUP_GAP)
       /* 太少格数会撑成巨块、太多格数在窄卡里会溢出：溢出时容器改为可滚动，格子保持 16px 下限 */
       const over = groupOverflows(apps.length, W, H, GROUP_GAP)
       return (
-        <div className="w-group" style={{ position: 'absolute', inset: 0, paddingBottom: GROUP_PAD + strip }}>
+        <div className="w-group" style={{ position: 'absolute', inset: 0, paddingBottom: GROUP_PAD }}>
           <div className={`gcell-grid${over ? ' scroll' : ''}`}
             style={{ gridTemplateColumns: `repeat(${cols},${cell}px)`, gridTemplateRows: `repeat(${rows},${cell}px)` }}>
             {apps.map((n) => <TileGlyph key={n} name={n} cls="gtile" fs={Math.round(cell * 0.38)} />)}

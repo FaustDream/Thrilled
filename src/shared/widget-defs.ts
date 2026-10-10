@@ -234,8 +234,7 @@ export const sizeAllowedFor = (
   if (!sizeAllowed(t, w, h)) return false;
   if (t === 'group') {
     const apps = Array.isArray(config['apps']) ? config['apps'] : [];
-    const label = typeof config['label'] === 'string' && config['label'].trim() !== '';
-    return groupFits(apps.length, w, h, label);
+    return groupFits(apps.length, w, h);
   }
   return true;
 };

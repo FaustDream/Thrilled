@@ -256,23 +256,21 @@ describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）'
 
   it('图标格容器的能力按应用数收紧：装不下（只能滚动）的档位被拦', () => {
     const apps = (n: number): { apps: string[] } => ({ apps: Array.from({ length: n }, (_, i) => `站${i + 1}`) })
-    /* 8×2 无标签：24 个仍能不滚动装下；加上标签条带后 4×2 就不行了 */
-    expect(sizeAllowedFor('group', apps(24), 8, 2)).toBe(true)
-    expect(sizeAllowedFor('group', { ...apps(24), label: '购物' }, 4, 2)).toBe(false)
-    expect(sizeAllowedFor('group', { ...apps(24), label: '购物' }, 8, 2)).toBe(true)
-    /* 8 个应用的 8×2 容器不受影响 */
-    expect(sizeAllowedFor('group', { ...apps(8), label: '常用' }, 8, 2)).toBe(true)
+    /* 名称标签已移除：能力判定只看应用数——4×2 的格子容量上限是 8×3×16px = 24 个 */
+    expect(sizeAllowedFor('group', apps(24), 4, 2)).toBe(true)
+    expect(sizeAllowedFor('group', apps(30), 4, 2)).toBe(false)
+    expect(sizeAllowedFor('group', apps(30), 8, 2)).toBe(true)
     /* 其它组件不受实例内容影响 */
     expect(sizeAllowedFor('clock', {}, 4, 2)).toBe(true)
     expect(sizeAllowedFor('clock', {}, 2, 2)).toBe(false)
   })
 
   it('图标格容器：可用框与「能装下」判定共用同一套几何（渲染与能力判定不各算一套）', () => {
-    /* 8×2：卡宽 8×74−50 = 542，减去容器内距 30 → 512；高度 98−30−22（标签条带）= 46 */
-    expect(groupBoxOf(8, 2, true)).toEqual({ w: 512, h: 46 })
-    expect(groupFits(24, 8, 2, true)).toBe(true)
-    expect(groupFits(24, 4, 2, true)).toBe(false)
-    expect(groupFits(12, 4, 2, true)).toBe(true)
+    /* 8×2：卡宽 8×74−50 = 542，减去容器内距 30 → 512；高度 98−30 = 68（标签条带已随标签一起移除） */
+    expect(groupBoxOf(8, 2)).toEqual({ w: 512, h: 68 })
+    expect(groupFits(24, 8, 2)).toBe(true)
+    expect(groupFits(24, 4, 2)).toBe(true)
+    expect(groupFits(30, 4, 2)).toBe(false)
   })
 })
 
@@ -286,14 +284,11 @@ describe('组件说明文案（定义表）', () => {
 describe('图标格容器自适应（groupGrid）', () => {
   const PAD = 15
   const GAP = 10
-  /** 卡内标签占位（与 widgets.tsx 的 GROUP_LABEL_STRIP 一致） */
-  const STRIP = 22
-  /** 工厂里图标格容器的可用框（去掉卡片内缩、容器内距与标签条带） */
-  const innerOf = (it: GridItem): { w: number; h: number } => {
-    const label = it.config['label']
-    const strip = typeof label === 'string' && label.trim() !== '' ? STRIP : 0
-    return { w: it.w * CELL - 2 * INSET - PAD * 2, h: it.h * CELL - 2 * INSET - PAD * 2 - strip }
-  }
+  /** 工厂里图标格容器的可用框（去掉卡片内缩与容器内距；名称标签已移除，不再有条带） */
+  const innerOf = (it: GridItem): { w: number; h: number } => ({
+    w: it.w * CELL - 2 * INSET - PAD * 2,
+    h: it.h * CELL - 2 * INSET - PAD * 2,
+  })
 
   it('出厂每个图标格容器：所有应用都装得下，且网格不溢出可用框', () => {
     const groups = DEFAULT_PAGES.flat().filter((it) => it.t === 'group')

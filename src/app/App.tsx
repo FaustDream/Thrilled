@@ -512,7 +512,7 @@ export const App = () => {
       </div>
       <div className="wall-mask" />
 
-      <div id="stage" ref={stageRef} data-mode={settings.mode} data-labels={settings.labels ? '1' : '0'}
+      <div id="stage" ref={stageRef} data-mode={settings.mode}
         data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}
         style={{ ['--search-top' as string]: `${settings.searchTop}px`, ['--search-font' as string]: `${settings.searchFontSize}px` }}>
 
@@ -677,7 +677,6 @@ const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging,
   onDragStart: (e: ReactPointerEvent) => void
 }) => {
   const c = cfg(item)
-  const label = str(c['label'], str(c['name']))
   /* 通用配置：卡片透明度（config.opacity 为数字时覆盖全局 --ga-card，未设置则跟随全局） */
   const ov = c['opacity']
   const cardVars = typeof ov === 'number' ? { ['--ga-card' as string]: (1 - GLASS_ALPHA_FACTOR * ov).toFixed(3) } : {}
@@ -700,8 +699,7 @@ const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging,
         data-id={item.id} data-t={item.t} data-act={item.t === 'quote' ? undefined : 'item-open'}
         onPointerDown={onDragStart}>
         <WidgetView item={item} now={now} nick={nick} encourage={encourage} playing={playing} weather={weather} />
-        {/* 名称标签并入卡片内部（左下角小字）：不再挂在卡片下方切分行间节奏；标题显隐见通用配置 */}
-        {label !== '' && c['hideLabel'] !== true && item.t !== 'icon' && item.t !== 'folder' ? <div className="item-label">{label}</div> : null}
+        {/* 名称标签已整体移除（用户需求）：卡片不再显示左下角组件名；名称仍用于网址图标命名与文件夹卡 */}
         <div className="item-acts">
           <div className="ia" data-act="item-edit" title="编辑">{Icon.edit()}</div>
           <div className="ia" data-act="item-del" title="删除">{Icon.trash()}</div>

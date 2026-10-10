@@ -69,16 +69,14 @@ const GROUP_TILE_MAX = 64;
 /** 图标格容器的卡内内距与格子间距（px；随 --u 缩放，自然尺寸下即这些值） */
 export const GROUP_PAD = 15;
 export const GROUP_GAP = 10;
-/** 图标格容器有名称标签时底部留出的条带（px） */
-export const GROUP_LABEL_STRIP = 22;
 
 /**
- * 图标格容器的可用框（按候选尺寸算，含卡片内缩、容器内距与可选标签条带）。
+ * 图标格容器的可用框（按候选尺寸算，含卡片内缩与容器内距；名称标签已移除，不再有条带）。
  * 与渲染侧同一算法，尺寸能力判定与渲染不会各算一套。
  */
-export const groupBoxOf = (w: number, h: number, hasLabel: boolean): { w: number; h: number } => ({
+export const groupBoxOf = (w: number, h: number): { w: number; h: number } => ({
   w: w * CELL - 2 * INSET - GROUP_PAD * 2,
-  h: h * CELL - 2 * INSET - GROUP_PAD * 2 - (hasLabel ? GROUP_LABEL_STRIP : 0),
+  h: h * CELL - 2 * INSET - GROUP_PAD * 2,
 });
 
 /**
@@ -120,8 +118,8 @@ export const groupOverflows = (n: number, availW: number, availH: number, gap: n
  * 给定卡片尺寸下，图标格容器能否「不滚动」装下全部应用。
  * 用于尺寸能力：应用多时不再允许选太小的档位（否则只能滚动条浏览）。
  */
-export const groupFits = (n: number, w: number, h: number, hasLabel: boolean): boolean => {
-  const box = groupBoxOf(w, h, hasLabel);
+export const groupFits = (n: number, w: number, h: number): boolean => {
+  const box = groupBoxOf(w, h);
   return !groupOverflows(n, box.w, box.h, GROUP_GAP);
 };
 

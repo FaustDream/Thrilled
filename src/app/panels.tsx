@@ -974,7 +974,6 @@ const PersonalPanel = () => {
         <div style={{ height: 10 }} />
         <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
         <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
-        <SwitchRow l="隐藏图标标签" d="只保留图标" on={!s.labels} onToggle={() => toggle('labels')} />
       </SecCard>
       </>
       )}
@@ -1344,6 +1343,7 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '新增', s: '历史记录一键清空：搜索历史与历史壁纸', d: '设置 → 搜索 → 「搜索框」卡底部新增「清空搜索历史（N 条）」（无可清时置灰不可点，与搜索框下拉里逐条删除同一份数据）；个性化 → 壁纸的历史缩略图带标题行新增「清空历史」——保留当前使用中的那张，其余记录连本机图片一并删除（二次确认，库内只剩当前壁纸）' },
       { k: '新增', s: '卡片点击直达详情，不再只能进编辑', d: '图标卡点击仍开站；其余 18 类小组件点击打开「详情」弹窗——天气实况 + 三日预报 + 刷新、时钟实时走字 + 快捷开关、日历当月月历（今日高亮）、待办可勾选 / 添加 / 删除（存卡片配置）、收藏夹浏览浏览器书签、倒数日 / 纪念日 / 倒计时大字、热榜全榜、每日一言换一句、木鱼 +N、图标格容器应用清单；数据未接入的（农历 / 计算器 / 翻译 / AI）如实注明占位，弹窗底部「编辑配置」互通' },
       { k: '新增', s: '从书签快速添加：主界面快捷方式与网址导航', d: '添加抽屉网址导航页签追加「书签」分类（读浏览器收藏夹、条目带真实网址，尾部「全部导入」复用批量导入通道）；自定义页签新增「从书签快速添加」——展开书签列表按名称过滤、逐条点击即添加为网址图标快捷方式' },
+      { k: '调整', s: '界面不再显示小组件名称标签', d: '卡片左下角的组件名小字整体移除（含「显示标题」与「隐藏图标标签」两个失效开关）；图标格容器不再为标签预留底部条带，格子铺满可用空间；名称仅保留数据用途——网址图标站点名与文件夹卡内名称' },
       { k: '新增', s: '组件尺寸自适应：字体图标随卡片等比缩放', d: '卡片即 CSS 查询容器（container-type:size），--u = max(1px, min(100cqw/自然宽, 100cqh/自然高)) × 字号缩放；比自然尺寸大的卡片等比放大（字体、图标、图标格、圆角、间距一起），更小的保持设计字号不缩小。自然尺寸下逐像素等于设计稿；小档位由「尺寸能力下限」（如新闻 4×4 起、时钟因时间裁切 4×2 起）与 @container 密度降级（窄卡隐热度值 / 熊猫 / 日期 / AI 副标题）兜住' },
       { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
       { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },
@@ -1534,11 +1534,9 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
       <h2>配置 · {def.n}</h2>
       <p className="sub">这张卡片是「{def.n}」组件的实例：位置与尺寸属于布局，下面的字段只改本实例的内容。</p>
       <div className="sec-title">通用</div>
-      <div className="f-row"><label className="f-label">名称标签</label>
-        <input className="f-input" value={String(c['label'] ?? '')} placeholder="留空则不显示名称"
+      <div className="f-row"><label className="f-label">名称</label>
+        <input className="f-input" value={String(c['label'] ?? '')} placeholder="网址图标用作站点名；文件夹卡显示为卡内名称"
           onChange={(e) => updateConfig(item.id, { label: e.target.value })} /></div>
-      <SwitchRow l="显示标题" d="卡片内左下角的名称小字" on={c['hideLabel'] !== true}
-        onToggle={() => updateConfig(item.id, { hideLabel: c['hideLabel'] !== true })} />
       <SwitchRow l="透明度跟随全局" d="关掉后可单独设置这张卡片的透明度" on={typeof c['opacity'] !== 'number'}
         onToggle={() => updateConfig(item.id, { opacity: typeof c['opacity'] === 'number' ? null : 0.6 })} />
       {typeof c['opacity'] === 'number' && (
