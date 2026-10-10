@@ -621,8 +621,10 @@ const ComponentLibraryTab = () => {
   )
 }
 
-/** 个性化面板导航页签（分组导航，避免单页堆全部设置） */
-const PANEL_TABS: readonly string[] = ['壁纸', '背景效果', '显示', '搜索与Dock', '主题', '组件库']
+/** 个性化面板导航页签（分组导航，避免单页堆全部设置）
+ *  「背景效果」= 透明度 / 毛玻璃 / 壁纸与文字 / 搜索与 Dock（搜索框与 Dock 的视觉参数与背景同域）
+ *  「主题」= 风格皮肤 + 风格编辑器 + 显示（整页显示项与主题同页） */
+const PANEL_TABS: readonly string[] = ['壁纸', '背景效果', '主题', '组件库']
 
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
@@ -843,21 +845,7 @@ const PersonalPanel = () => {
         <ColorField label="字体颜色" value={s.fontColor === '' ? '#1f2937' : s.fontColor} auto="跟随风格"
           onAuto={() => setSetting('fontColor', '')} onChange={(hex) => setSetting('fontColor', hex)} />
       </SecCard>
-      </>
-      )
-      }
-      {tab === 2 && (
-      <SecCard t="显示" info="页面内容由「组件库」管理（时间 / 日期 / 每日一言 都是组件自身的配置），这里只留与具体组件无关的整页显示项。">
-        <ColorField label="时间颜色" value={s.clockColor} onChange={(hex) => setSetting('clockColor', hex)} />
-        <div style={{ height: 10 }} />
-        <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
-        <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
-        <SwitchRow l="隐藏图标标签" d="只保留图标" on={!s.labels} onToggle={() => toggle('labels')} />
-      </SecCard>
-      )
-      }
-      {tab === 3 && (
-      <SecCard t="搜索与 Dock">
+      <SecCard t="搜索与 Dock" info="搜索框与 Dock 的外观参数——与背景效果同域，故并入本页签。">
         <SliderRow l="搜索框宽度" min={400} max={1400} value={s.searchWidth} display={`${s.searchWidth}px`} onInput={(v) => setSetting('searchWidth', v)} />
         <SliderRow l="搜索框圆角" min={0} max={25} value={s.searchRadius} display={`${s.searchRadius}px`} onInput={(v) => setSetting('searchRadius', v)} />
         <SwitchRow l="沉浸式搜索框" d="与壁纸融合的透明样式" on={s.immersive} onToggle={() => toggle('immersive')} />
@@ -868,10 +856,11 @@ const PersonalPanel = () => {
           onToggle={() => setSetting('dockIcon', s.dockIcon === 'circle' ? 'rect' : 'circle')} />
         <SwitchRow l="Dock 快捷栏" d="隐藏底部快捷栏" on={s.mascot} onToggle={() => toggle('mascot')} />
       </SecCard>
+      </>
       )
       }
 
-      {tab === 4 && (
+      {tab === 2 && (
       <>
       <SecCard t="主题与风格">
         <div className="theme-grid">
@@ -906,10 +895,17 @@ const PersonalPanel = () => {
           <button className="btn sm" onClick={skinNew}>新建皮肤</button>
         </div>
       </SecCard>
+      <SecCard t="显示" info="页面内容由「组件库」管理（时间 / 日期 / 每日一言 都是组件自身的配置），这里只留与具体组件无关的整页显示项。">
+        <ColorField label="时间颜色" value={s.clockColor} onChange={(hex) => setSetting('clockColor', hex)} />
+        <div style={{ height: 10 }} />
+        <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
+        <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
+        <SwitchRow l="隐藏图标标签" d="只保留图标" on={!s.labels} onToggle={() => toggle('labels')} />
+      </SecCard>
       </>
       )}
 
-      {tab === 5 && <ComponentLibraryTab />}
+      {tab === 3 && <ComponentLibraryTab />}
     </>
   )
 }
@@ -1211,13 +1207,20 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
-    v: '4.4', d: '2026-09-30 – 2026-10-08', items: [
+    v: '4.4', d: '2026-09-30 – 2026-10-10', items: [
       { k: '优化', s: '极简页面：胶囊收起只显图标，功能键移入 Dock', d: '模式胶囊悬停展开「极简 / 标准」两个选项（去除说明文字）；右上头像移除，新增 / 个性化 / 设置改由底部 Dock 承载' },
       { k: '优化', s: 'Dock 改版：手动新增，支持右键改名与移除', d: '出厂快捷方式清空、由用户手动新增（「添加」抽屉勾选「同时添加到底部 Dock」）；图标显示站点 favicon（失败回退品牌字形）；苹果式尺寸与玻璃质感' },
       { k: '优化', s: '极简模式：日期 / 搜索框 / 鼓励语视觉重做', d: '日期改「2026年9月30日」格式、时钟 84px；搜索框未聚焦为透明胶囊白描边、聚焦展开为白色玻璃卡片；鼓励语悬浮在 Dock 上方；搜索历史与引擎面板跟随新位置' },
       { k: '调整', s: '壁纸改为外部来源适配器，内置壁纸移除', d: '接入 Wallhaven / Picsum / 必应每日 / 061129 / 哲风；自适应裁剪焦点（主体最集中的窗口）、同一张图去重、最近 12 张历史缩略图带、应用分阶段反馈' },
       { k: '调整', s: '设置与个性化面板改为分区页签 + 卡片', d: '透明度补至 12 项并与毛玻璃模糊解耦（6 项玻璃底色 + 6 项元素显隐，另有 6 项模糊配对）；个性化「主题」页签压缩为 4 列缩略图 + 12 项色值 4 列密排；说明统一收进标题 ⓘ' },
       { k: '移除', s: '在线广场（模板分享）整体移除', d: '广场从未接入云端，一直是种子模板示意；个性化里的「主题」（风格皮肤）不受影响；「吉祥物」开关更名为「Dock 快捷栏」' },
+      { k: '移除', s: '云端同步与「关于我们」移除，回归纯本地', d: '设置页签由五个收敛为搜索 / 通用 / 数据 / 关于；core/cloud.ts 与参考服务端 server/ 删除，落盘只写本机；「关于我们」弹窗、右键菜单项与「同步数据」一并删除，关于页保留版本 / 更新记录 / 快捷键' },
+      { k: '新增', s: '组件库：19 类组件分组浏览与拖拽排序', d: '个性化新增页签——信息 / 工具 / 内容 / 导航四组展示，已添加显示灰态；当前页组件可拖拽排序（只改列表顺序）、切「小 2×2 / 宽 4×2 / 大 4×4」、行尾 ··· 配置或移除；卡片通用配置含名称标签、显示标题与单独透明度；时间 / 日期 / 每日一言从「显示」页拆进时钟组件与「组件是否存在」' },
+      { k: '优化', s: '快捷键可自定义：11 个动作点键帽改键', d: '单按键只在非输入状态生效，含 Ctrl / Alt 的组合键在任意位置生效；Esc 取消采集、Backspace / Delete 清除、与他人冲突时拦截，卡片底部可一键恢复出厂' },
+      { k: '优化', s: '更新记录改为设置内联，摘要一行可展开', d: '不再走弹窗；版本表头单行「版本 · 日期区间 · N 项」（当前版本带 chip），条目只留类型标签与一句摘要，实现细节点条目展开' },
+      { k: '优化', s: '图标格容器按卡铺满，标签收进卡内', d: '图标格行列改由卡片可用框自动决定（24 应用卡由一格 5 个变 8×3、格子 55px），「列数」假开关删除；卡下标签改为卡内左下角小字；搜索框与首行卡片间距 4px → 24px' },
+      { k: '调整', s: '个性化页签由 6 个收敛为 4 个', d: '「搜索与 Dock」并入「背景效果」（搜索框宽度 / 圆角、沉浸式、Dock 数量 / 图标形状 / 快捷栏开关），「显示」并入「主题」（时间颜色、隐藏顶部区域 / 搜索框 / 图标标签）；功能项本身不变' },
+      { k: '优化', s: '引擎添加失效修复，数据分区改网格并贴底', d: '「添加自定义搜索引擎」原先被「可见引擎数 ≥ 12 即拒绝」的恒真上限判断静默丢弃，现已移除上限并补空地址校验；数字键 1–9 快捷切换与列表序号删除；数据分区 6 颗按钮改 3 列等宽网格、按作用域分两行，「重置与清理」贴面板底部并复用同一网格，中部空白放「上次备份 + 查看快照」状态行，作用范围写进标题 ⓘ 清单' },
     ],
   },
   {
