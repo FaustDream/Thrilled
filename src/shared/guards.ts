@@ -173,6 +173,10 @@ const numRecord = <T extends string>(raw: unknown, def: Record<T, number>, min: 
   return out;
 };
 
+/** 搜索触发的打开方式覆盖：只认四态枚举，坏值回退出厂默认 */
+const overrideish = (v: unknown, d: AppSettings['searchEnterMode']): AppSettings['searchEnterMode'] =>
+  v === 'inherit' || v === 'link' || v === 'tab' || v === 'search' ? v : d;
+
 /** 设置归一化：逐字段合并到出厂默认（坏数据回退） */
 export const normalizeSettings = (v: unknown): AppSettings => {
   const d = DEFAULT_SETTINGS;
@@ -201,6 +205,12 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     hideEngineIco: boolish(o['hideEngineIco'], d.hideEngineIco),
     engineIcoAct: o['engineIcoAct'] === 'cycle' ? 'cycle' : 'panel',
     historyLimit: numish(o['historyLimit'], d.historyLimit, 4, 20),
+    searchFontSize: numish(o['searchFontSize'], d.searchFontSize, 13, 20),
+    searchTop: numish(o['searchTop'], d.searchTop, 20, 44),
+    searchEnterMode: overrideish(o['searchEnterMode'], d.searchEnterMode),
+    searchBtnMode: overrideish(o['searchBtnMode'], d.searchBtnMode),
+    blurAfterSearch: boolish(o['blurAfterSearch'], d.blurAfterSearch),
+    historyItemDel: boolish(o['historyItemDel'], d.historyItemDel),
     nick: strish(o['nick'], d.nick),
     searchWidth: numish(o['searchWidth'], d.searchWidth, 400, 1400),
     searchRadius: numish(o['searchRadius'], d.searchRadius, 0, 25),

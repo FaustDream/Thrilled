@@ -224,6 +224,18 @@ export interface AppSettings {
   engineIcoAct: 'panel' | 'cycle';
   /** 搜索历史保留条数（4–20） */
   historyLimit: number;
+  /** 搜索框字号（px，13–20） */
+  searchFontSize: number;
+  /** 搜索框距顶距离（px，20–44；只能往上收——网格下方到 Dock 已排满） */
+  searchTop: number;
+  /** 回车打开方式（inherit = 跟随通用里的全局打开方式） */
+  searchEnterMode: SearchOpenOverride;
+  /** 点放大镜打开方式（同上） */
+  searchBtnMode: SearchOpenOverride;
+  /** 搜索后自动失焦（收起光标与历史面板） */
+  blurAfterSearch: boolean;
+  /** 历史面板显示单条删除按钮 */
+  historyItemDel: boolean;
   nick: string;
   searchWidth: number;
   searchRadius: number;
@@ -269,6 +281,9 @@ export interface WidgetStyle {
   radius?: number;
   textColor?: string;
 }
+
+/** 搜索触发的打开方式覆盖：inherit = 跟随设置里的全局打开方式 */
+export type SearchOpenOverride = 'inherit' | OpenMode;
 
 /** 外部壁纸来源（协议适配器 + 用户可改的 API 基址） */
 export interface WallpaperSource {

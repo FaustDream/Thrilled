@@ -86,7 +86,7 @@ interface AppState {
   enginePanel: boolean
   page: () => GridItem[]
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
-  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'hideEngineIco' | 'immersive' | 'simpleSearch') => void
+  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'hideEngineIco' | 'historyItemDel' | 'blurAfterSearch' | 'immersive' | 'simpleSearch') => void
   /** 组件库：按给定顺序重排当前页组件（只改数组顺序，不动各自坐标） */
   reorderItems: (ids: string[]) => void
   /** 设置某个动作的组合键（空串 = 清除该快捷键） */

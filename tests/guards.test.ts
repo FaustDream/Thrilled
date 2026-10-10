@@ -73,6 +73,25 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(BUILTIN_SKINS.some((sk) => 'wall' in sk)).toBe(false)
   })
 
+  it('搜索框第二批：字号 / 距顶 / 打开方式覆盖 / 失焦 / 单条删除', () => {
+    const s = normalizeSettings({
+      searchFontSize: 30, searchTop: 10,
+      searchEnterMode: 'tab', searchBtnMode: 'inherit',
+      blurAfterSearch: true, historyItemDel: false,
+    })
+    expect(s.searchFontSize).toBe(20)
+    expect(s.searchTop).toBe(20)
+    expect(s.searchEnterMode).toBe('tab')
+    expect(s.searchBtnMode).toBe('inherit')
+    expect(s.blurAfterSearch).toBe(true)
+    expect(s.historyItemDel).toBe(false)
+    const bad = normalizeSettings({ searchEnterMode: 'popup', searchBtnMode: 1, blurAfterSearch: 'yes', historyItemDel: 'no' })
+    expect(bad.searchEnterMode).toBe('inherit')
+    expect(bad.searchBtnMode).toBe('inherit')
+    expect(bad.blurAfterSearch).toBe(DEFAULT_SETTINGS.blurAfterSearch)
+    expect(bad.historyItemDel).toBe(DEFAULT_SETTINGS.historyItemDel)
+  })
+
   it('搜索框四项：占位文字 / 隐藏引擎图标 / 图标点击行为 / 历史条数', () => {
     const s = normalizeSettings({
       searchPlaceholder: '搜点什么…',

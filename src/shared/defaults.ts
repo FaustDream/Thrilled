@@ -27,6 +27,14 @@ export const DEFAULT_SETTINGS: AppSettings = {
   /* 出厂保持既有行为：点引擎图标展开下拉（切换引擎的入口在设置 / 右键菜单） */
   engineIcoAct: 'panel',
   historyLimit: 8,
+  searchFontSize: 15,
+  /* 出厂 44px（= 既有设计值：搜索框底缘 98px，与首行卡片留 24px） */
+  searchTop: 44,
+  /* 出厂都跟随全局打开方式（与旧行为一致） */
+  searchEnterMode: 'inherit',
+  searchBtnMode: 'inherit',
+  blurAfterSearch: false,
+  historyItemDel: true,
   nick: '主人',
   searchWidth: 880,
   searchRadius: 25,

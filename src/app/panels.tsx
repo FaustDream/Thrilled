@@ -1120,6 +1120,28 @@ const SettingSearchTab = () => {
         <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')} />
         <SliderRow l="历史保留条数" min={4} max={20} value={s.historyLimit} display={`${s.historyLimit} 条`}
           onInput={setHistoryLimit} />
+        <SwitchRow l="显示单条删除" d="历史面板每行右侧的 × 按钮" on={s.historyItemDel} onToggle={() => toggle('historyItemDel')} />
+        <SwitchRow l="搜索后自动失焦" d="回车或点放大镜搜索后收起光标与历史面板" on={s.blurAfterSearch} onToggle={() => toggle('blurAfterSearch')} />
+        <SliderRow l="字号" min={13} max={20} value={s.searchFontSize} display={`${s.searchFontSize}px`}
+          info="只作用于标准模式；极简模式在此值上再加 1px" onInput={(v) => setSetting('searchFontSize', v)} />
+        <SliderRow l="距顶距离" min={20} max={44} value={s.searchTop} display={`${s.searchTop}px`}
+          info="只能往上收：网格下方到 Dock 已排满，往下移会让卡片压到 Dock" onInput={(v) => setSetting('searchTop', v)} />
+        <div className="f-row"><label className="f-label">回车时打开方式</label>
+          <div className="cats">
+            <div className={`cat${s.searchEnterMode === 'inherit' ? ' active' : ''}`} onClick={() => setSetting('searchEnterMode', 'inherit')}>跟随全局</div>
+            <div className={`cat${s.searchEnterMode === 'link' ? ' active' : ''}`} onClick={() => setSetting('searchEnterMode', 'link')}>本窗口</div>
+            <div className={`cat${s.searchEnterMode === 'tab' ? ' active' : ''}`} onClick={() => setSetting('searchEnterMode', 'tab')}>新标签页</div>
+            <div className={`cat${s.searchEnterMode === 'search' ? ' active' : ''}`} onClick={() => setSetting('searchEnterMode', 'search')}>本窗口搜索</div>
+          </div>
+        </div>
+        <div className="f-row"><label className="f-label">点放大镜时</label>
+          <div className="cats">
+            <div className={`cat${s.searchBtnMode === 'inherit' ? ' active' : ''}`} onClick={() => setSetting('searchBtnMode', 'inherit')}>跟随全局</div>
+            <div className={`cat${s.searchBtnMode === 'link' ? ' active' : ''}`} onClick={() => setSetting('searchBtnMode', 'link')}>本窗口</div>
+            <div className={`cat${s.searchBtnMode === 'tab' ? ' active' : ''}`} onClick={() => setSetting('searchBtnMode', 'tab')}>新标签页</div>
+            <div className={`cat${s.searchBtnMode === 'search' ? ' active' : ''}`} onClick={() => setSetting('searchBtnMode', 'search')}>本窗口搜索</div>
+          </div>
+        </div>
         {/* 一键清空：历史为空时不可点（与搜索框下拉里逐条删除同一份数据） */}
         <div className="btn-row" style={{ marginTop: 12 }}>
           <button className="btn sm ghost" disabled={history.length === 0} onClick={clearHistory}>
@@ -1274,6 +1296,7 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },
       { k: '优化', s: '尺寸能力按实例内容收紧，宽卡多显示一行信息', d: '图标格容器按应用数与标签条带判定「该档能否不滚动装下」，装不下的档位在组件库 / 配置弹窗 / 右键菜单一并置灰（提示区分「低于下限」与「当前内容装不下」）；天气卡与倒数日卡在宽度 ≥ 420px 时增加一行扩展信息（明日温度 / 目标日期），窄卡自动隐去' },
       { k: '新增', s: '搜索框四项设置：占位文字 / 引擎图标 / 点按行为 / 历史条数', d: '占位文字可自定义（留空回默认「<引擎名> 搜索」）；引擎图标可隐藏（切换引擎改到设置或右键菜单）；点引擎图标可选「展开引擎列表」或「切换到下一个」（后者把此前移除的数字键快速切换以可发现的方式补回，出厂不启用）；搜索历史保留条数可调 4–20 条，调小时现有历史一并裁剪' },
+      { k: '新增', s: '搜索框第二批：字号 / 距顶 / 分别指定打开方式 / 失焦 / 单条删除', d: '字号 13–20px（极简模式自动 +1px）；距顶距离 20–44px，搜索行、历史与引擎面板、极简模式的偏移全部随其平移（只能往上收：网格下方到 Dock 已排满）；回车与点放大镜可分别指定打开方式（跟随全局 / 本窗口 / 新标签页 / 本窗口搜索）；搜索后自动失焦；历史面板的单条删除按钮可关' },
     ],
   },
   {

@@ -22,7 +22,7 @@ import { GLASS_ALPHA_FACTOR, GLASS_FADED_KEYS, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN
 import { SHORTCUT_DEFS, comboOf, isBareCombo } from '../shared/shortcuts'
 import { computeWallFocus } from '../core/wallpaper-focus'
 import type { WeatherData } from '../core/weather'
-import type { GridItem } from '../shared/types'
+import type { GridItem, OpenMode } from '../shared/types'
 
 const allItems = (pages: GridItem[][]): GridItem[] => pages.flat()
 
@@ -50,21 +50,27 @@ const resolveSiteUrl = (item: GridItem): string | null => {
   return siteUrlOf(str(c['label'], str(c['name'])))
 }
 
-/** 打开链接（打开方式遵循设置） */
-const openByMode = (st: ReturnType<typeof useApp.getState>, url: string, kind: 'search' | 'link'): void => {
-  void openLink(url, st.settings.openMode, kind)
+/** 打开链接（mode 缺省时用设置里的全局打开方式） */
+const openByMode = (st: ReturnType<typeof useApp.getState>, url: string, kind: 'search' | 'link', mode?: OpenMode): void => {
+  void openLink(url, mode ?? st.settings.openMode, kind)
 }
 
-/** 搜索：把输入框内容交给当前引擎 */
-const runSearch = (): void => {
+/**
+ * 搜索：把输入框内容交给当前引擎。
+ * via 区分触发方式——回车与点放大镜可以各自指定打开方式（'inherit' 时跟随全局）。
+ */
+const runSearch = (via: 'enter' | 'btn'): void => {
   const st = useApp.getState()
+  const s = st.settings
   const el = document.getElementById('searchInput') as HTMLInputElement | null
   const term = el?.value.trim() ?? ''
   if (!term) { st.showToast('请输入搜索内容'); return }
-  const engine = st.engines.find((e) => e.id === st.settings.engineId) ?? st.engines[0]
+  const engine = st.engines.find((e) => e.id === s.engineId) ?? st.engines[0]
+  const override = via === 'enter' ? s.searchEnterMode : s.searchBtnMode
   st.addHistory(term)
-  openByMode(st, buildSearchUrl(engine?.base ?? '', term), 'search')
-  if (!st.settings.searchKeep && el) el.value = ''
+  openByMode(st, buildSearchUrl(engine?.base ?? '', term), 'search', override === 'inherit' ? undefined : override)
+  if (!s.searchKeep && el) el.value = ''
+  if (s.blurAfterSearch) el?.blur()
 }
 
 /** Dock 图标右键菜单动作（修改名称 / 修改网址 / 移除）；返回是否已处理 */
@@ -300,8 +306,9 @@ export const App = () => {
         case 'open-log': st.setSettingsTab(settingTabOf('关于')); st.setDrawer('setting'); st.showToast('已打开设置 · 更新记录'); break
         case 'eng-set': st.setEngine(v); st.showToast('该搜索引擎正在使用中'); break
         case 'eng-hide': st.toggleEngineHidden(v); break
-        case 'search-go': runSearch(); setHistoryOpen(false); break
-        case 'sp-pick': if (inputRef.current) inputRef.current.value = v; runSearch(); setHistoryOpen(false); break
+        case 'search-go': runSearch('btn'); setHistoryOpen(false); break
+        /* 历史条目等价于「填好词再回车」，按回车的方式打开 */
+        case 'sp-pick': if (inputRef.current) inputRef.current.value = v; runSearch('enter'); setHistoryOpen(false); break
         case 'sp-del': useApp.setState({ history: st.history.filter((h) => h !== v) }); break
         case 'set-mode': st.setMode(v as 'minimal' | 'standard'); break
         case 'go-page': st.goPage(Number(v)); break
@@ -505,7 +512,8 @@ export const App = () => {
       <div className="wall-mask" />
 
       <div id="stage" ref={stageRef} data-mode={settings.mode} data-labels={settings.labels ? '1' : '0'}
-        data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}>
+        data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}
+        style={{ ['--search-top' as string]: `${settings.searchTop}px`, ['--search-font' as string]: `${settings.searchFontSize}px` }}>
 
       {/* 翻页画布 */}
       <div id="pager" style={{ transform: `translateX(-${cur * PAGE_W}px)` }}>
@@ -560,7 +568,7 @@ export const App = () => {
             placeholder={settings.searchPlaceholder.trim() === '' ? `${engine?.name ?? ''} 搜索` : settings.searchPlaceholder}
             autoComplete="off" spellCheck={false}
             onFocus={() => setHistoryOpen(true)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); setHistoryOpen(false) } }} />
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch('enter'); setHistoryOpen(false) } }} />
           {!settings.hideBtn && (
             <span className="search-go-btn" data-act="search-go" title="搜索">{Icon.search()}</span>
           )}
@@ -572,7 +580,7 @@ export const App = () => {
           {history.map((h) => (
             <div className="sp-row" key={h} data-act="sp-pick" data-v={h}>
               {Icon.search()}<span className="t">{h}</span>
-              <span className="sp-del" data-act="sp-del" data-v={h}>{Icon.close()}</span>
+              {settings.historyItemDel && <span className="sp-del" data-act="sp-del" data-v={h}>{Icon.close()}</span>}
             </div>
           ))}
         </div>

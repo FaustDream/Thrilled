@@ -30,7 +30,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* 壁纸层与遮罩统一由全窗口的 .wall-layer / .wall-mask 承担（见第18 节），此处不再重复绘制 */
 
 /* ============ 2. 搜索栏（行 y=44，框 h=54，底缘 98px） ============ */
-.search-row{position:absolute;left:0;top:44px;width:100%;height:50px;display:flex;
+.search-row{position:absolute;left:0;top:var(--search-top,44px);width:100%;height:50px;display:flex;
   justify-content:center;align-items:flex-start;z-index:var(--z-pop)}
 .search-box{width:var(--search-width);height:54px;border-radius:var(--search-radius);
   border:2px solid rgba(255,255,255,.72);
@@ -42,13 +42,13 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .engine-ico{width:20px;height:20px;flex:0 0 auto;border-radius:6px;display:flex;align-items:center;
   justify-content:center;font-size:11px;font-weight:700;color:#fff;cursor:pointer;background:var(--engine-color,#2932e1)}
 .search-box input{flex:1;height:100%;border:none;background:transparent;outline:none;
-  font-size:15px;color:var(--search-text);font-family:inherit}
+  font-size:var(--search-font,15px);color:var(--search-text);font-family:inherit}
 .search-box input::placeholder{color:var(--search-ph)}
 .search-go-btn{width:30px;height:30px;flex:0 0 auto;border-radius:50%;display:flex;align-items:center;
   justify-content:center;color:var(--search-text);cursor:pointer;transition:background .16s}
 .search-go-btn:hover{background:rgba(255,255,255,.25)}
 .search-go-btn svg{width:16px;height:16px}
-.search-panel{position:absolute;left:50%;top:106px;transform:translateX(-50%);width:772px;
+.search-panel{position:absolute;left:50%;top:calc(var(--search-top,44px) + 62px);transform:translateX(-50%);width:772px;
   background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
   backdrop-filter:blur(var(--blur-panel));
   border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);padding:6px 0;display:none;z-index:var(--z-pop)}
@@ -60,7 +60,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .sp-row span.t{flex:1;overflow:hidden;text-overflow:ellipsis}
 
 /* 搜索引擎下拉（点击搜索框左侧引擎图标展开；与搜索历史面板互斥） */
-.engine-panel{position:absolute;top:106px;width:242px;max-height:642px;overflow:auto;padding:6px;
+.engine-panel{position:absolute;top:calc(var(--search-top,44px) + 62px);width:242px;max-height:642px;overflow:auto;padding:6px;
   background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
   backdrop-filter:blur(var(--blur-menu));border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);
   display:none;z-index:var(--z-dropdown);color:var(--panel-text)}
@@ -622,7 +622,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* —— 搜索框：聚焦光晕 + 按钮反馈 —— */
 .search-box{box-shadow:0 12px 34px -10px rgba(6,12,24,.28);transition:border-radius .18s,background .18s,width .18s,box-shadow .22s,border-color .22s}
 .search-box:focus-within{box-shadow:var(--ring),0 16px 40px -10px rgba(6,12,24,.34)}
-.search-box input{font-size:15px}
+.search-box input{font-size:var(--search-font,15px)}
 .search-go-btn{transition:background .16s,transform .16s var(--ease-spring)}
 .search-go-btn:hover{background:color-mix(in srgb,var(--accent) 20%,transparent);transform:scale(1.06)}
 
@@ -797,13 +797,13 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 
 /* ============ 21. 极简模式（v4.4）：图6/7 搜索框 + 页面降噪 ============ */
 /* 极简模式只留：模式胶囊 / 大时钟+日期 / 搜索框 / 鼓励语 / Dock */
-#stage[data-mode='minimal'] .search-row{top:150px}
+#stage[data-mode='minimal'] .search-row{top:calc(var(--search-top,44px) + 106px)}
 /* 未聚焦：透明玻璃胶囊 + 白描边（图6），文字加投影保证浅壁纸上可读 */
 #stage[data-mode='minimal'] .search-box{border-radius:999px;background:rgba(0,0,0,.06);
   border:1.5px solid rgba(255,255,255,.75);box-shadow:0 8px 28px -14px rgba(6,12,24,.22);
   backdrop-filter:blur(6px) saturate(1.3);
   transition:background .22s,box-shadow .22s,border-color .22s,border-radius .22s}
-#stage[data-mode='minimal'] .search-box input{color:#fff;font-size:16px;text-shadow:0 1px 6px rgba(0,0,0,.35)}
+#stage[data-mode='minimal'] .search-box input{color:#fff;font-size:calc(var(--search-font,15px) + 1px);text-shadow:0 1px 6px rgba(0,0,0,.35)}
 #stage[data-mode='minimal'] .search-box input::placeholder{color:rgba(255,255,255,.85);text-shadow:0 1px 6px rgba(0,0,0,.35)}
 #stage[data-mode='minimal'] .search-go-btn{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.35)}
 #stage[data-mode='minimal'] .search-go-btn:hover{background:rgba(255,255,255,.22)}
@@ -816,8 +816,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* 搜索引擎图标：未聚焦白色玻璃底、聚焦恢复品牌色底 */
 #stage[data-mode='minimal'] .search-box .engine-ico{background:rgba(255,255,255,.28);backdrop-filter:blur(4px)}
 #stage[data-mode='minimal'] .search-box:focus-within .engine-ico{background:var(--engine-color,#2932e1)}
-/* 历史 / 引擎面板跟随极简搜索框位置（框 top:150 + 高 54 + 12px 间隙） */
-#stage[data-mode='minimal'] .search-panel,#stage[data-mode='minimal'] .engine-panel{top:216px}
+/* 历史 / 引擎面板跟随极简搜索框位置（框 top:150 + 高 54 + 12px 间隙，随距顶设置整体平移） */
+#stage[data-mode='minimal'] .search-panel,#stage[data-mode='minimal'] .engine-panel{top:calc(var(--search-top,44px) + 172px)}
 /* 极简模式无网格卡片，页点隐藏 */
 #stage[data-mode='minimal'] .page-dots{display:none}
 
