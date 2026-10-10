@@ -1092,18 +1092,34 @@ const pickJson = (e: React.ChangeEvent<HTMLInputElement>, ok: (v: unknown) => vo
 const SettingSearchTab = () => {
   const s = useApp((st) => st.settings)
   const toggle = useApp((st) => st.toggle)
+  const setSetting = useApp((st) => st.setSetting)
   const history = useApp((st) => st.history)
   const clearHistory = useApp((st) => st.clearHistory)
+  const setHistoryLimit = useApp((st) => st.setHistoryLimit)
+  /* 占位文字的默认值提示用当前引擎名 */
+  const engineName = useApp((st) => st.engines.find((e) => e.id === st.settings.engineId)?.name ?? '搜索')
   return (
     <>
       <SecCard t="搜索引擎" info="拖动行首 ⋮⋮ 排序；隐藏的引擎不出现在搜索框下拉与右键二级菜单里。">
         <EngineRows />
       </SecCard>
       <SecCard t="搜索框" info="本项目不做搜索联想：输入时不出候选词，只在开启搜索历史时展示历史记录。">
+        <div className="f-row"><label className="f-label">占位文字</label>
+          <input className="f-input" value={s.searchPlaceholder} placeholder={`留空则显示「${engineName} 搜索」`}
+            onChange={(e) => setSetting('searchPlaceholder', e.target.value)} /></div>
+        <SwitchRow l="隐藏引擎图标" d="搜索框左侧只留输入区；切换引擎改到设置或右键菜单" on={s.hideEngineIco} onToggle={() => toggle('hideEngineIco')} />
+        <div className="f-row"><label className="f-label">点引擎图标时</label>
+          <div className="cats">
+            <div className={`cat${s.engineIcoAct === 'panel' ? ' active' : ''}`} onClick={() => setSetting('engineIcoAct', 'panel')}>展开引擎列表</div>
+            <div className={`cat${s.engineIcoAct === 'cycle' ? ' active' : ''}`} onClick={() => setSetting('engineIcoAct', 'cycle')}>切换到下一个</div>
+          </div>
+        </div>
         <SwitchRow l="自动聚焦" d="打开新标签时自动聚焦搜索框" on={s.autoFocus} onToggle={() => toggle('autoFocus')} />
         <SwitchRow l="保留搜索内容" d="搜索后不清空输入框内容" on={s.searchKeep} onToggle={() => toggle('searchKeep')} />
         <SwitchRow l="隐藏搜索按钮" d="仅通过 Enter 键触发搜索" on={s.hideBtn} onToggle={() => toggle('hideBtn')} />
         <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')} />
+        <SliderRow l="历史保留条数" min={4} max={20} value={s.historyLimit} display={`${s.historyLimit} 条`}
+          onInput={setHistoryLimit} />
         {/* 一键清空：历史为空时不可点（与搜索框下拉里逐条删除同一份数据） */}
         <div className="btn-row" style={{ marginTop: 12 }}>
           <button className="btn sm ghost" disabled={history.length === 0} onClick={clearHistory}>
@@ -1257,6 +1273,7 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
       { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },
       { k: '优化', s: '尺寸能力按实例内容收紧，宽卡多显示一行信息', d: '图标格容器按应用数与标签条带判定「该档能否不滚动装下」，装不下的档位在组件库 / 配置弹窗 / 右键菜单一并置灰（提示区分「低于下限」与「当前内容装不下」）；天气卡与倒数日卡在宽度 ≥ 420px 时增加一行扩展信息（明日温度 / 目标日期），窄卡自动隐去' },
+      { k: '新增', s: '搜索框四项设置：占位文字 / 引擎图标 / 点按行为 / 历史条数', d: '占位文字可自定义（留空回默认「<引擎名> 搜索」）；引擎图标可隐藏（切换引擎改到设置或右键菜单）；点引擎图标可选「展开引擎列表」或「切换到下一个」（后者把此前移除的数字键快速切换以可发现的方式补回，出厂不启用）；搜索历史保留条数可调 4–20 条，调小时现有历史一并裁剪' },
     ],
   },
   {

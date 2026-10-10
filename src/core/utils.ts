@@ -51,6 +51,17 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/* ===== 搜索历史 ===== */
+
+/**
+ * 搜索历史入栈：同一个词去重后前置，按上限截断。
+ * 上限来自设置（4–20），这里再夹一次，避免坏值把历史拉成 0 条或无限长。
+ */
+export function pushHistory(prev: readonly string[], term: string, limit: number): string[] {
+  const n = Number.isFinite(limit) ? clamp(Math.round(limit), 4, 20) : 8;
+  return [term, ...prev.filter((h) => h !== term)].slice(0, n);
+}
+
 /* ===== 日期工具 ===== */
 
 /**

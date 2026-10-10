@@ -22,6 +22,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   searchKeep: false,
   hideBtn: false,
   searchHistory: true,
+  searchPlaceholder: '',
+  hideEngineIco: false,
+  /* 出厂保持既有行为：点引擎图标展开下拉（切换引擎的入口在设置 / 右键菜单） */
+  engineIcoAct: 'panel',
+  historyLimit: 8,
   nick: '主人',
   searchWidth: 880,
   searchRadius: 25,

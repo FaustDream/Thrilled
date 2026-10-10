@@ -278,10 +278,24 @@ export const App = () => {
         case 'quote-refresh': st.rollEncourage(); break
         /* 每次功课的功德数可配置（默认 +1） */
         case 'fish-hit': if (item) st.updateConfig(item.id, { count: Number(cfg(item)['count'] ?? 0) + Math.max(1, num(cfg(item)['step'], 1)) }); break
-        case 'engine-open':
+        case 'engine-open': {
           setHistoryOpen(false)
+          /* 引擎图标点击行为可在设置里改为「切换下一个引擎」（对只用一两个引擎的人更快） */
+          if (st.settings.engineIcoAct === 'cycle') {
+            const list = st.engines.filter((x) => !x.hidden)
+            if (list.length > 1) {
+              const i = list.findIndex((x) => x.id === st.settings.engineId)
+              const next = list[(i + 1) % list.length]
+              if (next !== undefined) {
+                st.setEngine(next.id)
+                st.showToast(`已切换到：${next.name}`)
+              }
+            }
+            break
+          }
           st.setEnginePanel(!st.enginePanel)
           break
+        }
         case 'engine-manage': st.setEnginePanel(false); st.setDrawer('setting'); st.showToast('已打开设置 · 搜索引擎'); break
         case 'open-log': st.setSettingsTab(settingTabOf('关于')); st.setDrawer('setting'); st.showToast('已打开设置 · 更新记录'); break
         case 'eng-set': st.setEngine(v); st.showToast('该搜索引擎正在使用中'); break
@@ -538,9 +552,13 @@ export const App = () => {
         <div className={`search-box${settings.immersive ? ' immersive' : ''}${settings.simpleSearch ? ' line' : ''}`} id="searchBox"
           style={{ width: settings.searchWidth, borderRadius: settings.searchRadius }}
           onClick={() => setHistoryOpen(true)}>
-          <span className="engine-ico" id="engineIco" data-act="engine-open"
-            style={{ fontSize: engine?.latin ? 10 : 11, ['--engine-color' as string]: engine?.color }}>{engine?.glyph}</span>
-          <input id="searchInput" ref={inputRef} placeholder={`${engine?.name ?? ''} 搜索`} autoComplete="off" spellCheck={false}
+          {!settings.hideEngineIco && (
+            <span className="engine-ico" id="engineIco" data-act="engine-open"
+              style={{ fontSize: engine?.latin ? 10 : 11, ['--engine-color' as string]: engine?.color }}>{engine?.glyph}</span>
+          )}
+          <input id="searchInput" ref={inputRef}
+            placeholder={settings.searchPlaceholder.trim() === '' ? `${engine?.name ?? ''} 搜索` : settings.searchPlaceholder}
+            autoComplete="off" spellCheck={false}
             onFocus={() => setHistoryOpen(true)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch(); setHistoryOpen(false) } }} />
           {!settings.hideBtn && (

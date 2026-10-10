@@ -13,6 +13,7 @@ import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { ENCOURAGE_QUOTES } from '../core/quotes'
 import { getWeather, type WeatherData } from '../core/weather'
+import { pushHistory } from '../core/utils'
 import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
 import { markActiveWallpaper } from '../core/wallpaper'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
@@ -85,7 +86,7 @@ interface AppState {
   enginePanel: boolean
   page: () => GridItem[]
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
-  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'immersive' | 'simpleSearch') => void
+  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'hideEngineIco' | 'immersive' | 'simpleSearch') => void
   /** 组件库：按给定顺序重排当前页组件（只改数组顺序，不动各自坐标） */
   reorderItems: (ids: string[]) => void
   /** 设置某个动作的组合键（空串 = 清除该快捷键） */
@@ -141,6 +142,8 @@ interface AppState {
   resetParts: (parts: { layout: boolean; skins: boolean; wallpaper: boolean }) => void
   addHistory: (term: string) => void
   clearHistory: () => void
+  /** 设置搜索历史条数上限（4–20），并把现有历史一并裁剪到该条数 */
+  setHistoryLimit: (n: number) => void
   showToast: (msg: string) => void
   setDrawer: (k: DrawerKey | null) => void
   setSettingsTab: (i: number) => void
@@ -624,8 +627,16 @@ export const useApp = create<AppState>()((set, get) => ({
     return next
   }),
 
-  addHistory: (term) => set((s) => ({ history: [term, ...s.history.filter((h) => h !== term)].slice(0, 8) })),
+  addHistory: (term) => set((s) => ({ history: pushHistory(s.history, term, s.settings.historyLimit) })),
   clearHistory: () => set({ history: [], toast: '搜索历史已清空' }),
+  setHistoryLimit: (n) => set((s) => {
+    const limit = Math.min(20, Math.max(4, Math.round(n)))
+    return {
+      settings: { ...s.settings, historyLimit: limit },
+      /* 调小时把现有历史一并裁掉，下拉与设置里的条数立刻一致 */
+      history: s.history.slice(0, limit),
+    }
+  }),
   showToast: (msg) => set({ toast: msg }),
   setDrawer: (k) => set({ drawer: k, ctx: null, enginePanel: false }),
   setSettingsTab: (i) => set({ settingsTab: i }),

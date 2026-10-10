@@ -73,6 +73,25 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(BUILTIN_SKINS.some((sk) => 'wall' in sk)).toBe(false)
   })
 
+  it('搜索框四项：占位文字 / 隐藏引擎图标 / 图标点击行为 / 历史条数', () => {
+    const s = normalizeSettings({
+      searchPlaceholder: '搜点什么…',
+      hideEngineIco: true,
+      engineIcoAct: 'cycle',
+      historyLimit: 99,          // 超上限 → 钳制 20
+    })
+    expect(s.searchPlaceholder).toBe('搜点什么…')
+    expect(s.hideEngineIco).toBe(true)
+    expect(s.engineIcoAct).toBe('cycle')
+    expect(s.historyLimit).toBe(20)
+    /* 坏值：非枚举回退出厂 panel、条数非数字回退出厂 8、占位文字类型错回退空串 */
+    const bad = normalizeSettings({ engineIcoAct: 'nope', historyLimit: 'many', searchPlaceholder: 42, hideEngineIco: 'yes' })
+    expect(bad.engineIcoAct).toBe('panel')
+    expect(bad.historyLimit).toBe(DEFAULT_SETTINGS.historyLimit)
+    expect(bad.searchPlaceholder).toBe('')
+    expect(bad.hideEngineIco).toBe(DEFAULT_SETTINGS.hideEngineIco)
+  })
+
   it('dockApps 保留合法 {name,url} 清单，坏项丢弃（旧版品牌名字符串一并清空）', () => {
     const s = normalizeSettings({ dockApps: [{ name: '知乎', url: 'https://www.zhihu.com' }, 42, { name: '', url: 'https://x.com' }, null, { name: 'GitHub', url: 'https://github.com' }] })
     expect(s.dockApps).toEqual([{ name: '知乎', url: 'https://www.zhihu.com' }, { name: 'GitHub', url: 'https://github.com' }])

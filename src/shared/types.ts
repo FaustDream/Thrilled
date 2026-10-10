@@ -216,6 +216,14 @@ export interface AppSettings {
   searchKeep: boolean;
   hideBtn: boolean;
   searchHistory: boolean;
+  /** 自定义占位文字（空串 = 默认的「<引擎名> 搜索」） */
+  searchPlaceholder: string;
+  /** 隐藏搜索框左侧的引擎图标（隐藏后到设置或右键菜单里切换引擎） */
+  hideEngineIco: boolean;
+  /** 引擎图标点击行为：展开引擎下拉 / 切换到下一个已启用引擎 */
+  engineIcoAct: 'panel' | 'cycle';
+  /** 搜索历史保留条数（4–20） */
+  historyLimit: number;
   nick: string;
   searchWidth: number;
   searchRadius: number;
