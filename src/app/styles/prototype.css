@@ -916,6 +916,12 @@ input[type='range']{width:100%;accent-color:var(--accent)}
   .w-ai .ai-line,.w-ai .ai-name,.w-ai .ai-sub{display:none}
   .w-quote .qt-hi{display:none}
 }
+/* 宽卡扩展信息行（明日预报 / 目标日期）：与上面的 compact 分界同一阈值，装得下才显示 */
+.wx-next{font-size:calc(11 * var(--u));color:var(--card-sub);margin-top:1px}
+.ct-date{font-size:calc(12 * var(--u));color:var(--card-sub)}
+@container (width < 420px){
+  .wx-next,.ct-date{display:none}
+}
 .wp-history::-webkit-scrollbar-thumb{background:color-mix(in srgb,var(--panel-sub) 32%,transparent);border-radius:999px}
 .wp-hitem{width:56px;height:36px;flex:0 0 auto;border-radius:7px;overflow:hidden;cursor:pointer;
   border:2px solid transparent;background:var(--line);display:flex;align-items:center;justify-content:center;

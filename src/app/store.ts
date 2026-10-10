@@ -8,7 +8,7 @@
 import { create } from 'zustand'
 import { DEFAULT_PAGES, clonePages, mergeIconPages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
-import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed } from '../shared/widget-defs'
+import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { ENCOURAGE_QUOTES } from '../core/quotes'
@@ -503,9 +503,10 @@ export const useApp = create<AppState>()((set, get) => ({
   resize: (id, w, h) => set((s) => {
     if (!isLegalSize(w, h)) return { toast: '仅支持六档尺寸' }
     const target = s.pages.flat().find((it) => it.id === id)
-    /* 尺寸能力：入口已置灰，这里兜底拦截（组件在过小的框里会被裁切） */
-    if (target !== undefined && !sizeAllowed(target.t, w, h)) {
-      return { toast: `「${WIDGET_DEFS[target.t].n}」最小 ${minSizeOf(target.t).w}×${minSizeOf(target.t).h}` }
+    /* 尺寸能力：入口已置灰，这里兜底拦截（组件在过小的框里会被裁切或只能滚动浏览） */
+    if (target !== undefined && !sizeAllowedFor(target.t, target.config, w, h)) {
+      const lo = minSizeOf(target.t)
+      return { toast: `「${WIDGET_DEFS[target.t].n}」最小 ${lo.w}×${lo.h}${sizeAllowed(target.t, w, h) ? '，当前内容在此档装不下' : ''}` }
     }
     const list = s.pages.map((pg) => [...pg])
     const idx = list.findIndex((pg) => pg.some((it) => it.id === id))

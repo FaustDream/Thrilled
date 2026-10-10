@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { CheckIcon, Icon } from './icons'
 import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
-import { CELL, INSET, groupGrid, groupOverflows } from '../shared/grid'
+import { CELL, GROUP_GAP, GROUP_LABEL_STRIP, GROUP_PAD, INSET, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
 import { daysUntil, getGreetingByHour } from '../core/utils'
 import { resolveFavicon } from '../core/favicon'
@@ -22,9 +22,6 @@ export const str = (v: unknown, d = ''): string => (typeof v === 'string' ? v : 
 export const num = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d)
 export const bool = (v: unknown): boolean => v === true
 const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
-
-/** 卡内名称标签的占位高度（px）：与 .item-label 的 12px 字 / 底部 5px 内距对齐，图标格容器据此留出底部条带 */
-const GROUP_LABEL_STRIP = 22
 
 /**
  * 实例级样式（配置弹窗「样式」段）→ CSS 变量：字号缩放 / 图标缩放 / 卡片圆角 / 文字颜色 / 强调色。
@@ -180,9 +177,10 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       const toF = str(c['unit'], '摄氏 °C') === '华氏 °F'
       const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
       const temp = weather !== null ? `${conv(weather.currentTemp)}°${toF ? 'F' : 'C'}` : '20°C'
-      const range = weather !== null
-        ? `${conv(weather.daily[0]?.min ?? 0)}°/${conv(weather.daily[0]?.max ?? 0)}°`
-        : '18°/24°'
+      const dayRange = (i: number): string => weather !== null
+        ? `${conv(weather.daily[i]?.min ?? 0)}°/${conv(weather.daily[i]?.max ?? 0)}°`
+        : i === 0 ? '18°/24°' : '17°/23°'
+      const range = dayRange(0)
       const desc = weather !== null
         ? `${weatherText(weather.currentCode)}${bool(c['showRange']) ? ` ${range}` : ''}`
         : `多云转小雨${bool(c['showRange']) ? ` ${range}` : ''} 空气优`
@@ -192,6 +190,8 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
           <div className="wx-mid">
             <div className="wx-city">{str(c['city'], '北京')}</div>
             <div className="wx-desc">{desc}</div>
+            {/* 宽卡扩展信息行：装得下时才显示（窄卡由 @container 隐去） */}
+            <div className="wx-next">明日 {dayRange(1)}</div>
           </div>
           <div className="wx-ico">{Icon.cloudy()}</div>
         </div>
@@ -300,6 +300,8 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
             <span className="ct-num">{left === null ? '--' : Math.abs(left)}</span>
             <span className="ct-unit">{left !== null && left < 0 ? '天前' : '天'}</span>
           </div>
+          {/* 宽卡扩展信息行：目标日期（窄卡由 @container 隐去） */}
+          <div className="ct-date">{str(c['date'], '2027-01-01')}</div>
         </div>
       )
     }
@@ -321,16 +323,14 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       /* 图标格容器：格子边长由 shared/grid 的 groupGrid 按卡片实际尺寸算出（铺满卡片，不再挤成一串小字形）；
          有名称标签时底部留出一条占位（标签在卡内左下角，见 .item-label / GridCard） */
       const apps = list(c['apps'])
-      const pad = 15
-      const gap = 10
       const strip = str(c['label']).trim() === '' ? 0 : GROUP_LABEL_STRIP
-      const W = item.w * CELL - 2 * INSET - pad * 2
-      const H = item.h * CELL - 2 * INSET - pad * 2 - strip
-      const { cols, rows, cell } = groupGrid(apps.length, W, H, gap)
+      const W = item.w * CELL - 2 * INSET - GROUP_PAD * 2
+      const H = item.h * CELL - 2 * INSET - GROUP_PAD * 2 - strip
+      const { cols, rows, cell } = groupGrid(apps.length, W, H, GROUP_GAP)
       /* 太少格数会撑成巨块、太多格数在窄卡里会溢出：溢出时容器改为可滚动，格子保持 16px 下限 */
-      const over = groupOverflows(apps.length, W, H, gap)
+      const over = groupOverflows(apps.length, W, H, GROUP_GAP)
       return (
-        <div className="w-group" style={{ position: 'absolute', inset: 0, paddingBottom: pad + strip }}>
+        <div className="w-group" style={{ position: 'absolute', inset: 0, paddingBottom: GROUP_PAD + strip }}>
           <div className={`gcell-grid${over ? ' scroll' : ''}`}
             style={{ gridTemplateColumns: `repeat(${cols},${cell}px)`, gridTemplateRows: `repeat(${rows},${cell}px)` }}>
             {apps.map((n) => <TileGlyph key={n} name={n} cls="gtile" fs={Math.round(cell * 0.38)} />)}

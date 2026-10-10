@@ -4,10 +4,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, uid } from '../src/app/layout'
-import { CELL, COLS, INSET, LIBRARY_SIZES, ROWS, SIZES, findSlot, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
+import { CELL, COLS, INSET, LIBRARY_SIZES, ROWS, SIZES, findSlot, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
 import {
   WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
-  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, sizeAllowed,
+  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, sizeAllowed, sizeAllowedFor,
 } from '../src/shared/widget-defs'
 import type { GridItem } from '../src/shared/types'
 
@@ -247,11 +247,32 @@ describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）'
     expect(sizeAllowed('clock', 4, 4)).toBe(true)
   })
 
-  it('出厂布局的每张卡片都在对应组件的尺寸能力区间内', () => {
+  it('出厂布局的每张卡片都在对应组件的尺寸能力区间内（含按实例内容收紧）', () => {
     const bad = PAGES.flatMap((p) => p.items)
-      .filter((it) => !sizeAllowed(it.t, it.w, it.h))
+      .filter((it) => !sizeAllowedFor(it.t, it.config, it.w, it.h))
       .map((it) => `${it.t} ${it.w}×${it.h}`)
     expect(bad).toEqual([])
+  })
+
+  it('图标格容器的能力按应用数收紧：装不下（只能滚动）的档位被拦', () => {
+    const apps = (n: number): { apps: string[] } => ({ apps: Array.from({ length: n }, (_, i) => `站${i + 1}`) })
+    /* 8×2 无标签：24 个仍能不滚动装下；加上标签条带后 4×2 就不行了 */
+    expect(sizeAllowedFor('group', apps(24), 8, 2)).toBe(true)
+    expect(sizeAllowedFor('group', { ...apps(24), label: '购物' }, 4, 2)).toBe(false)
+    expect(sizeAllowedFor('group', { ...apps(24), label: '购物' }, 8, 2)).toBe(true)
+    /* 8 个应用的 8×2 容器不受影响 */
+    expect(sizeAllowedFor('group', { ...apps(8), label: '常用' }, 8, 2)).toBe(true)
+    /* 其它组件不受实例内容影响 */
+    expect(sizeAllowedFor('clock', {}, 4, 2)).toBe(true)
+    expect(sizeAllowedFor('clock', {}, 2, 2)).toBe(false)
+  })
+
+  it('图标格容器：可用框与「能装下」判定共用同一套几何（渲染与能力判定不各算一套）', () => {
+    /* 8×2：卡宽 8×74−50 = 542，减去容器内距 30 → 512；高度 98−30−22（标签条带）= 46 */
+    expect(groupBoxOf(8, 2, true)).toEqual({ w: 512, h: 46 })
+    expect(groupFits(24, 8, 2, true)).toBe(true)
+    expect(groupFits(24, 4, 2, true)).toBe(false)
+    expect(groupFits(12, 4, 2, true)).toBe(true)
   })
 })
 

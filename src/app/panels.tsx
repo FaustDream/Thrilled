@@ -8,7 +8,7 @@ import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchW
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
-import { WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, WIDGET_DEFS, maxSizeOf, minSizeOf, sizeAllowed } from '../shared/widget-defs'
+import { WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, WIDGET_DEFS, maxSizeOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { LIBRARY_SIZES, SIZES } from '../shared/grid'
 import { SKIN_FIELDS } from '../shared/defaults'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
@@ -585,10 +585,13 @@ const ComponentLibraryTab = () => {
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
               <div className="lib-size">
                 {LIBRARY_SIZES.map((sz) => {
-                  const ok = sizeAllowed(it.t, sz.w, sz.h)
+                  const ok = sizeAllowedFor(it.t, it.config, sz.w, sz.h)
+                  const lo = minSizeOf(it.t)
                   return (
                     <div key={sz.k}
-                      title={ok ? `${sz.k}（${sz.w}×${sz.h}）` : `${sz.k}（${sz.w}×${sz.h}）显示不下，最小 ${minSizeOf(it.t).w}×${minSizeOf(it.t).h}`}
+                      title={ok
+                        ? `${sz.k}（${sz.w}×${sz.h}）`
+                        : `${sz.k}（${sz.w}×${sz.h}）装不下：最小 ${lo.w}×${lo.h}${sizeAllowed(it.t, sz.w, sz.h) ? '，或当前内容超出该尺寸' : ''}`}
                       className={`cat${it.w === sz.w && it.h === sz.h ? ' active' : ''}${ok ? '' : ' dis'}`}
                       onClick={() => { if (ok) resize(it.id, sz.w, sz.h) }}>{sz.k}</div>
                   )
@@ -1253,6 +1256,7 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '新增', s: '组件尺寸自适应：字体图标随卡片等比缩放', d: '卡片即 CSS 查询容器（container-type:size），--u = max(1px, min(100cqw/自然宽, 100cqh/自然高)) × 字号缩放；比自然尺寸大的卡片等比放大（字体、图标、图标格、圆角、间距一起），更小的保持设计字号不缩小。自然尺寸下逐像素等于设计稿；小档位由「尺寸能力下限」（如新闻 4×4 起、时钟因时间裁切 4×2 起）与 @container 密度降级（窄卡隐热度值 / 熊猫 / 日期 / AI 副标题）兜住' },
       { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
       { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },
+      { k: '优化', s: '尺寸能力按实例内容收紧，宽卡多显示一行信息', d: '图标格容器按应用数与标签条带判定「该档能否不滚动装下」，装不下的档位在组件库 / 配置弹窗 / 右键菜单一并置灰（提示区分「低于下限」与「当前内容装不下」）；天气卡与倒数日卡在宽度 ≥ 420px 时增加一行扩展信息（明日温度 / 目标日期），窄卡自动隐去' },
     ],
   },
   {
@@ -1480,12 +1484,14 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
       {def.fields.map(field)}
       <div className="f-row"><label className="f-label">尺寸</label>
         <div className="cats">{SIZES.map((sz) => {
-          const ok = sizeAllowed(item.t, sz.w, sz.h)
+          const ok = sizeAllowedFor(item.t, item.config, sz.w, sz.h)
           const lo = minSizeOf(item.t)
           return (
             <div key={`${sz.w}x${sz.h}`}
               className={`cat${item.w === sz.w && item.h === sz.h ? ' active' : ''}${ok ? '' : ' dis'}`}
-              title={ok ? `${item.w === sz.w && item.h === sz.h ? '当前尺寸 · ' : ''}点选切换` : `「${def.n}」最小 ${lo.w}×${lo.h}，此档显示不下`}
+              title={ok
+                ? `${item.w === sz.w && item.h === sz.h ? '当前尺寸 · ' : ''}点选切换`
+                : `「${def.n}」最小 ${lo.w}×${lo.h}${sizeAllowed(item.t, sz.w, sz.h) ? '，当前内容在此档需滚动浏览' : '，此档显示不下'}`}
               onClick={() => { if (ok) resize(item.id, sz.w, sz.h) }}>{sz.w}×{sz.h}</div>
           )
         })}</div>

@@ -66,6 +66,21 @@ export const itemBox = (it: { c: number; r: number; w: number; h: number }): str
 /** 图标格容器的格子边长上限（px）：避免少格数把图标撑成巨块 */
 const GROUP_TILE_MAX = 64;
 
+/** 图标格容器的卡内内距与格子间距（px；随 --u 缩放，自然尺寸下即这些值） */
+export const GROUP_PAD = 15;
+export const GROUP_GAP = 10;
+/** 图标格容器有名称标签时底部留出的条带（px） */
+export const GROUP_LABEL_STRIP = 22;
+
+/**
+ * 图标格容器的可用框（按候选尺寸算，含卡片内缩、容器内距与可选标签条带）。
+ * 与渲染侧同一算法，尺寸能力判定与渲染不会各算一套。
+ */
+export const groupBoxOf = (w: number, h: number, hasLabel: boolean): { w: number; h: number } => ({
+  w: w * CELL - 2 * INSET - GROUP_PAD * 2,
+  h: h * CELL - 2 * INSET - GROUP_PAD * 2 - (hasLabel ? GROUP_LABEL_STRIP : 0),
+});
+
 /**
  * 图标格容器（group）自适应行列：在给定可用框内为 n 个格子挑「边长最大」的行列组合，
  * 行列数乘积 ≥ n（末行可不满），用于把图标铺满卡片而不是挤成一串小字形。
@@ -99,5 +114,14 @@ export const groupGrid = (
 export const groupOverflows = (n: number, availW: number, availH: number, gap: number): boolean => {
   const { cols, rows, cell } = groupGrid(n, availW, availH, gap);
   return cols * cell + (cols - 1) * gap > availW + 0.001 || rows * cell + (rows - 1) * gap > availH + 0.001;
+};
+
+/**
+ * 给定卡片尺寸下，图标格容器能否「不滚动」装下全部应用。
+ * 用于尺寸能力：应用多时不再允许选太小的档位（否则只能滚动条浏览）。
+ */
+export const groupFits = (n: number, w: number, h: number, hasLabel: boolean): boolean => {
+  const box = groupBoxOf(w, h, hasLabel);
+  return !groupOverflows(n, box.w, box.h, GROUP_GAP);
 };
 

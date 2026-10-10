@@ -6,7 +6,7 @@
  * 纯数据无 React 依赖 → app（渲染 / 编辑弹窗）与 core（导入校验 / 迁移）共用。
  */
 import type { WidgetDefinition, WidgetKind } from './types';
-import { CELL, INSET } from './grid';
+import { CELL, INSET, groupFits } from './grid';
 
 export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
   news: {
@@ -219,4 +219,23 @@ export const sizeAllowed = (t: WidgetKind, w: number, h: number): boolean => {
   const lo = minSizeOf(t);
   const hi = maxSizeOf(t);
   return w >= lo.w && h >= lo.h && w <= hi.w && h <= hi.h;
+};
+
+/**
+ * 尺寸能力（含实例配置）：在定义表区间之上再按实例内容收紧。
+ * 目前只有图标格容器——应用多到该尺寸装不下（只能滚动浏览）时不允许选，避免把用户的容器压成滚动条。
+ */
+export const sizeAllowedFor = (
+  t: WidgetKind,
+  config: Record<string, unknown>,
+  w: number,
+  h: number,
+): boolean => {
+  if (!sizeAllowed(t, w, h)) return false;
+  if (t === 'group') {
+    const apps = Array.isArray(config['apps']) ? config['apps'] : [];
+    const label = typeof config['label'] === 'string' && config['label'].trim() !== '';
+    return groupFits(apps.length, w, h, label);
+  }
+  return true;
 };
