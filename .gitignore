@@ -11,3 +11,4 @@ docs/*
 .codebuddy/
 AGENTS.md
 BUG_FIXES.md
+.playwright-cli/
