@@ -340,7 +340,7 @@ export const App = () => {
           break
         }
         case 'item-folder': st.showToast('添加到文件夹：请输入文件夹名称'); break
-        /* 卡片点击：图标卡开站，其余提示（拖拽后的 click 已被 suppressItemClick 拦下） */
+        /* 卡片点击：图标卡开站，其余类型打开该组件的详情视图（拖拽后的 click 已被 suppressItemClick 拦下） */
         case 'item-open': {
           if (suppressItemClick) { suppressItemClick = false; break }
           if (item === null) break
@@ -350,7 +350,8 @@ export const App = () => {
             st.showToast('未配置网址，可在编辑里补充链接')
             break
           }
-          st.showToast(`打开：${str(cfg(item)['label'], str(cfg(item)['name'], '卡片'))}`)
+          /* 小组件详情：天气看预报、日历看月历、待办勾任务、收藏夹浏览书签……编辑入口仍在悬浮 ··· */
+          st.setModal('itemDetail')
           break
         }
         case 'open-link': {

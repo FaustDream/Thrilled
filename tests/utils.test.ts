@@ -1,8 +1,9 @@
 /**
  * 纯逻辑工具单测：日期差（倒数日组件「距离目标日期还有几天」）+ 搜索历史入栈（条数上限）
+ * + 月历网格（日历详情弹窗）+ 待办条目归一化（待办详情弹窗）
  */
 import { describe, expect, it } from 'vitest'
-import { daysUntil, pushHistory } from '../src/core/utils'
+import { daysUntil, monthCells, normTodoItems, pushHistory } from '../src/core/utils'
 
 const NOW = new Date(2026, 9, 10) // 2026-10-10
 
@@ -50,5 +51,44 @@ describe('pushHistory：搜索历史入栈与条数上限', () => {
     expect(pushHistory(['a', 'b', 'c'], 'd', 0)).toEqual(['d', 'a', 'b', 'c'])
     expect(pushHistory(Array.from({ length: 30 }, (_, i) => `h${i}`), 'x', 99).length).toBe(20)
     expect(pushHistory(['a'], 'b', Number.NaN)).toEqual(['b', 'a'])
+  })
+})
+
+describe('monthCells：月历网格（日历详情弹窗）', () => {
+  it('始终 6 行 × 7 列、周日起头', () => {
+    const rows = monthCells(2026, 9) // 2026-10
+    expect(rows).toHaveLength(6)
+    rows.forEach((r) => expect(r).toHaveLength(7))
+    // 2026-10-01 是周四 → 首行前 4 格为上个月（周日起头）
+    expect(rows[0]?.[0]?.inMonth).toBe(false)
+    expect(rows[0]?.[4]?.inMonth).toBe(true)
+    expect(rows[0]?.[4]?.day).toBe(1)
+  })
+
+  it('本月格子连续且数量等于当月天数，前后月补齐 42 格', () => {
+    const rows = monthCells(2026, 9)
+    const days = rows.flat().filter((c) => c.inMonth)
+    expect(days).toHaveLength(31)
+    expect(days[0]?.day).toBe(1)
+    expect(days[30]?.day).toBe(31)
+    expect(rows.flat()).toHaveLength(42)
+  })
+})
+
+describe('normTodoItems：待办条目归一化（待办详情弹窗）', () => {
+  it('只保留含非空 txt 的对象，done 严格布尔化', () => {
+    expect(normTodoItems([{ txt: ' 买牛奶 ', done: true }, { txt: '写周报' }]))
+      .toEqual([{ txt: '买牛奶', done: true }, { txt: '写周报', done: false }])
+  })
+
+  it('非数组 / 非对象 / 空白 txt 一律丢弃', () => {
+    expect(normTodoItems('x')).toEqual([])
+    expect(normTodoItems(null)).toEqual([])
+    expect(normTodoItems([1, '文本', null, { txt: '  ' }, { done: true }])).toEqual([])
+  })
+
+  it('上限 50 条：脏数据再长也不会撑爆卡片配置', () => {
+    const many = Array.from({ length: 80 }, (_, i) => ({ txt: `t${i}`, done: false }))
+    expect(normTodoItems(many)).toHaveLength(50)
   })
 })

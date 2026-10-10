@@ -51,6 +51,49 @@ export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/* ===== 日历 ===== */
+
+/**
+ * 生成某月日历网格（纯函数，日历详情弹窗用）：始终 6 行 × 7 列，周日起头。
+ * 非本月日期照常返回日期数（渲染层降透明度显示），cell.day 为 1 起的日期。
+ */
+export function monthCells(year: number, month: number): { day: number; inMonth: boolean }[][] {
+  const first = new Date(year, month, 1);
+  const lead = first.getDay(); // 1 号是周几（0 = 周日）
+  const daysIn = new Date(year, month + 1, 0).getDate();
+  const cells: { day: number; inMonth: boolean }[] = [];
+  for (let i = 0; i < 42; i++) {
+    const dayNum = i - lead + 1;
+    cells.push({ day: dayNum, inMonth: dayNum >= 1 && dayNum <= daysIn });
+  }
+  const rows: { day: number; inMonth: boolean }[][] = [];
+  for (let r = 0; r < 6; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
+  return rows;
+}
+
+/* ===== 待办清单 ===== */
+
+/** 待办条目（存在卡片 config.items 里，config 是自由字典，零迁移） */
+export interface TodoEntry {
+  txt: string;
+  done: boolean;
+}
+
+/** 待办条目归一化：非数组 / 字段非法一律丢弃；txt 空白剔除；上限 50 条防脏数据撑爆配置 */
+export function normTodoItems(v: unknown): TodoEntry[] {
+  if (!Array.isArray(v)) return [];
+  const out: TodoEntry[] = [];
+  for (const raw of v) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const txt = typeof (raw as { txt?: unknown }).txt === 'string' ? (raw as { txt: string }).txt.trim() : '';
+    if (txt === '') continue;
+    out.push({ txt, done: (raw as { done?: unknown }).done === true });
+    if (out.length >= 50) break;
+  }
+  return out;
+}
+
+
 /* ===== 搜索历史 ===== */
 
 /**

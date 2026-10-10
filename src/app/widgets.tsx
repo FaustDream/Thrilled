@@ -105,7 +105,7 @@ const panda = () => (
   </svg>
 )
 
-const HOT: readonly (readonly [string, string])[] = [
+export const HOT: readonly (readonly [string, string])[] = [
   ['台风“桦加沙”最新路径公布', '326.4万'], ['国庆中秋假期出行全指南', '298.1万'],
   ['我国成功发射新一组低轨卫星', '256.7万'], ['新能源汽车下乡政策发布', '218.3万'],
   ['多地气温创入秋以来新低', '196.5万'], ['国产大模型开源新进展', '174.2万'],
@@ -368,8 +368,8 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
   }
 }
 
-const p2 = (n: number): string => String(n).padStart(2, '0')
-const dateText = (d: Date): string =>
+export const p2 = (n: number): string => String(n).padStart(2, '0')
+export const dateText = (d: Date): string =>
   `${p2(d.getMonth() + 1)}月${p2(d.getDate())}日 星期${'日一二三四五六'[d.getDay()]}`
 
 /** 判断 kind 是否存在（导入校验用） */

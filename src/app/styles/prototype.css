@@ -440,6 +440,41 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .nv-name{font-size:11px;color:var(--panel-sub);max-width:100%;text-align:center;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
 .cats{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+/* 卡片详情弹窗：各组件的核心内容视图（天气 / 时钟 / 月历 / 待办 / 书签列表 / 大数字） */
+.dt-now{display:flex;align-items:baseline;gap:12px;margin:4px 0 10px}
+.dt-temp{font-size:42px;font-weight:700}
+.dt-clock{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 4px}
+.dt-time{font-size:46px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+.dt-unit{font-size:14px;font-weight:400;margin-left:6px;color:var(--panel-sub)}
+.dt-sub{font-size:12px;color:var(--panel-sub)}
+.dt-quote{font-size:16px;font-weight:600;text-align:center;max-width:90%}
+.dt-days{display:flex;gap:8px;margin-bottom:8px}
+.dt-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;
+  border:0.5px solid var(--line);border-radius:10px;font-size:12px;color:var(--panel-sub)}
+.dt-day span:first-child{color:var(--panel-text,var(--card-text));font-weight:600}
+.dt-cal-head{font-size:14px;font-weight:600;margin-bottom:8px}
+.dt-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12px}
+.dt-cal-wd{color:var(--panel-sub);padding:4px 0}
+.dt-cal-wd.end,.dt-cal-cell.end{color:#e05a6d}
+.dt-cal-cell{padding:5px 0;border-radius:8px}
+.dt-cal-cell.out{opacity:.28}
+.dt-cal-cell.today{background:var(--accent);color:#fff;font-weight:600}
+.dt-list{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.dt-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:10px;cursor:pointer}
+.dt-row:hover{background:var(--line)}
+.dt-ico{width:30px;height:30px;border-radius:9px;flex:0 0 auto}
+.dt-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-host{margin-left:auto;font-size:11px;color:var(--panel-sub);flex:0 0 auto}
+.dt-rank{font-size:12px;color:var(--panel-sub);width:18px;flex:0 0 auto;text-align:center}
+.dt-todo-head{font-size:13px;font-weight:600;margin-bottom:6px}
+.dt-todo-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:10px}
+.dt-todo-row input[type='checkbox']{accent-color:var(--accent)}
+.dt-todo-txt{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-todo-txt.done{text-decoration:line-through;color:var(--panel-sub)}
+.dt-row-del{margin-left:auto;flex:0 0 auto;width:22px;height:22px;display:flex;align-items:center;
+  justify-content:center;border-radius:6px;color:var(--panel-sub);cursor:pointer;opacity:0}
+.dt-todo-row:hover .dt-row-del{opacity:1}
+.dt-row-del:hover{background:var(--line);color:#e05a6d}
 /* 组件库：已放置组件的三档尺寸胶囊（小 / 宽 / 大），比通用胶囊更紧 */
 .lib-size{display:flex;gap:4px;flex:0 0 auto}
 .lib-size .cat{padding:4px 8px;font-size:11px;margin:0}

@@ -48,7 +48,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'theme' | 'addEngine' | 'editItem' | 'backup' | 'restore' | 'reset'
+export type ModalKey = 'theme' | 'addEngine' | 'editItem' | 'itemDetail' | 'backup' | 'restore' | 'reset'
 
 export interface CtxState {
   x: number

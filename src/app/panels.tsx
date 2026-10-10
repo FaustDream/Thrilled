@@ -14,11 +14,14 @@ import { SKIN_FIELDS } from '../shared/defaults'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
 import { STYLE_PRESETS, isBlankStyle } from '../shared/widget-style'
 import { Icon } from './icons'
-import { SiteIcon, cfg, num } from './widgets'
+import { HOT, SiteIcon, bool, cfg, dateText, num, p2, str } from './widgets'
 import { siteUrlOf } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
-import { readBookmarkTree, collectBookmarks } from '../core/bookmark-importer'
+import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
+import { daysUntil, getGreetingByHour, monthCells, normTodoItems, type TodoEntry } from '../core/utils'
+import { weatherText } from '../core/weather'
+import { openLink } from '../core/link-opener'
 import { resetAllData } from '../core/reset'
 import { saveDoc } from '../core/storage'
 import { SHORTCUT_DEFS, comboOf, formatCombo } from '../shared/shortcuts'
@@ -106,6 +109,11 @@ const NAVI: readonly { c: string; l: readonly string[] }[] = [
   { c: 'AI', l: ['豆包', 'Kimi', '秘塔AI搜索', '通义千问'] },
 ]
 
+/** 展示用主机名（书签列表右缘小字）；解析失败原样显示 */
+const hostOf = (url: string): string => {
+  try { return new URL(url).host } catch { return url }
+}
+
 /* ============================== 添加 ============================== */
 
 const AddPanel = () => {
@@ -122,6 +130,26 @@ const AddPanel = () => {
   const [toDock, setToDock] = useState(true)
   const [folderName, setFolderName] = useState('')
   const iconFile = useRef<HTMLInputElement | null>(null)
+  /* 浏览器书签（网址导航「书签」分类与自定义页「从书签快速添加」共用）：
+     抽屉每次打开重新读取；条目是 { label, url } 扁平结构，批量导入直接复用 placeMany（去重 + 自动翻页）通道 */
+  const [bm, setBm] = useState<BookmarkEntry[] | null>(null)
+  const [showBk, setShowBk] = useState(false)
+  const [bkFilter, setBkFilter] = useState('')
+  useEffect(() => {
+    void (async () => {
+      const tree = await readBookmarkTree()
+      setBm(tree === null ? [] : collectBookmarks(tree))
+    })()
+  }, [])
+
+  /* 网址导航分类 = 预设分类 + （有书签时的）书签分类；书签类目下的条目带真实 url */
+  const cats = [...NAVI.map((c) => c.c), ...(bm !== null && bm.length > 0 ? ['书签'] : [])]
+  const isBmCat = cat >= NAVI.length
+  const nvList: readonly { label: string; url: string }[] = isBmCat
+    ? (bm ?? []).map((e) => ({ label: e.label, url: e.url }))
+    : (NAVI[cat]?.l ?? []).map((n) => ({ label: n, url: '' }))
+  /* 自定义页书签快速添加的过滤列表 */
+  const bmList = (bm ?? []).filter((e) => bkFilter.trim() === '' || e.label.toLowerCase().includes(bkFilter.trim().toLowerCase()))
 
   /** 加进 Dock 快捷方式（去重，最多 8 个；手动新增入口） */
   const addToDock = (label: string, link: string): void => {
@@ -160,22 +188,23 @@ const AddPanel = () => {
       {tab === 0 && (
         <>
           <div className="cats">
-            {NAVI.map((c, i) => (
-              <div key={c.c} className={`cat${i === cat ? ' active' : ''}`} onClick={() => setCat(i)}>{c.c}</div>
+            {cats.map((cc, i) => (
+              <div key={cc} className={`cat${i === cat ? ' active' : ''}`} onClick={() => setCat(i)}>{cc}</div>
             ))}
           </div>
           <div className="btn-row" style={{ marginBottom: 10 }}>
+            {/* 书签分类提供「全部导入」——批量导入能力沿用收藏夹导入同一条 placeMany 通道 */}
             <button className="btn sm" onClick={() => {
-              const list = (NAVI[cat]?.l ?? []).slice(0, 6).map((n) => ({ label: n, url: '' }))
+              const list = isBmCat ? (bm ?? []) : (NAVI[cat]?.l ?? []).slice(0, 6).map((n) => ({ label: n, url: '' }))
               const n = placeMany(list)
-              showToast(`已处理待添加列表，添加 ${n} 个`)
-            }}>批量添加</button>
+              showToast(isBmCat ? `已从收藏夹导入 ${n} 个网站图标` : `已处理待添加列表，添加 ${n} 个`)
+            }}>{isBmCat ? '全部导入' : '批量添加'}</button>
           </div>
           <div className="nv-grid">
-            {(NAVI[cat]?.l ?? []).map((n) => (
-              <div className="nv-item" key={n} onClick={() => place('icon', { label: n })}>
-                <SiteIcon url={siteUrlOf(n) ?? ''} name={n} cls="nv-ico" fs={15} size={40} />
-                <div className="nv-name">{n}</div>
+            {nvList.map((it) => (
+              <div className="nv-item" key={it.label} onClick={() => place('icon', { label: it.label, url: it.url })}>
+                <SiteIcon url={it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''} name={it.label} cls="nv-ico" fs={15} size={40} />
+                <div className="nv-name">{it.label}</div>
               </div>
             ))}
           </div>
@@ -197,6 +226,28 @@ const AddPanel = () => {
           </div>
           <div className="f-row"><label className="f-label">添加到文件夹（可选，创建图标格容器）</label>
             <input className="f-input" placeholder="请输入文件夹名称" value={folderName} onChange={(e) => setFolderName(e.target.value)} /></div>
+          <div className="f-row"><label className="f-label">从书签快速添加</label>
+            <div className="btn-row">
+              <button className="btn sm ghost" onClick={() => setShowBk(!showBk)}>{showBk ? '收起书签列表' : '展开书签列表'}</button>
+            </div>
+            {showBk && (
+              <>
+                <input className="f-input" style={{ marginTop: 8 }} placeholder="输入名称过滤书签" value={bkFilter}
+                  onChange={(e) => setBkFilter(e.target.value)} />
+                <div className="dt-list" style={{ marginTop: 8 }}>
+                  {bmList.length === 0 && <Hint>浏览器收藏夹里没有可添加的 http(s) 书签（开发预览环境没有书签数据，请在扩展中使用）。</Hint>}
+                  {bmList.map((e) => (
+                    <div className="dt-row" key={e.url}
+                      onClick={() => { place('icon', { label: e.label, url: e.url }); showToast(`已添加「${e.label}」快捷方式`) }}>
+                      <SiteIcon url={e.url} name={e.label} cls="dt-ico" fs={13} size={30} />
+                      <span className="dt-name">{e.label}</span>
+                      <span className="dt-host">{hostOf(e.url)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
           <Hint>支持拖拽调整位置与尺寸；确认后会放到当前页的空白位置。</Hint>
           <div className="btn-row end" style={{ marginTop: 14 }}>
             <button className="btn" onClick={addCustom}>确认添加</button>
@@ -1291,6 +1342,8 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '调整', s: '个性化页签由 6 个收敛为 4 个', d: '「搜索与 Dock」并入「背景效果」（搜索框宽度 / 圆角、沉浸式、Dock 数量 / 图标形状 / 快捷栏开关），「显示」并入「主题」（时间颜色、隐藏顶部区域 / 搜索框 / 图标标签）；功能项本身不变' },
       { k: '优化', s: '引擎添加失效修复，数据分区改网格并贴底', d: '「添加自定义搜索引擎」原先被「可见引擎数 ≥ 12 即拒绝」的恒真上限判断静默丢弃，现已移除上限并补空地址校验；数字键 1–9 快捷切换与列表序号删除；数据分区 6 颗按钮改 3 列等宽网格、按作用域分两行，「重置与清理」贴面板底部并复用同一网格，中部空白放「上次备份 + 查看快照」状态行，作用范围写进标题 ⓘ 清单' },
       { k: '新增', s: '历史记录一键清空：搜索历史与历史壁纸', d: '设置 → 搜索 → 「搜索框」卡底部新增「清空搜索历史（N 条）」（无可清时置灰不可点，与搜索框下拉里逐条删除同一份数据）；个性化 → 壁纸的历史缩略图带标题行新增「清空历史」——保留当前使用中的那张，其余记录连本机图片一并删除（二次确认，库内只剩当前壁纸）' },
+      { k: '新增', s: '卡片点击直达详情，不再只能进编辑', d: '图标卡点击仍开站；其余 18 类小组件点击打开「详情」弹窗——天气实况 + 三日预报 + 刷新、时钟实时走字 + 快捷开关、日历当月月历（今日高亮）、待办可勾选 / 添加 / 删除（存卡片配置）、收藏夹浏览浏览器书签、倒数日 / 纪念日 / 倒计时大字、热榜全榜、每日一言换一句、木鱼 +N、图标格容器应用清单；数据未接入的（农历 / 计算器 / 翻译 / AI）如实注明占位，弹窗底部「编辑配置」互通' },
+      { k: '新增', s: '从书签快速添加：主界面快捷方式与网址导航', d: '添加抽屉网址导航页签追加「书签」分类（读浏览器收藏夹、条目带真实网址，尾部「全部导入」复用批量导入通道）；自定义页签新增「从书签快速添加」——展开书签列表按名称过滤、逐条点击即添加为网址图标快捷方式' },
       { k: '新增', s: '组件尺寸自适应：字体图标随卡片等比缩放', d: '卡片即 CSS 查询容器（container-type:size），--u = max(1px, min(100cqw/自然宽, 100cqh/自然高)) × 字号缩放；比自然尺寸大的卡片等比放大（字体、图标、图标格、圆角、间距一起），更小的保持设计字号不缩小。自然尺寸下逐像素等于设计稿；小档位由「尺寸能力下限」（如新闻 4×4 起、时钟因时间裁切 4×2 起）与 @container 密度降级（窄卡隐热度值 / 熊猫 / 日期 / AI 副标题）兜住' },
       { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
       { k: '新增', s: '组件配置补齐 + 样式预设 / 默认样式 / 复制同类', d: '13 个原本零配置或只有一项文本的组件补齐专属项（日历显示年月与农历、天气温度单位与区间、倒计时额度格与熊猫、木鱼每次功课、文件夹显示名称…），全组件专属项都落在 1–3 项；「样式」段再补一键预设（紧凑 / 标准 / 宽松）、「设为该组件默认」（新放置的实例自动套用）与「复制到同类卡片」；图标格容器装不下时改为可滚动，格子不再压到看不清' },
@@ -1548,6 +1601,349 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
   )
 }
 
+/* ============================== 卡片详情 ============================== */
+
+/**
+ * 卡片详情：点卡片（非图标卡）直接展示该组件的核心内容，而不是只能进编辑。
+ * 每类给出当前数据下最有意义的视图——数据模型还没有的部分（如农历）如实说明，不造假数据。
+ * 底部固定「编辑配置」入口，详情 ↔ 编辑互通。
+ */
+
+/** 待办清单详情：真实清单数据存在卡片 config.items（自由字典，零迁移），可勾选 / 添加 / 删除 */
+const TodoDetail = ({ item }: { item: GridItem }) => {
+  const updateConfig = useApp((s) => s.updateConfig)
+  const c = cfg(item)
+  const [items, setItems] = useState<TodoEntry[]>(() => normTodoItems(c['items']))
+  const [draft, setDraft] = useState('')
+  const commit = (next: TodoEntry[]): void => {
+    setItems(next)
+    updateConfig(item.id, { items: next })
+  }
+  const done = items.filter((x) => x.done).length
+  return (
+    <>
+      <div className="dt-todo-head">{str(c['title'], '待办')} · {done}/{items.length} 已完成</div>
+      <div className="dt-list">
+        {items.length === 0 && <Hint>还没有条目，在下面输入第一条待办（回车添加）。</Hint>}
+        {items.map((t, i) => (
+          <div className="dt-todo-row" key={`${i}-${t.txt}`}>
+            <input type="checkbox" checked={t.done}
+              onChange={() => commit(items.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))} />
+            <span className={`dt-todo-txt${t.done ? ' done' : ''}`}>{t.txt}</span>
+            <div className="dt-row-del" title="删除" onClick={() => commit(items.filter((_, j) => j !== i))}>{Icon.trash()}</div>
+          </div>
+        ))}
+      </div>
+      <div className="f-row">
+        <input className="f-input" placeholder="输入待办事项，回车添加" value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            const txt = draft.trim()
+            if (e.key === 'Enter' && txt !== '') { commit([...items, { txt, done: false }]); setDraft('') }
+          }} />
+      </div>
+    </>
+  )
+}
+
+/** 收藏夹详情：浏览浏览器收藏夹（扩展环境读 chrome.bookmarks），点击按全局「打开方式」跳转 */
+const FavDetail = () => {
+  const [entries, setEntries] = useState<BookmarkEntry[] | null>(null)
+  useEffect(() => {
+    void (async () => {
+      const tree = await readBookmarkTree()
+      setEntries(tree === null ? null : collectBookmarks(tree))
+    })()
+  }, [])
+  if (entries === null) return <Hint>正在读取浏览器收藏夹…（开发预览环境没有书签数据，请在扩展中使用）</Hint>
+  if (entries.length === 0) return <Hint>浏览器收藏夹里没有可展示的 http(s) 书签。</Hint>
+  return (
+    <div className="dt-list">
+      {entries.map((e) => (
+        <div className="dt-row" key={e.url} title={e.url}
+          onClick={() => { void openLink(e.url, useApp.getState().settings.openMode, 'link') }}>
+          <SiteIcon url={e.url} name={e.label} cls="dt-ico" fs={13} size={30} />
+          <span className="dt-name">{e.label}</span>
+          <span className="dt-host">{hostOf(e.url)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const ItemDetail = ({ item }: { item: GridItem }) => {
+  const setModal = useApp((s) => s.setModal)
+  const showToast = useApp((s) => s.showToast)
+  const updateConfig = useApp((s) => s.updateConfig)
+  const weather = useApp((s) => s.weather)
+  const encourage = useApp((s) => s.encourage)
+  const playing = useApp((s) => s.playing)
+  const rollEncourage = useApp((s) => s.rollEncourage)
+  const c = cfg(item)
+  const def = WIDGET_DEFS[item.t]
+  /* 时钟 / 倒计时详情需要每秒走字；其他类型不受影响（effect 内按类型决定是否启动定时器） */
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    if (item.t !== 'clock' && item.t !== 'countdown') return
+    const timer = window.setInterval(() => setNow(new Date()), 1000)
+    return () => window.clearInterval(timer)
+  }, [item.t])
+
+  const openSite = (url: string): void => { void openLink(url, useApp.getState().settings.openMode, 'link') }
+
+  let body: React.ReactNode
+  switch (item.t) {
+    case 'weather': {
+      const d = weather
+      const wdOf = (date: string): string => {
+        const t = Date.parse(date)
+        return Number.isNaN(t) ? date.slice(5) : `周${'日一二三四五六'[new Date(t).getDay()]}`
+      }
+      body = (
+        <>
+          {d === null ? (
+            <Hint>暂无实况数据（定位或天气服务不可用时的兜底态，稍后会自动重试刷新）。</Hint>
+          ) : (
+            <>
+              <div className="dt-now">
+                <span className="dt-temp">{d.currentTemp}°</span>
+                <span>{weatherText(d.currentCode)}</span>
+                <span className="dt-host">{str(c['city'], '北京')}</span>
+              </div>
+              <div className="dt-days">
+                {d.daily.map((x) => (
+                  <div className="dt-day" key={x.date}>
+                    <span>{wdOf(x.date)}</span>
+                    <span>{weatherText(x.code)}</span>
+                    <span>{x.min}° / {x.max}°</span>
+                  </div>
+                ))}
+              </div>
+              <Hint>数据时间 {new Date(d.ts).toLocaleString('zh-CN')}；温度单位与城市在编辑配置里调整。</Hint>
+            </>
+          )}
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            <button className="btn sm ghost" onClick={() => { void useApp.getState().loadWeather(); showToast('正在刷新天气') }}>刷新天气</button>
+          </div>
+        </>
+      )
+      break
+    }
+    case 'clock': {
+      const mode = str(c['timeMode'], '24 小时')
+      const h = now.getHours()
+      const hm = mode === '12 小时' ? `${p2(h % 12 === 0 ? 12 : h % 12)}:${p2(now.getMinutes())}` : `${p2(h)}:${p2(now.getMinutes())}`
+      const time = `${hm}${bool(c['showSeconds']) ? `:${p2(now.getSeconds())}` : ''}${mode === '12 小时' ? (h < 12 ? ' AM' : ' PM') : ''}`
+      body = (
+        <>
+          <div className="dt-clock">
+            <div className="dt-time">{time}</div>
+            <div className="dt-sub">{dateText(now)} · {getGreetingByHour(h)}</div>
+          </div>
+          <SwitchRow l="12 小时制" on={mode === '12 小时'} onToggle={() => updateConfig(item.id, { timeMode: mode === '12 小时' ? '24 小时' : '12 小时' })} />
+          <SwitchRow l="显示秒数" on={bool(c['showSeconds'])} onToggle={() => updateConfig(item.id, { showSeconds: !bool(c['showSeconds']) })} />
+          <SwitchRow l="显示日期" on={bool(c['showDate'])} onToggle={() => updateConfig(item.id, { showDate: !bool(c['showDate']) })} />
+        </>
+      )
+      break
+    }
+    case 'cal': {
+      const rows = monthCells(now.getFullYear(), now.getMonth())
+      const today = now.getDate()
+      body = (
+        <>
+          <div className="dt-cal-head">{`${now.getFullYear()} 年 ${now.getMonth() + 1} 月`}</div>
+          <div className="dt-cal">
+            {'日一二三四五六'.split('').map((w, i) => (
+              <div key={w} className={`dt-cal-wd${i === 0 || i === 6 ? ' end' : ''}`}>{w}</div>
+            ))}
+            {rows.flat().map((cell, i) => (
+              <div key={i}
+                className={`dt-cal-cell${cell.inMonth ? '' : ' out'}${i % 7 === 0 || i % 7 === 6 ? ' end' : ''}${cell.inMonth && cell.day === today ? ' today' : ''}`}>
+                {cell.day}
+              </div>
+            ))}
+          </div>
+          <Hint>今天是 {dateText(now)}。农历与宜忌本组件暂未接入真实数据（卡内该行为占位展示）。</Hint>
+        </>
+      )
+      break
+    }
+    case 'todo':
+      return (
+        <>
+          <h2>待办清单 · 详情</h2>
+          <p className="sub">勾选进度与清单内容会保存在本机。</p>
+          <TodoDetail item={item} />
+          <div className="btn-row end" style={{ marginTop: 16 }}>
+            <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
+            <button className="btn" onClick={() => setModal(null)}>关闭</button>
+          </div>
+        </>
+      )
+    case 'fav':
+      return (
+        <>
+          <h2>收藏夹 · 详情</h2>
+          <p className="sub">{str(c['folder'], '收藏夹')} · 点击任意书签按「打开方式」设置跳转</p>
+          <FavDetail />
+          <div className="btn-row end" style={{ marginTop: 16 }}>
+            <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
+            <button className="btn" onClick={() => setModal(null)}>关闭</button>
+          </div>
+        </>
+      )
+    case 'countday': {
+      const left = daysUntil(str(c['date']), now)
+      body = (
+        <>
+          <div className="dt-clock">
+            <div className="dt-sub">{str(c['title'], '距离目标日')} · {str(c['date'], '2027-01-01')}</div>
+            <div className="dt-time">{left === null ? '--' : Math.abs(left)}<span className="dt-unit">{left !== null && left < 0 ? '天前' : '天'}</span></div>
+            <div className="dt-sub">{left === null ? '日期未设置，请在编辑配置里填写' : left > 0 ? `还有 ${left} 天到达目标日` : left === 0 ? '就是今天' : `目标日已过去 ${-left} 天`}</div>
+          </div>
+        </>
+      )
+      break
+    }
+    case 'countdown': {
+      const at = str(c['at'], '18:00').split(':')
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
+      const left = Math.floor((end.getTime() - now.getTime()) / 1000)
+      const passed = left < 0
+      const a = Math.abs(left)
+      const t = `${p2(Math.floor(a / 3600))}:${p2(Math.floor(a / 60) % 60)}:${p2(a % 60)}`
+      body = (
+        <>
+          <div className="dt-clock">
+            <div className="dt-sub">{passed ? '已过目标时刻' : '距目标时刻'}（今天 {str(c['at'], '18:00')}）</div>
+            <div className="dt-time">{t}</div>
+          </div>
+          <Hint>目标时刻在编辑配置里调整；卡内的「发薪日 / 周五」等条目为装饰展示。</Hint>
+        </>
+      )
+      break
+    }
+    case 'ann': {
+      const date = str(c['date'], '2020-05-20')
+      const t0 = Date.parse(date)
+      const days = Number.isNaN(t0) ? 0 : Math.max(0, Math.floor((Date.now() - t0) / 86400000))
+      body = (
+        <div className="dt-clock">
+          <div className="dt-sub">{str(c['title'], '与MiNa相识')} · {date}</div>
+          <div className="dt-time">{days}<span className="dt-unit">{str(c['unitLabel'], '天')}</span></div>
+        </div>
+      )
+      break
+    }
+    case 'news':
+      body = (
+        <>
+          <div className="dt-list">
+            {HOT.map((h, i) => (
+              <div className="dt-row" key={h[0]} data-act="hot-open" data-v={h[0]}>
+                <span className="dt-rank">{i + 1}</span>
+                <span className="dt-name">{h[0]}</span>
+                <span className="dt-host">{h[1]}</span>
+              </div>
+            ))}
+          </div>
+          <Hint>榜单为内置演示数据，点条目查看打开行为。</Hint>
+        </>
+      )
+      break
+    case 'quote':
+      body = (
+        <div className="dt-clock">
+          <div className="dt-sub">{`${getGreetingByHour(now.getHours())}，${str(c['nick']) === '' ? useApp.getState().settings.nick : str(c['nick'])}`}</div>
+          <div className="dt-quote">{encourage}</div>
+          <div className="btn-row" style={{ justifyContent: 'center' }}>
+            <button className="btn sm ghost" onClick={rollEncourage}>换一句</button>
+          </div>
+        </div>
+      )
+      break
+    case 'woodfish': {
+      const step = Math.max(1, num(c['step'], 1))
+      body = (
+        <div className="dt-clock">
+          <div className="dt-time">{num(c['count'], 0)}<span className="dt-unit">功德</span></div>
+          <div className="btn-row" style={{ justifyContent: 'center' }}>
+            <button className="btn" onClick={() => updateConfig(item.id, { count: num(c['count'], 0) + step })}>功德 +{step}</button>
+          </div>
+        </div>
+      )
+      break
+    }
+    case 'music':
+      body = (
+        <>
+          <div className="dt-clock">
+            <div className="dt-sub">当前电台</div>
+            <div className="dt-quote">{str(c['station'], '熊猫Dj')}</div>
+          </div>
+          <div className="btn-row" style={{ justifyContent: 'center' }}>
+            <button className="btn sm ghost" data-act="music-prev">上一首</button>
+            <button className="btn" data-act="music-toggle">{playing ? '暂停' : '播放'}</button>
+            <button className="btn sm ghost" data-act="music-next">下一首</button>
+          </div>
+          <Hint>播放状态为界面演示；接入真实音频源后此页即成播放器。</Hint>
+        </>
+      )
+      break
+    case 'group': {
+      const apps = (Array.isArray(c['apps']) ? c['apps'] : []).filter((x): x is string => typeof x === 'string')
+      body = (
+        <div className="dt-list">
+          {apps.map((n) => (
+            <div className="dt-row" key={n} onClick={() => {
+              const url = siteUrlOf(n)
+              if (url !== null) openSite(url)
+              else showToast(`「${n}」没有内置网址，可编辑后直接打开`)
+            }}>
+              <SiteIcon url={siteUrlOf(n) ?? ''} name={n} cls="dt-ico" fs={13} size={30} />
+              <span className="dt-name">{n}</span>
+            </div>
+          ))}
+        </div>
+      )
+      break
+    }
+    case 'calc':
+      body = <Hint>计算器当前为占位组件：点击卡片不执行计算，副标题文案可在编辑配置里修改；完整计算能力在后续版本接入。</Hint>
+      break
+    case 'trans':
+      body = (
+        <>
+          <div className="dt-clock"><div className="dt-sub">语言方向</div><div className="dt-quote">{str(c['pair'], '中英互译 · 划词')}</div></div>
+          <Hint>翻译当前为占位组件，真实翻译服务在后续版本接入。</Hint>
+        </>
+      )
+      break
+    case 'ai':
+      body = (
+        <>
+          <div className="dt-clock"><div className="dt-sub">服务商</div><div className="dt-quote">{str(c['provider'], 'UiTab AI')}</div></div>
+          <Hint>AI 助手当前为占位组件，真实对话能力在后续版本接入。</Hint>
+        </>
+      )
+      break
+    default:
+      body = <Hint>该类型暂无详情视图。</Hint>
+  }
+  return (
+    <>
+      <h2>{def.n} · 详情</h2>
+      <p className="sub">{def.s}</p>
+      {body}
+      <div className="btn-row end" style={{ marginTop: 16 }}>
+        <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
+        <button className="btn" onClick={() => setModal(null)}>关闭</button>
+      </div>
+    </>
+  )
+}
+
 export const Modal = () => {
   const modal = useApp((s) => s.modal)
   const setModal = useApp((s) => s.setModal)
@@ -1687,6 +2083,8 @@ export const Modal = () => {
         )
       case 'editItem':
         return item !== null ? <EditCardModal item={item} /> : <h2>编辑卡片</h2>
+      case 'itemDetail':
+        return item !== null ? <ItemDetail item={item} /> : null
       default:
         return null
     }
