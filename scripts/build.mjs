@@ -13,13 +13,15 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const DIST = join(ROOT, 'dist');
-const PROD = process.argv.includes('--prod');
+/** 默认生产构建（交付扩展用）；`--dev` 才是 development（本地排查用，React 带 dev 警告且体积大） */
+const PROD = !process.argv.includes('--dev');
 
 const buildApp = async () => {
   const { build: viteBuild } = await import('vite');
   await viteBuild({
     configFile: join(ROOT, 'vite.config.ts'),
     mode: PROD ? 'production' : 'development',
+    emptyOutDir: true,
     logLevel: 'info',
   });
 };
@@ -32,7 +34,7 @@ const buildBackground = async () => {
     format: 'iife',
     target: 'es2022',
     minify: PROD,
-    sourcemap: !PROD,
+    sourcemap: true,
     logLevel: 'info',
   });
 };
@@ -43,7 +45,13 @@ const copyStatics = () => {
 };
 
 async function main() {
-  rmSync(DIST, { recursive: true, force: true });
+  /* dist 可能被加载中的 Chrome 持有句柄（扩展目录）而无法整体删除：
+     删不掉就跳过，靠 vite 的 emptyOutDir 与覆盖写完成原地重建 */
+  try {
+    rmSync(DIST, { recursive: true, force: true });
+  } catch (e) {
+    console.warn('[build] dist 目录被占用，跳过整体清理（原地覆盖重建）:', e instanceof Error ? e.message : String(e));
+  }
   mkdirSync(DIST, { recursive: true });
   await buildApp();
   await buildBackground();
