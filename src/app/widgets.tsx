@@ -25,16 +25,44 @@ const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is st
 /** 卡内名称标签的占位高度（px）：与 .item-label 的 12px 字 / 底部 5px 内距对齐，图标格容器据此留出底部条带 */
 const GROUP_LABEL_STRIP = 22
 
+/**
+ * 实例级样式（通用「样式」段）→ CSS 变量：字号缩放 / 图标缩放 / 卡片圆角 / 文字颜色 / 强调色。
+ * 非法值或不写即交给皮肤令牌兜底（跟随主题）；比例夹在 0.6–1.6，避免极端值把卡片撑坏。
+ */
+export const styleVarsOf = (c: Record<string, unknown>): Record<string, string> => {
+  const out: Record<string, string> = {}
+  const ratio = (k: string): number | null => {
+    const v = c[k]
+    return typeof v === 'number' && Number.isFinite(v) ? Math.min(1.6, Math.max(0.6, v)) : null
+  }
+  const fs = ratio('fontScale')
+  if (fs !== null && fs !== 1) out['--w-fs'] = fs.toFixed(3)
+  const ico = ratio('iconScale')
+  if (ico !== null && ico !== 1) out['--w-ico'] = ico.toFixed(3)
+  const r = c['radius']
+  if (typeof r === 'number' && Number.isFinite(r)) out['--w-radius'] = String(Math.min(32, Math.max(0, Math.round(r))))
+  const hexOk = (v: string): boolean => /^#[0-9a-f]{6}$/i.test(v)
+  const text = str(c['textColor'])
+  if (hexOk(text)) out['--card-text'] = text
+  const accent = str(c['accent'])
+  if (hexOk(accent)) out['--accent'] = accent
+  return out
+}
+
 /** 时段问候（语料与 core/utils 共用） */
 export const greetByHour = getGreetingByHour
 
-/** 统一图标容器：底色取容器令牌，品牌色只用于字形（全站唯一一种图标语言） */
-export const TileGlyph = ({ name, cls, fs, size }: { name: string; cls: string; fs: number; size?: number }) => {
+/**
+ * 统一图标容器：底色取容器令牌，品牌色只用于字形（全站唯一一种图标语言）。
+ * fs / size 均可省略——省略时尺寸交给 CSS（卡内图标按 --u 随卡片等比缩放，Dock 与导航仍显式传入）。
+ */
+export const TileGlyph = ({ name, cls, fs, size }: { name: string; cls: string; fs?: number | undefined; size?: number | undefined }) => {
   const b = brandOf(name)
+  const font = fs === undefined ? undefined : b.latin ? Math.round(fs * 0.74) : fs
   return (
     <div
       className={`${cls}${b.latin ? ' lat' : ''}`}
-      style={{ color: b.color, fontSize: b.latin ? Math.round(fs * 0.74) : fs, ...(size ? { width: size, height: size } : {}) }}
+      style={{ color: b.color, ...(font === undefined ? {} : { fontSize: font }), ...(size === undefined ? {} : { width: size, height: size }) }}
     >
       {/* 图形单独一层：容器底色（--ga-tile）与图形本身（--ga-glyph / --ga-dockIcon）可分别调节 */}
       <span className="glyph">{b.glyph}</span>
@@ -45,14 +73,15 @@ export const TileGlyph = ({ name, cls, fs, size }: { name: string; cls: string; 
 /**
  * 站点图标：优先真实 favicon（IndexedDB 缓存 → SW 解析），失败回退品牌字形。
  * 缓存键为站点域名，同一站点只解析一次；非扩展环境（开发预览）直接走字形。
- * cls / fs / size 可调（添加抽屉网址导航等小尺寸场景复用）；url 为空直接走字形。
+ * fs / size 可调（添加抽屉网址导航、Dock 等小尺寸场景显式传入）；**省略时尺寸由 CSS 决定**
+ * ——卡内「网站图标」组件据此随卡片等比缩放。url 为空直接走字形。
  */
-export const SiteIcon = ({ url, name, cls = 'v-icon', fs = 31, size = 60 }: {
+export const SiteIcon = ({ url, name, cls = 'v-icon', fs, size }: {
   url: string
   name: string
   cls?: string
-  fs?: number
-  size?: number
+  fs?: number | undefined
+  size?: number | undefined
 }) => {
   const [icon, setIcon] = useState<string | null>(null)
   useEffect(() => {
@@ -66,7 +95,10 @@ export const SiteIcon = ({ url, name, cls = 'v-icon', fs = 31, size = 60 }: {
     return () => { alive = false }
   }, [url])
   if (icon !== null) {
-    return <img className={cls} src={icon} alt={name} style={{ width: size, height: size, objectFit: 'cover', fontSize: 0 }} />
+    return (
+      <img className={cls} src={icon} alt={name}
+        style={{ objectFit: 'cover', fontSize: 0, ...(size === undefined ? {} : { width: size, height: size }) }} />
+    )
   }
   return <TileGlyph name={name} cls={cls} fs={fs} size={size} />
 }
@@ -307,9 +339,10 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       const name = str(c['label']) || '网站'
       const custom = str(c['icon'])
       if (custom !== '') {
+        /* 尺寸交给 CSS（.item .v-icon 随 --u 缩放），不再写死 60px */
         return (
           <div className="v-cell" style={{ position: 'absolute', inset: 0 }}>
-            <img className="v-icon" src={custom} alt={name} style={{ width: 60, height: 60, objectFit: 'cover', fontSize: 0 }} />
+            <img className="v-icon" src={custom} alt={name} style={{ objectFit: 'cover', fontSize: 0 }} />
           </div>
         )
       }

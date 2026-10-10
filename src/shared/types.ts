@@ -37,8 +37,12 @@ export interface SlotSize {
   h: number;
 }
 
-/** 可编辑字段类型：文本 / 数字 / 逗号分隔列表 / 开关 / 选项 */
-export type WidgetFieldType = 'text' | 'num' | 'list' | 'bool' | 'sel';
+/**
+ * 可编辑字段类型（对齐 Storybook argTypes 的 control 词汇，便于配置面板按类型自动出控件）：
+ * text→input / num→number input / list→逗号分隔 input / bool→SwitchRow / sel→cats 胶囊 /
+ * range→SliderRow / color→ColorField（后两者复用设置面板既有控件）
+ */
+export type WidgetFieldType = 'text' | 'num' | 'list' | 'bool' | 'sel' | 'range' | 'color';
 
 export interface WidgetField {
   /** config 键 */
@@ -50,6 +54,12 @@ export interface WidgetField {
   o?: string[];
   /** 占位提示 */
   ph?: string;
+  /** range 的取值区间与步长（数值型） */
+  min?: number;
+  max?: number;
+  step?: number;
+  /** range 的显示单位后缀（如 '%' / 'px'） */
+  unit?: string;
 }
 
 /** 小组件定义（唯一来源，定义默认值属于这里） */
@@ -65,6 +75,10 @@ export interface WidgetDefinition {
   s: string;
   /** 添加时的默认单位尺寸 */
   units: SlotSize;
+  /** 尺寸能力下限（单位数，缺省 2×2）——入口据此过滤，避免出现显不下的卡片 */
+  min?: SlotSize;
+  /** 尺寸能力上限（单位数，缺省 8×4） */
+  max?: SlotSize;
   /** 可编辑字段（编辑弹窗据此渲染） */
   fields: WidgetField[];
   /** 默认配置 */

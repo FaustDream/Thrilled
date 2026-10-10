@@ -4,7 +4,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from './store'
-import { WIDGET_DEFS } from '../shared/widget-defs'
+import { WIDGET_DEFS, sizeAllowed } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
 import { stage } from './stage'
 import { CheckIcon, Icon } from './icons'
@@ -80,7 +80,8 @@ const CardMenu = ({ id }: { id: string }) => {
       </div>
       <div className="ctx-item"><span>修改尺寸</span><span className="ctx-arrow" />
         <div className="ctx-sub">
-          {SIZES.map((s) => (
+          {/* 只列出该组件装得下的档位（当前尺寸即使超范围也保留一条，便于看出现状） */}
+          {SIZES.filter((s) => sizeAllowed(item.t, s.w, s.h) || (item.w === s.w && item.h === s.h)).map((s) => (
             <SubItem key={`${s.w}x${s.h}`} on={item.w === s.w && item.h === s.h} act="item-size" v={`${s.w}x${s.h}`}>
               {s.w}×{s.h}
             </SubItem>

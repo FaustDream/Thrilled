@@ -5,7 +5,10 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, uid } from '../src/app/layout'
 import { CELL, COLS, INSET, LIBRARY_SIZES, ROWS, SIZES, findSlot, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
-import { WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST } from '../src/shared/widget-defs'
+import {
+  WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
+  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, sizeAllowed,
+} from '../src/shared/widget-defs'
 import type { GridItem } from '../src/shared/types'
 
 const PAGES = DEFAULT_PAGES.map((items, i) => ({ name: `出厂第 ${i + 1} 页`, items }))
@@ -149,13 +152,110 @@ describe('组件库数据（分组 / 三档尺寸 / 配置项上限）', () => {
     for (const s of LIBRARY_SIZES) expect(isLegalSize(s.w, s.h), `${s.k} 不是合法档位`).toBe(true)
   })
 
-  it('配置项不超过 5 项（通用 2 项 + 专属 ≤3 项）', () => {
+  /* 通用段 2 项（名称标签 / 显示标题 / 透明度按需展开）+ 专属 ≤3 项；
+     样式段（字号缩放 / 图标缩放 / 圆角 / 文字颜色）对所有组件统一，不计入定义表 */
+  it('配置项不超过 5 项（通用 2 项 + 专属 ≤3 项；样式段另计）', () => {
     for (const w of WIDGET_LIST) {
       expect(w.fields.length, `${w.n} 的专属配置超过 3 项`).toBeLessThanOrEqual(3)
       expect(w.fields.length + 2, `${w.n} 的配置项超过 5 项`).toBeLessThanOrEqual(5)
     }
   })
 
+  it('专属字段只用受支持的字段类型（含 range / color 的配套参数）', () => {
+    const types = new Set(['text', 'num', 'list', 'bool', 'sel', 'range', 'color'])
+    for (const w of WIDGET_LIST) {
+      for (const f of w.fields) {
+        expect(types.has(f.t), `${w.n} · ${f.l} 的字段类型 ${f.t} 不受支持`).toBe(true)
+        if (f.t === 'range') {
+          expect(typeof f.min, `${w.n} · ${f.l} 的 range 缺 min`).toBe('number')
+          expect(typeof f.max, `${w.n} · ${f.l} 的 range 缺 max`).toBe('number')
+          expect((f.max ?? 0) > (f.min ?? 0), `${w.n} · ${f.l} 的 range 区间非法`).toBe(true)
+        }
+      }
+    }
+  })
+})
+
+describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）', () => {
+  it('单位尺寸 → 像素：2×2 是 98×98、4×4 是 246×246（与 itemBox 同算法）', () => {
+    expect(boxOfUnits(2, 2)).toEqual({ w: 98, h: 98 })
+    expect(boxOfUnits(4, 4)).toEqual({ w: 246, h: 246 })
+    expect(boxOfUnits(8, 4)).toEqual({ w: 542, h: 246 })
+  })
+
+  it('自然短边取两轴较小者：竖向卡取宽、横向卡取高', () => {
+    expect(naturalMinOf('fav')).toBe(98)    /* 2×4：98 × 246 */
+    expect(naturalMinOf('news')).toBe(246)  /* 8×4：542 × 246 */
+    expect(naturalMinOf('clock')).toBe(246) /* 4×4 */
+    expect(naturalMinOf('icon')).toBe(98)   /* 2×2 */
+  })
+
+  /* CSS 侧的 --u 公式（prototype.css §23）在 JS 里的等价实现，用于钉住「只放大不缩小」这条规则 */
+  const scaleOf = (t: Parameters<typeof naturalBoxOf>[0], w: number, h: number): number => {
+    const nat = naturalBoxOf(t)
+    const box = boxOfUnits(w, h)
+    return Math.max(1, Math.min(box.w / nat.w, box.h / nat.h))
+  }
+
+  it('缩放比 = min(宽比, 高比) 且下限 1（只在比自然尺寸大时放大）', () => {
+    /* 图标（自然 2×2）：4×4 放大 2.51 倍，2×2 保持 1 */
+    expect(scaleOf('icon', 4, 4)).toBeCloseTo(2.51, 2)
+    expect(scaleOf('icon', 2, 2)).toBe(1)
+    /* 时钟（自然 4×4）：出厂就放在 4×2，不缩小；8×4 受高度限制同样不放大 */
+    expect(scaleOf('clock', 4, 2)).toBe(1)
+    expect(scaleOf('clock', 8, 4)).toBe(1)
+    /* 倒数日（自然 4×2）：放进 8×4 时受宽度限制 → 2.2 倍 */
+    expect(scaleOf('countday', 8, 4)).toBeCloseTo(2.2, 2)
+    /* 新闻（自然 8×4）：4×4 是缩小方向 → 1 */
+    expect(scaleOf('news', 4, 4)).toBe(1)
+  })
+
+  it('每类组件的默认尺寸都在自己的能力区间内（放置即合法）', () => {
+    for (const w of WIDGET_LIST) {
+      expect(sizeAllowed(w.t, w.units.w, w.units.h), `${w.n} 的默认尺寸 ${w.units.w}×${w.units.h} 超出能力区间`).toBe(true)
+    }
+  })
+
+  it('能力上下限本身是合法档位，且下限不高于上限', () => {
+    for (const w of WIDGET_LIST) {
+      const lo = minSizeOf(w.t)
+      const hi = maxSizeOf(w.t)
+      expect(isLegalSize(lo.w, lo.h), `${w.n} 的下限非法`).toBe(true)
+      expect(isLegalSize(hi.w, hi.h), `${w.n} 的上限非法`).toBe(true)
+      expect(lo.w <= hi.w && lo.h <= hi.h, `${w.n} 的上下限颠倒`).toBe(true)
+    }
+  })
+
+  it('内容型组件拒绝装不下的档位（新闻 / 日历 / 音乐 / 图标格容器）', () => {
+    expect(sizeAllowed('news', 4, 2)).toBe(false)     /* 高 2 格只有 98px，列表放不下 */
+    expect(sizeAllowed('news', 4, 4)).toBe(true)
+    expect(sizeAllowed('news', 8, 4)).toBe(true)
+    expect(sizeAllowed('cal', 2, 2)).toBe(false)
+    expect(sizeAllowed('cal', 4, 2)).toBe(true)
+    expect(sizeAllowed('music', 4, 2)).toBe(false)
+    expect(sizeAllowed('music', 4, 4)).toBe(true)
+    expect(sizeAllowed('group', 4, 4)).toBe(true)
+    expect(sizeAllowed('group', 2, 2)).toBe(false)
+  })
+
+  it('小尺寸组件只受六档合法性约束（图标 / 倒数日 / 木鱼可到 2×2）；时钟因 44px 时间裁切而下限 4×2', () => {
+    expect(sizeAllowed('icon', 2, 2)).toBe(true)
+    expect(sizeAllowed('countday', 2, 2)).toBe(true)
+    expect(sizeAllowed('woodfish', 2, 2)).toBe(true)
+    expect(sizeAllowed('clock', 2, 2)).toBe(false)
+    expect(sizeAllowed('clock', 4, 2)).toBe(true)
+    expect(sizeAllowed('clock', 4, 4)).toBe(true)
+  })
+
+  it('出厂布局的每张卡片都在对应组件的尺寸能力区间内', () => {
+    const bad = PAGES.flatMap((p) => p.items)
+      .filter((it) => !sizeAllowed(it.t, it.w, it.h))
+      .map((it) => `${it.t} ${it.w}×${it.h}`)
+    expect(bad).toEqual([])
+  })
+})
+
+describe('组件说明文案（定义表）', () => {
   it('组件说明为一行短句（≤20 字）', () => {
     const over = WIDGET_LIST.filter((w) => w.s.length > 20).map((w) => `${w.n}:${w.s}`)
     expect(over).toEqual([])

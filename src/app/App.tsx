@@ -8,8 +8,9 @@ import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
 import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
+import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
-import { WidgetView, SiteIcon, cfg, str } from './widgets'
+import { WidgetView, SiteIcon, cfg, str, styleVarsOf } from './widgets'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
 import { Drawer, Modal, settingTabOf } from './panels'
@@ -652,13 +653,22 @@ const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging,
   /* 通用配置：卡片透明度（config.opacity 为数字时覆盖全局 --ga-card，未设置则跟随全局） */
   const ov = c['opacity']
   const cardVars = typeof ov === 'number' ? { ['--ga-card' as string]: (1 - GLASS_ALPHA_FACTOR * ov).toFixed(3) } : {}
+  /* 尺寸自适应 + 实例样式：--nw/--nh 是组件的自然尺寸，CSS 里
+     --u = max(1px, min(100cqw/--nw, 100cqh/--nh)) × 字号缩放 即「1 设计像素」；
+     自然尺寸下 --u = 1px（渲染与设计稿一致），更大的卡片等比放大，更小的卡片不缩小 */
+  const nat = naturalBoxOf(item.t)
+  const sizeVars = {
+    ['--nw' as string]: String(nat.w),
+    ['--nh' as string]: String(nat.h),
+    ...styleVarsOf(c),
+  }
   const draggingStyle = dragging !== null && dragging.moved
   const style = draggingStyle
     ? { left: dragging.x, top: dragging.y, zIndex: 20, transition: 'none' }
     : { animationDelay: `${Math.min(idx * 22, 440)}ms` }
   return (
     <>
-      <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...style }}
+      <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
         data-id={item.id} data-t={item.t} data-act={item.t === 'quote' ? undefined : 'item-open'}
         onPointerDown={onDragStart}>
         <WidgetView item={item} now={now} nick={nick} encourage={encourage} playing={playing} weather={weather} />

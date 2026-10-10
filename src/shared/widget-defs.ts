@@ -6,18 +6,23 @@
  * 纯数据无 React 依赖 → app（渲染 / 编辑弹窗）与 core（导入校验 / 迁移）共用。
  */
 import type { WidgetDefinition, WidgetKind } from './types';
+import { CELL, INSET } from './grid';
 
 export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
   news: {
     t: 'news', n: '新闻热点', g: '闻', c: '#FF4D4F', s: '看点 / 百度 / 微博 / 抖音热榜', units: { w: 8, h: 4 },
+    /* 横向来源页签 + 五条列表：任一轴小于 4 格都会把正文压到读不清，下限 4×4 */
+    min: { w: 4, h: 4 },
     fields: [
       { k: 'source', l: '热榜来源', t: 'sel', o: ['看点', '百度', '微博', '抖音'] },
-      { k: 'count', l: '显示条数', t: 'num', ph: '1–6' },
+      { k: 'count', l: '显示条数', t: 'range', min: 1, max: 6, step: 1, unit: ' 条' },
     ],
     def: { source: '看点', count: 5 },
   },
   clock: {
     t: 'clock', n: '时钟', g: '钟', c: '#3B82F6', s: '大号数字时间，可切换 12/24 小时', units: { w: 4, h: 4 },
+    /* 44px 的「13:07」约 105px 宽：宽 2 格（98px）会把时间裁掉，故宽度下限 4 格 */
+    min: { w: 4, h: 2 },
     fields: [
       { k: 'timeMode', l: '时间显示', t: 'sel', o: ['24 小时', '12 小时', '隐藏'] },
       { k: 'showDate', l: '显示日期', t: 'bool' },
@@ -25,9 +30,10 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     ],
     def: { timeMode: '24 小时', showDate: true, showSeconds: false },
   },
-  cal: { t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '公历 / 农历 / 宜忌', units: { w: 4, h: 2 }, fields: [], def: {} },
+  cal: { t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '公历 / 农历 / 宜忌', units: { w: 4, h: 2 }, min: { w: 4, h: 2 }, fields: [], def: {} },
   weather: {
     t: 'weather', n: '天气', g: '天', c: '#38BDF8', s: '实况天气 · 城市可调', units: { w: 4, h: 2 },
+    min: { w: 4, h: 2 },
     fields: [{ k: 'city', l: '城市', t: 'text', ph: '北京' }], def: { city: '北京' },
   },
   todo: {
@@ -36,6 +42,8 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
   },
   ann: {
     t: 'ann', n: '纪念日', g: '纪', c: '#F472B6', s: '在一起 · 生日 · 倒数', units: { w: 8, h: 4 },
+    /* 左右分栏（标题 + 大号天数）：短边小于 4 格时字号会掉到个位数 */
+    min: { w: 4, h: 4 },
     fields: [{ k: 'title', l: '标题', t: 'text', ph: '与 MiNa 相识' }, { k: 'date', l: '起始日期', t: 'text', ph: '2020-05-20' }],
     def: { title: '与MiNa相识', date: '2020-05-20' },
   },
@@ -44,11 +52,15 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     fields: [
       { k: 'title', l: '标题', t: 'text', ph: '距离目标日' },
       { k: 'date', l: '目标日期', t: 'text', ph: '2026-10-01' },
+      /* color 字段：留空表示跟随主题（ColorField 的「跟随主题」） */
+      { k: 'accent', l: '强调色', t: 'color' },
     ],
-    def: { title: '距离元旦', date: '2027-01-01' },
+    def: { title: '距离元旦', date: '2027-01-01', accent: '' },
   },
   countdown: {
     t: 'countdown', n: '下班倒计时', g: '班', c: '#FB923C', s: '进度 / 工资 / 任务', units: { w: 8, h: 4 },
+    /* 大号计时 + 四格额度 + 熊猫：短边小于 4 格时同样无法阅读 */
+    min: { w: 4, h: 4 },
     fields: [{ k: 'at', l: '下班时刻', t: 'text', ph: '18:00' }], def: { at: '18:00' },
   },
   fav: {
@@ -58,13 +70,16 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
   quote: { t: 'quote', n: '每日一言', g: '言', c: '#6366F1', s: '时段问候 + 昵称 + 鼓励语', units: { w: 8, h: 2 }, fields: [], def: {} },
   music: {
     t: 'music', n: '音乐', g: '乐', c: '#EC4899', s: '熊猫Dj · 在线电台', units: { w: 4, h: 4 },
+    /* 唱片盘 + 三颗播放键需要足够的方块：矮于 4 格时按短边缩到按钮不可点，故下限 4×4 */
+    min: { w: 4, h: 4 },
     fields: [{ k: 'station', l: '电台', t: 'text', ph: '熊猫Dj' }], def: { station: '熊猫Dj' },
   },
   trans: {
     t: 'trans', n: '翻译', g: '译', c: '#3B82F6', s: '多语种即时翻译', units: { w: 4, h: 2 },
+    min: { w: 4, h: 2 },
     fields: [{ k: 'pair', l: '语言对', t: 'text', ph: '中 ⇄ 英' }], def: { pair: '中英互译 · 划词' },
   },
-  calc: { t: 'calc', n: '计算器', g: '算', c: '#8B5CF6', s: '科学计算 / 单位换算', units: { w: 4, h: 2 }, fields: [], def: {} },
+  calc: { t: 'calc', n: '计算器', g: '算', c: '#8B5CF6', s: '科学计算 / 单位换算', units: { w: 4, h: 2 }, min: { w: 4, h: 2 }, fields: [], def: {} },
   woodfish: {
     t: 'woodfish', n: '木鱼', g: '鱼', c: '#C98A4B', s: '功德 +1 · 可关后台敲击', units: { w: 2, h: 2 },
     fields: [{ k: 'count', l: '起始功德', t: 'num', ph: '128' }], def: { count: 128 },
@@ -80,6 +95,8 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
   folder: { t: 'folder', n: '图标文件夹', g: '夹', c: '#94A3B8', s: '把多个图标收进文件夹', units: { w: 2, h: 2 }, fields: [], def: {} },
   group: {
     t: 'group', n: '图标格容器', g: '格', c: '#0EA5E9', s: '一格里放多个网站图标', units: { w: 4, h: 4 },
+    /* 图标格按卡片尺寸自动铺满：宽 2 格（98px）放不下一行图标，高度上 2 格起即可（出厂布局即有 8×2 的容器） */
+    min: { w: 4, h: 2 },
     /* 行列不再手填：按卡片尺寸自动铺满（shared/grid 的 groupGrid） */
     fields: [{ k: 'apps', l: '应用列表', t: 'list', ph: '淘宝, 京东, 知乎' }],
     def: { apps: [] },
@@ -119,3 +136,37 @@ export const strOf = (v: unknown, d = ''): string => (typeof v === 'string' ? v 
 export const numOf = (v: unknown, d = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 export const boolOf = (v: unknown): boolean => v === true;
 export const listOf = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+
+/* ---------- 尺寸自适应（容器查询单位 cqmin 的基准） ---------- */
+
+/** 单位尺寸 → 卡片实际像素（与 shared/grid 的 itemBox 同一算法：单位数 × CELL − 两侧内缩） */
+export const boxOfUnits = (w: number, h: number): { w: number; h: number } => ({
+  w: w * CELL - 2 * INSET,
+  h: h * CELL - 2 * INSET,
+});
+
+/**
+ * 组件「自然尺寸」（px）：定义表 units 对应的实际卡片框。
+ * 内容排版以自然尺寸为 1 设计像素（CSS 里写 calc(N * var(--u))）：
+ * 自然尺寸下渲染与设计稿逐像素一致，更大的卡片按 min(宽比, 高比) 等比放大，更小的卡片不缩小。
+ */
+export const naturalBoxOf = (t: WidgetKind): { w: number; h: number } =>
+  boxOfUnits(WIDGET_DEFS[t].units.w, WIDGET_DEFS[t].units.h);
+
+/** 组件「自然短边」（px）——@container 密度降级阈值与调试用 */
+export const naturalMinOf = (t: WidgetKind): number => {
+  const box = naturalBoxOf(t);
+  return Math.min(box.w, box.h);
+};
+
+/** 组件的尺寸能力下限（缺省 2×2） */
+export const minSizeOf = (t: WidgetKind): { w: number; h: number } => WIDGET_DEFS[t].min ?? { w: 2, h: 2 };
+/** 组件的尺寸能力上限（缺省 8×4，即六档里的最大） */
+export const maxSizeOf = (t: WidgetKind): { w: number; h: number } => WIDGET_DEFS[t].max ?? { w: 8, h: 4 };
+
+/** 某尺寸是否在该组件的能力区间内（两轴都要落区间；六档合法性仍由 shared/grid 的 isLegalSize 判定） */
+export const sizeAllowed = (t: WidgetKind, w: number, h: number): boolean => {
+  const lo = minSizeOf(t);
+  const hi = maxSizeOf(t);
+  return w >= lo.w && h >= lo.h && w <= hi.w && h <= hi.h;
+};

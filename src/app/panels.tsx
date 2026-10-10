@@ -8,12 +8,12 @@ import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchW
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
-import { WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, WIDGET_DEFS } from '../shared/widget-defs'
+import { WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, WIDGET_DEFS, maxSizeOf, minSizeOf, sizeAllowed } from '../shared/widget-defs'
 import { LIBRARY_SIZES, SIZES } from '../shared/grid'
 import { SKIN_FIELDS } from '../shared/defaults'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
 import { Icon } from './icons'
-import { SiteIcon, cfg } from './widgets'
+import { SiteIcon, cfg, num } from './widgets'
 import { siteUrlOf } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
@@ -583,11 +583,15 @@ const ComponentLibraryTab = () => {
               <div className="er-ico" style={{ background: def.c }}>{def.g}</div>
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
               <div className="lib-size">
-                {LIBRARY_SIZES.map((sz) => (
-                  <div key={sz.k} title={`${sz.w}×${sz.h}`}
-                    className={`cat${it.w === sz.w && it.h === sz.h ? ' active' : ''}`}
-                    onClick={() => resize(it.id, sz.w, sz.h)}>{sz.k}</div>
-                ))}
+                {LIBRARY_SIZES.map((sz) => {
+                  const ok = sizeAllowed(it.t, sz.w, sz.h)
+                  return (
+                    <div key={sz.k}
+                      title={ok ? `${sz.k}（${sz.w}×${sz.h}）` : `${sz.k}（${sz.w}×${sz.h}）显示不下，最小 ${minSizeOf(it.t).w}×${minSizeOf(it.t).h}`}
+                      className={`cat${it.w === sz.w && it.h === sz.h ? ' active' : ''}${ok ? '' : ' dis'}`}
+                      onClick={() => { if (ok) resize(it.id, sz.w, sz.h) }}>{sz.k}</div>
+                  )
+                })}
               </div>
               <OverflowMenu
                 trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
@@ -1245,6 +1249,8 @@ const CHANGELOG: readonly LogVersion[] = [
       { k: '调整', s: '个性化页签由 6 个收敛为 4 个', d: '「搜索与 Dock」并入「背景效果」（搜索框宽度 / 圆角、沉浸式、Dock 数量 / 图标形状 / 快捷栏开关），「显示」并入「主题」（时间颜色、隐藏顶部区域 / 搜索框 / 图标标签）；功能项本身不变' },
       { k: '优化', s: '引擎添加失效修复，数据分区改网格并贴底', d: '「添加自定义搜索引擎」原先被「可见引擎数 ≥ 12 即拒绝」的恒真上限判断静默丢弃，现已移除上限并补空地址校验；数字键 1–9 快捷切换与列表序号删除；数据分区 6 颗按钮改 3 列等宽网格、按作用域分两行，「重置与清理」贴面板底部并复用同一网格，中部空白放「上次备份 + 查看快照」状态行，作用范围写进标题 ⓘ 清单' },
       { k: '新增', s: '历史记录一键清空：搜索历史与历史壁纸', d: '设置 → 搜索 → 「搜索框」卡底部新增「清空搜索历史（N 条）」（无可清时置灰不可点，与搜索框下拉里逐条删除同一份数据）；个性化 → 壁纸的历史缩略图带标题行新增「清空历史」——保留当前使用中的那张，其余记录连本机图片一并删除（二次确认，库内只剩当前壁纸）' },
+      { k: '新增', s: '组件尺寸自适应：字体图标随卡片等比缩放', d: '卡片即 CSS 查询容器（container-type:size），--u = max(1px, min(100cqw/自然宽, 100cqh/自然高)) × 字号缩放；比自然尺寸大的卡片等比放大（字体、图标、图标格、圆角、间距一起），更小的保持设计字号不缩小。自然尺寸下逐像素等于设计稿；小档位由「尺寸能力下限」（如新闻 4×4 起、时钟因时间裁切 4×2 起）与 @container 密度降级（窄卡隐热度值 / 熊猫 / 日期 / AI 副标题）兜住' },
+      { k: '新增', s: '单组件配置增强：滑杆 / 取色字段 + 通用样式段', d: '字段类型对齐 Storybook argTypes 的 control 词汇并新增 range / color（显示条数变滑杆、倒数日新增强调色）；配置弹窗新增「样式」段——字号缩放、图标缩放、卡片圆角、文字颜色，四项对所有组件生效且按实例保存' },
     ],
   },
   {
@@ -1389,6 +1395,21 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
   const field = (f: WidgetField) => {
     const v = c[f.k]
     if (f.t === 'bool') return <SwitchRow key={f.k} l={f.l} on={v === true} onToggle={() => updateConfig(item.id, { [f.k]: !(v === true) })} />
+    if (f.t === 'range') {
+      const cur = typeof v === 'number' && Number.isFinite(v) ? v : (f.min ?? 0)
+      return (
+        <SliderRow key={f.k} l={f.l} min={f.min ?? 0} max={f.max ?? 100} value={cur}
+          display={`${cur}${f.unit ?? ''}`} onInput={(x) => updateConfig(item.id, { [f.k]: x })} />
+      )
+    }
+    if (f.t === 'color') {
+      /* 留空 = 跟随主题（ColorField 的「跟随主题」按钮写回空串） */
+      const hex = /^#[0-9a-f]{6}$/i.test(String(v ?? '')) ? String(v) : '#3B82F6'
+      return (
+        <ColorField key={f.k} label={f.l} value={hex} auto="跟随风格"
+          onAuto={() => updateConfig(item.id, { [f.k]: '' })} onChange={(x) => updateConfig(item.id, { [f.k]: x })} />
+      )
+    }
     if (f.t === 'sel') return (
       <div className="f-row" key={f.k}><label className="f-label">{f.l}</label>
         <div className="cats">{f.o?.map((o) => (
@@ -1421,15 +1442,38 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
           display={`${Math.round(Number(c['opacity']) * 100)}%`}
           onInput={(v) => updateConfig(item.id, { opacity: v / 100 })} />
       )}
+      {/* 样式：所有组件共用的一套实例级排版变量（不写入定义表，故专属项仍守 ≤3 的上限） */}
+      <div className="sec-title">样式</div>
+      <SliderRow l="字号缩放" min={60} max={160} value={Math.round(num(c['fontScale'], 1) * 100)}
+        display={`${Math.round(num(c['fontScale'], 1) * 100)}%`}
+        onInput={(v) => updateConfig(item.id, { fontScale: v / 100 })} />
+      <SliderRow l="图标缩放" min={60} max={160} value={Math.round(num(c['iconScale'], 1) * 100)}
+        display={`${Math.round(num(c['iconScale'], 1) * 100)}%`}
+        onInput={(v) => updateConfig(item.id, { iconScale: v / 100 })} />
+      <SliderRow l="卡片圆角" min={0} max={28} value={Math.round(num(c['radius'], 16))}
+        display={`${Math.round(num(c['radius'], 16))}px`}
+        onInput={(v) => updateConfig(item.id, { radius: v })} />
+      <ColorField label="文字颜色" auto="跟随风格"
+        value={/^#[0-9a-f]{6}$/i.test(String(c['textColor'] ?? '')) ? String(c['textColor']) : '#1f2937'}
+        onAuto={() => updateConfig(item.id, { textColor: '' })} onChange={(x) => updateConfig(item.id, { textColor: x })} />
       {def.fields.length > 0 && <div className="sec-title">专属</div>}
       {def.fields.map(field)}
       <div className="f-row"><label className="f-label">尺寸</label>
-        <div className="cats">{SIZES.map((sz) => (
-          <div key={`${sz.w}x${sz.h}`} className={`cat${item.w === sz.w && item.h === sz.h ? ' active' : ''}`}
-            onClick={() => resize(item.id, sz.w, sz.h)}>{sz.w}×{sz.h}</div>
-        ))}</div>
+        <div className="cats">{SIZES.map((sz) => {
+          const ok = sizeAllowed(item.t, sz.w, sz.h)
+          const lo = minSizeOf(item.t)
+          return (
+            <div key={`${sz.w}x${sz.h}`}
+              className={`cat${item.w === sz.w && item.h === sz.h ? ' active' : ''}${ok ? '' : ' dis'}`}
+              title={ok ? `${item.w === sz.w && item.h === sz.h ? '当前尺寸 · ' : ''}点选切换` : `「${def.n}」最小 ${lo.w}×${lo.h}，此档显示不下`}
+              onClick={() => { if (ok) resize(item.id, sz.w, sz.h) }}>{sz.w}×{sz.h}</div>
+          )
+        })}</div>
       </div>
-      <Hint>引用的小组件：{def.s}。想要别的类型，可在卡片右键菜单里「更换小组件」。</Hint>
+      <Hint>
+        引用的小组件：{def.s}。尺寸能力 {minSizeOf(item.t).w}×{minSizeOf(item.t).h} – {maxSizeOf(item.t).w}×{maxSizeOf(item.t).h}，
+        内容按当前尺寸等比缩放（自然尺寸 {def.units.w}×{def.units.h} 下与设计稿一致）；想要别的类型，可在卡片右键菜单里「更换小组件」。
+      </Hint>
       <div className="btn-row end" style={{ marginTop: 16 }}>
         <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
         <button className="btn" onClick={() => { setModal(null); showToast('修改成功') }}>确认修改</button>
