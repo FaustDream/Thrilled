@@ -335,8 +335,9 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
    卡片沿用 margin-bottom 间距，末卡去掉外边距让「贴底」精确等于抽屉的 16px 内边距 */
 .pane-fill{display:flex;flex-direction:column;min-height:100%}
 .pane-fill>.sec-card:last-child{margin-bottom:0}
-/* 数据分区的空白隔离带：撑开常规动作与危险动作之间的距离，空间不足时保留 32px 最小间隔 */
-.pane-band{flex:1 1 auto;min-height:32px}
+/* 数据分区的空白隔离带：撑开常规动作与危险动作之间的距离，空间不足时保留 32px 最小间隔；
+   中部放一条状态行，把贴底留下的空白变成信息区（row 居中于这段空白） */
+.pane-band{flex:1 1 auto;min-height:32px;display:flex;align-items:center;justify-content:center}
 
 /* ============ 11. 表单与通用控件 ============ */
 .f-row{margin-bottom:14px}
@@ -360,16 +361,15 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .btn:disabled{opacity:.45;cursor:default;filter:none;transform:none}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn-row.end{justify-content:flex-end}
-/* 按钮下方带作用域小字时，同一行的按钮按顶对齐（不被拉伸到小字那格的高度） */
-.btn-row.top{align-items:flex-start}
-/* 3 列等宽按钮网格：每行 3 个、右边缘对齐，不再出现按钮按文字宽度流式换行 */
+/* 3 列等宽按钮网格：每行 3 个、右边缘对齐，不再出现按钮按文字宽度流式换行；
+   两张卡共用同一网格，因此「重置与清理」的两颗与上卡第一、二列严格对齐 */
 .btn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:start}
 .btn-grid+.btn-grid{margin-top:8px}
 .btn-grid .btn{width:100%;padding:0 8px}
-/* 按钮 + 其下方 11px 作用域说明（用于区分易混操作的作用范围） */
-.btn-cell{display:flex;flex-direction:column;gap:6px}
-.btn-cell .btn{width:100%}
-.btn-note{font-size:11px;line-height:1.4;color:var(--panel-sub);text-align:center}
+/* 数据分区中部状态行（上次备份 + 快照入口）：占用危险区贴底留下的空白 */
+.status-row{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--panel-sub)}
+.status-row .link{color:var(--accent);cursor:pointer}
+.status-row .link:hover{text-decoration:underline}
 .sec-title{font-size:14px;font-weight:500;margin:24px 0 10px}
 .sec-card{border:0.5px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
 .sec-card .sec-title{margin:0 0 12px}
@@ -796,6 +796,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
   border-radius:10px;background:var(--card-bg);border:0.5px solid var(--line);
   box-shadow:0 6px 20px rgba(15,23,42,.14);font-size:11px;font-weight:400;line-height:1.7;
   color:var(--panel-sub);opacity:0;visibility:hidden;pointer-events:none;
+  /* pre-line：说明文案里的 \n 按行渲染，作用范围可以写成清单而不挤成一段 */
+  white-space:pre-line;
   transition:opacity .16s var(--ease),transform .16s var(--ease)}
 .sl-info-pop.flip{left:auto;right:0}
 .sl-info.on .sl-info-pop{opacity:1;visibility:visible}

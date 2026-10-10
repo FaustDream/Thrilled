@@ -1111,8 +1111,26 @@ const SettingGeneralTab = () => {
   )
 }
 
+/** 备份时间压缩显示：2026/10/9 22:14:03 → 10-09 22:14（无法解析时原样显示） */
+const shortStamp = (v: string): string => {
+  const m = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})[ T](\d{1,2}):(\d{2})/.exec(v)
+  return m === null ? v : `${(m[2] ?? '').padStart(2, '0')}-${(m[3] ?? '').padStart(2, '0')} ${(m[4] ?? '').padStart(2, '0')}:${m[5] ?? ''}`
+}
+
+/** 数据分区中部状态行：危险区贴底留下的空白改作信息区（上次备份 + 快照入口），不再是大片空壁纸 */
+const DataStatusRow = () => {
+  const backupTime = useApp((st) => st.backupTime)
+  const setModal = useApp((st) => st.setModal)
+  return (
+    <div className="status-row">
+      <span>上次备份：{backupTime === null ? '暂无记录' : shortStamp(backupTime)}</span>
+      <span className="link" onClick={() => setModal('backup')}>查看快照</span>
+    </div>
+  )
+}
+
 /** 备份与迁移卡片：3 列等宽网格——行 1 界面级（备份 / 取快照 / 恢复默认）、行 2 文件级（导出 / 导入 / 收藏夹）；
- *  「备份当前界面」是全组唯一的主按钮；与「一键重置」易混的「恢复为默认界面」按钮下加 11px 作用域小字 */
+ *  「备份当前界面」是全组唯一的主按钮；易混操作的适用范围统一写进标题 ⓘ（不再用按钮下方的小字，避免切碎行距） */
 const SettingBackupCard = () => {
   const setModal = useApp((st) => st.setModal)
   const importLayout = useApp((st) => st.importLayout)
@@ -1120,14 +1138,11 @@ const SettingBackupCard = () => {
   const file = useRef<HTMLInputElement | null>(null)
   const bkFile = useRef<HTMLInputElement | null>(null)
   return (
-    <SecCard t="备份与迁移" info="导出内容 = 全部页面的卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来；已配置同步目录时改动会自动写入本地目录。">
+    <SecCard t="备份与迁移" info={`导出内容 = 全部页面的卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来。\n恢复本地快照 = 回滚到最近快照\n恢复为默认界面 = 仅重置布局、保留数据\n一键重置 = 全量清空，不可撤销`}>
       <div className="btn-grid">
         <button className="btn" onClick={() => setModal('backup')}>备份当前界面</button>
         <button className="btn ghost" onClick={() => bkFile.current?.click()}>恢复本地快照</button>
-        <div className="btn-cell">
-          <button className="btn ghost" onClick={() => setModal('restore')}>恢复为默认界面</button>
-          <span className="btn-note">仅重置界面布局</span>
-        </div>
+        <button className="btn ghost" onClick={() => setModal('restore')}>恢复为默认界面</button>
       </div>
       <div className="btn-grid">
         <button className="btn sm ghost" onClick={exportLayoutFile}>导出布局 JSON</button>
@@ -1150,23 +1165,21 @@ const SettingResetCard = () => {
     await resetAllData()
   }
   return (
-    <SecCard danger t="重置与清理" info="两项都只作用于本机数据且不可撤销：「清除本地数据」会连壁纸一起删除；「一键重置」可只勾选要重置的部分，建议先用上方备份留一份退路。">
-      <div className="btn-row top">
+    <SecCard danger t="重置与清理" info={`两项都只作用于本机数据且不可撤销：\n清除本地数据 = 删除本机全部数据（含壁纸）\n一键重置 = 全量清空，不可撤销`}>
+      {/* 复用与上方卡片同一套 3 列网格：两颗各占 1 格，与「备份当前界面 / 恢复本地快照」逐列对齐 */}
+      <div className="btn-grid">
         <button className="btn ghost" onClick={() => void clearLocal()}>清除本地数据</button>
-        <div className="btn-cell">
-          <button className="btn danger" onClick={() => setModal('reset')}>一键重置</button>
-          <span className="btn-note">含数据全量重置</span>
-        </div>
+        <button className="btn danger" onClick={() => setModal('reset')}>一键重置</button>
       </div>
     </SecCard>
   )
 }
 
-/** 数据分区：备份与迁移（常规动作）→ 空白隔离带 → 重置与清理（危险动作贴面板底部，拉开距离降低误触） */
+/** 数据分区：备份与迁移（常规动作）→ 状态行（占用中部空白，危险区仍贴底）→ 重置与清理（危险动作贴底降低误触） */
 const SettingDataTab = () => (
   <>
     <SettingBackupCard />
-    <div className="pane-band" />
+    <div className="pane-band"><DataStatusRow /></div>
     <SettingResetCard />
   </>
 )
