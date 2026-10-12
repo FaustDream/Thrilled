@@ -3,7 +3,7 @@
  * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, prunePages, uid } from '../src/app/layout'
+import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, INSET, ROWS, SIZES, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
@@ -395,6 +395,19 @@ describe('图标格容器自适应（groupGrid）', () => {
     expect(groupGrid(4, 20, 20, GAP).cell).toBe(16)
   })
 })
+describe('已添加判定（placedKindsOf：组件库与右键「添加组件」共用）', () => {
+  const card = (t: GridItem['t']): GridItem => ({ id: uid(), c: 0, r: 0, w: 4, h: 2, t, config: {} })
+
+  it('跨页收集类型，同类型多实例只算一个', () => {
+    const pages = [[card('icon'), card('icon')], [card('clock')]]
+    expect([...placedKindsOf(pages)].sort()).toEqual(['clock', 'icon'])
+  })
+
+  it('空布局返回空集合', () => {
+    expect(placedKindsOf([]).size).toBe(0)
+  })
+})
+
 describe('prunePages：删除卡片后的空页修剪', () => {
   const P = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `x${i}`, c: 0, r: 0, w: 2, h: 2, t: 'clock' as const, config: {} }))
 

@@ -7,6 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type CtxState } from './store'
+import { placedKindsOf } from './layout'
 import { WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
 import { MAX_PAGES, SIZES, findSlot } from '../shared/grid'
 import { stage } from './stage'
@@ -83,6 +84,8 @@ const BlankMenu = () => {
   const icon = placeSizeOf('icon', {}, sizeDefaults)
   const noRoom = pages.length >= MAX_PAGES && findSlot(pages[cur] ?? [], icon.w, icon.h) === null
   const dockFull = apps.length >= dockCount
+  /* 已添加类型（跨页判定，与组件库同一口径 placedKindsOf）：二级里置灰并标「已添加」 */
+  const added = placedKindsOf(pages)
   const roomTip = '最多 5 页，已没有位置可放'
   const dockTip = `Dock 最多 ${dockCount} 个快捷方式，请先移除一些`
   return (
@@ -95,9 +98,18 @@ const BlankMenu = () => {
       </div>
       <div className="ctx-item"><span>添加组件</span><span className="ctx-arrow" />
         <div className="ctx-sub" style={{ maxHeight: 560, overflow: 'auto' }}>
-          {(Object.keys(WIDGET_DEFS) as WidgetKind[]).map((k) => (
-            <div key={k} className="ctx-sub-item" data-act="place-kind" data-v={k}>{WIDGET_DEFS[k].n}</div>
-          ))}
+          {(Object.keys(WIDGET_DEFS) as WidgetKind[]).map((k) => {
+            /* 该类型已在任意页存在 → 置灰 + 「已添加」标记，点击只给原因（不落位） */
+            const isAdded = added.has(k)
+            return (
+              <div key={k} className={`ctx-sub-item${isAdded ? ' dis' : ''}`}
+                data-act={isAdded ? 'ctx-blocked' : 'place-kind'}
+                data-v={isAdded ? `「${WIDGET_DEFS[k].n}」已在页面上，删除后可再次添加` : k}>
+                <span>{WIDGET_DEFS[k].n}</span>
+                {isAdded && <span className="ctx-sub-tag">已添加</span>}
+              </div>
+            )
+          })}
         </div>
       </div>
       <div className="ctx-sep" />

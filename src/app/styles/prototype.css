@@ -305,6 +305,10 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* 禁用项：置灰且不参与 hover 反馈；点击由 App.onAct 的 ctx-blocked 给出原因 */
 .ctx-item.dis{opacity:.4;cursor:default}
 .ctx-item.dis:hover{background:transparent}
+/* 二级置灰项（「添加组件」里已在页面上的类型）：右侧标「已添加」，同样不可点 */
+.ctx-sub-item.dis{opacity:.4;cursor:default}
+.ctx-sub-item.dis:hover{background:transparent}
+.ctx-sub-tag{margin-left:auto;font-size:11px;color:var(--panel-sub);flex:0 0 auto}
 
 /* ============ 10. 抽屉 ============ */
 .dw-mask{position:absolute;inset:0;background:rgba(8,12,20,.34);z-index:calc(var(--z-drawer) - 1);

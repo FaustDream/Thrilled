@@ -191,3 +191,13 @@ export const prunePages = (
     removed: pages.length - kept.length,
   }
 }
+
+/* ---------- 已放置组件类型（组件库与右键「添加组件」的共用判定） ---------- */
+
+/**
+ * 布局中已存在的组件类型集合：**跨页判定**，任一页存在该类型即视为「已添加」。
+ * 组件库的按钮态与空白处右键「添加组件」二级菜单共用同一口径——一处已放、另一处再点添加
+ * 会造成「同一类型多个实例」的状态冲突（用户需求）。
+ */
+export const placedKindsOf = (pages: readonly GridItem[][]): Set<WidgetKind> =>
+  new Set(pages.flat().map((it) => it.t))

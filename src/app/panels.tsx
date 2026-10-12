@@ -4,6 +4,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp, type DrawerKey, type NewSiteTarget } from './store'
+import { placedKindsOf } from './layout'
 import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
@@ -669,8 +670,8 @@ const ComponentLibraryTab = () => {
   const sized = useApp((st) => Object.keys(st.settings.sizeDefaults).length)
   const [dragId, setDragId] = useState<string | null>(null)
   const page = pages[cur] ?? EMPTY_PAGE
-  /* 已添加判定跨页：任意页存在该类型即「已添加」——防止一处已放、另一处再点添加造成状态冲突（用户需求） */
-  const added = new Set(pages.flat().map((it) => it.t))
+  /* 已添加判定跨页：任意页存在该类型即「已添加」（与空白处右键「添加组件」共用 placedKindsOf） */
+  const added = placedKindsOf(pages)
   /** 配置：复用编辑弹窗（打开弹窗前先定位到该实例） */
   const openConfig = (id: string): void => {
     useApp.setState({ itemId: id })
