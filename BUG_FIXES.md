@@ -3,6 +3,14 @@
 > 本地文档，不提交到 git。
 > 按版本号区分；发布新版本时，上一版本的修复记录即为该新版本的修复汇总。
 
+## v4.4 补丁 31（2026-10-12）——修复拖拽结束时的「渲染期间更新组件」（生产环境 React #185）
+
+- **现象**：控制台出现 `Uncaught Error: Minified React error #185`（开发环境表现为警告 `Cannot update a component (App) while rendering a different component (App)`）
+- **根因**：拖拽结束处理 `up` 把**副作用写在了 `setDrag` 的 updater 里**——`useApp.getState().move(...)` 与 `showToast(...)` 都是写 store 的操作，`suppressItemClick` 复位还带了定时器。React 的 updater 必须是纯函数（React 18 会在渲染阶段调用它做状态计算），于是变成「渲染期间更新其它组件」，嵌套到上限后抛出 #185（`App.tsx` 的 `up`）
+- **修复**：把「提交落位 / 被占提示 / `suppressItemClick` 定时器」全部移出 updater，直接在 `pointerup` 事件处理器里用 effect 闭包里的 `drag` 执行；updater 只负责 `setDrag(null)`
+- **顺带**：`favicon 未解析到` 的域名从 `extra` 参数移进消息体（原先控制台里显示成 `[object Object]`）。该警告本身是**开发预览环境的预期行为**——没有扩展后台的 SW 代理，favicon 请求失败即回退品牌字形；扩展内正常解析
+- **验证**：`tsc --noEmit` 0 错误、176 例单测通过、eslint 无新增、`node scripts/build.mjs` 构建成功；浏览器实测（dev 5199，新会话首次拖拽）——拖到被占格：`dragging=1`（拖拽确实发生）、toast「该位置已被占用」（走到了原先出问题的分支）、**控制台无 `Cannot update` / `Maximum update depth` 警告**
+
 ## v4.4 补丁 30（2026-10-12）——添加网站图标 / 容器后的结果可见性（用户复议）
 
 - **背景**：用户在补丁 28 之后再次提出同一条需求，按"覆盖全部入口 + 让结果真正看得见"重新核对与补齐

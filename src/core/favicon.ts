@@ -128,6 +128,7 @@ export async function resolveFavicon(url: string): Promise<string | null> {
     void cacheFavicon(domain, dataUrl);
     return dataUrl;
   }
-  warn(MODULE, 'favicon 未解析到', { domain });
+  /* 域名写进消息体而不是 extra，控制台里一眼看清是哪个站点（原先显示成 [object Object]） */
+  warn(MODULE, `favicon 未解析到：${domain}`);
   return null;
 }

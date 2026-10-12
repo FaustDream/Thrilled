@@ -534,15 +534,15 @@ export const App = () => {
       })
     }
     const up = () => {
-      setDrag((d) => {
-        if (d !== null && d.moved) {
-          suppressItemClick = true
-          const ok = useApp.getState().move(d.id, d.c, d.r)
-          if (!ok) useApp.getState().showToast('该位置已被占用')
-          setTimeout(() => { suppressItemClick = false }, 80)
-        }
-        return null
-      })
+      /* 副作用必须留在事件处理器里：写进 setDrag 的 updater 会在渲染阶段执行，
+         变成「渲染期间更新其它组件」（React 18 会直接报 Maximum update depth exceeded） */
+      if (drag !== null && drag.moved) {
+        suppressItemClick = true
+        const ok = useApp.getState().move(drag.id, drag.c, drag.r)
+        if (!ok) useApp.getState().showToast('该位置已被占用')
+        setTimeout(() => { suppressItemClick = false }, 80)
+      }
+      setDrag(null)
     }
     document.addEventListener('pointermove', move)
     document.addEventListener('pointerup', up)
