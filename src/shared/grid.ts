@@ -78,6 +78,88 @@ export const findSlotNear = (
   return best;
 };
 
+/* ---------- 网格原点与「网格 + 组件」统一吸附 ---------- */
+
+/** 卡片网格在舞台 / 页面内的原点（px）：宽 1776 居中于 1920 → 72，顶部 97（与 .grid 的 CSS 保持一致） */
+export const GRID_LEFT = (PAGE_W - COLS * CELL) / 2;
+export const GRID_TOP = 97;
+/** 组件对齐吸附阈值（设计像素）：自由位置与对齐格偏差不超过它就改用对齐格（约 0.3 格） */
+export const SNAP_ALIGN_PX = 22;
+
+/** 对齐参考盒：拖拽时只关心同页其它卡片的位置与尺寸 */
+export interface AlignBox {
+  id: string;
+  c: number;
+  r: number;
+  w: number;
+  h: number;
+}
+
+/** 单轴的落格结果 */
+export interface AxisSnap {
+  /** 最终格坐标 */
+  index: number;
+  /** 命中组件对齐时的参考线位置（设计像素，相对网格原点）；null = 只用网格基准 */
+  guide: { pos: number; ids: string[] } | null;
+}
+
+/**
+ * 单轴选格：以「最近网格格」为基准，若同页其它卡片存在偏差不超过阈值的对齐候选
+ * （起点边 / 终点边 / 居中），则改用偏差最小的那个对齐格——这就是「网格给基准、组件对齐在近处微调」。
+ *
+ * free 是自由位置（格单位，可含小数）；size 是本卡该轴的格数；max 是该轴格数上限（COLS / ROWS）；
+ * thresholdPx ≤ 0 表示不做组件对齐（只用网格基准）。宽高都是偶数，三类候选都落在整数格上，不会出现半格。
+ */
+export const snapAxis = (
+  free: number,
+  size: number,
+  max: number,
+  others: readonly AlignBox[],
+  axis: 'x' | 'y',
+  thresholdPx: number,
+): AxisSnap => {
+  const clamp = (v: number): number => Math.max(0, Math.min(max - size, v));
+  const base = clamp(Math.round(free));
+  if (thresholdPx <= 0) return { index: base, guide: null };
+  const threshold = thresholdPx / CELL;
+  let index = base;
+  let guidePos: number | null = null;
+  let best = Infinity;
+  let ids: string[] = [];
+  for (const o of others) {
+    const start = axis === 'x' ? o.c : o.r;
+    const span = axis === 'x' ? o.w : o.h;
+    /* 三类参考点：起点边对齐 / 终点边对齐 / 居中（第二个值是参考线在设计像素里的位置） */
+    const cands: readonly [number, number][] = [
+      [start, start * CELL + INSET],
+      [start + span - size, (start + span) * CELL - INSET],
+      [start + (span - size) / 2, (start + span / 2) * CELL],
+    ];
+    for (const [cand, pos] of cands) {
+      if (cand !== clamp(cand)) continue;
+      const dev = Math.abs(cand - free);
+      if (dev > threshold) continue;
+      if (dev < best - 1e-9) {
+        best = dev;
+        index = cand;
+        guidePos = pos;
+        ids = [o.id];
+      } else if (guidePos !== null && Math.abs(dev - best) < 1e-9 && !ids.includes(o.id)) {
+        /* 同一张卡的起点 / 终点候选可能给出同一个格，去重后再收集 */
+        ids.push(o.id);
+      }
+    }
+  }
+  return { index, guide: guidePos === null ? null : { pos: guidePos, ids } };
+};
+
+/**
+ * 另一轴上是否邻近（重叠，或间隙不超过 1 格）：某轴做对齐时只参考「另一轴邻近」的卡片，
+ * 否则整页同列 / 同行的卡片都会被算作对齐目标，参考线与高亮会糊成一片。
+ */
+export const nearOnAxis = (a0: number, a1: number, b0: number, b1: number): boolean =>
+  a0 <= b1 + 1 && b0 <= a1 + 1;
+
 /** 卡片绝对定位（px）：单元格块内四边内缩 */
 export const itemBox = (it: { c: number; r: number; w: number; h: number }): string =>
   `left:${it.c * CELL + INSET}px;top:${it.r * CELL + INSET}px;width:${it.w * CELL - 2 * INSET}px;height:${it.h * CELL - 2 * INSET}px`;

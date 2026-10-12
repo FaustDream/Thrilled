@@ -7,7 +7,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey, type NewSiteTarget } from './store'
-import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
+import { CELL, COLS, GRID_LEFT, GRID_TOP, INSET, PAGE_W, ROWS, SNAP_ALIGN_PX, STAGE_W, itemBox, nearOnAxis, snapAxis } from '../shared/grid'
+import type { AxisSnap } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
 import { WidgetView, SiteIcon, cfg, str, styleVarsOf } from './widgets'
@@ -105,6 +106,27 @@ const dockMenuAct = (name: string, v: string): boolean => {
 /** 拖拽刚结束的这一次 click 不触发卡片打开 */
 let suppressItemClick = false
 
+/**
+ * 拖拽态：offX/offY 是抓取偏移（指针相对卡片左上角，设计像素），保证拖动中卡片不会跳到指针下；
+ * c/r 是当前候选格（已含「网格基准 + 阈值内的组件对齐」），gx/gy 是命中的对齐参考线（画线与高亮目标用）。
+ */
+interface DragState {
+  id: string
+  /** 指针位置（相对网格原点的设计像素） */
+  x: number
+  y: number
+  /** 起始屏幕坐标（4px 点按阈值用） */
+  scx: number
+  scy: number
+  offX: number
+  offY: number
+  c: number
+  r: number
+  gx: AxisSnap['guide']
+  gy: AxisSnap['guide']
+  moved: boolean
+}
+
 export const App = () => {
   const settings = useApp((s) => s.settings)
   const pages = useApp((s) => s.pages)
@@ -120,7 +142,10 @@ export const App = () => {
   const [now, setNow] = useState(() => new Date())
   const [historyOpen, setHistoryOpen] = useState(false)
   const [pillOpen, setPillOpen] = useState(false)
-  const [drag, setDrag] = useState<{ id: string; x: number; y: number; scx: number; scy: number; c: number; r: number; moved: boolean } | null>(null)
+  const [drag, setDrag] = useState<DragState | null>(null)
+  /* 只注册一次的键盘处理要读到最新的拖拽态（拖拽中按 Esc 取消），故用 ref 镜像 */
+  const dragLive = useRef(false)
+  useEffect(() => { dragLive.current = drag !== null }, [drag])
   const [customWall, setCustomWall] = useState<BgData | null>(null)
   /* 视口宽高比（只在变化超过 1% 时更新，避免 resize 抖动触发无谓重渲染） */
   const [vpRatio, setVpRatio] = useState(() => window.innerWidth / Math.max(1, window.innerHeight))
@@ -439,6 +464,12 @@ export const App = () => {
        typing 动作（关闭浮层）输入状态下也生效。重置走确认弹窗，满足二次确认约束 */
     const key = (e: KeyboardEvent) => {
       const st = useApp.getState()
+      /* 拖拽中按 Esc 先取消拖拽（优先于「关闭浮层」快捷键），卡片留在原位 */
+      if (e.key === 'Escape' && dragLive.current) {
+        setDrag(null)
+        e.preventDefault()
+        return
+      }
       const combo = comboOf(e)
       if (combo === null) return
       const def = SHORTCUT_DEFS.find((d) => st.settings.shortcuts[d.id] === combo)
@@ -486,11 +517,20 @@ export const App = () => {
         /* 拖拽阈值：屏幕位移 ≤4px 视为点按（修「点击卡片左上角导致组件被移动」），不进入拖拽态
            （用屏幕坐标比较——stage 坐标在整体缩放下会被放大） */
         if (!d.moved && Math.abs(e.clientX - d.scx) <= 4 && Math.abs(e.clientY - d.scy) <= 4) return d
-        const it = allItems(useApp.getState().pages).find((v) => v.id === d.id)
+        const st = useApp.getState()
+        const it = allItems(st.pages).find((v) => v.id === d.id)
         if (!it) return d
-        const c = Math.max(0, Math.min(COLS - it.w, Math.round((x - INSET) / CELL)))
-        const r2 = Math.max(0, Math.min(ROWS - it.h, Math.round((y - INSET) / CELL)))
-        return { ...d, x, y, c, r: r2, moved: true }
+        /* 自由位置（去掉抓取偏移）→ 每轴独立选格：网格给基准，阈值内可被组件对齐覆盖。
+           某轴只参考「另一轴邻近」的卡片，避免整页同列 / 同行的卡片都被当成对齐目标 */
+        const freeC = (x - d.offX - INSET) / CELL
+        const freeR = (y - d.offY - INSET) / CELL
+        const others = (st.pages[st.cur] ?? []).filter((v) => v.id !== d.id)
+        const nearX = others.filter((v) => nearOnAxis(freeR, freeR + it.h, v.r, v.r + v.h))
+        const nearY = others.filter((v) => nearOnAxis(freeC, freeC + it.w, v.c, v.c + v.w))
+        const threshold = st.settings.snapItems ? SNAP_ALIGN_PX : 0
+        const sx = snapAxis(freeC, it.w, COLS, nearX, 'x', threshold)
+        const sy = snapAxis(freeR, it.h, ROWS, nearY, 'y', threshold)
+        return { ...d, x, y, c: sx.index, r: sy.index, gx: sx.guide, gy: sy.guide, moved: true }
       })
     }
     const up = () => {
@@ -511,6 +551,10 @@ export const App = () => {
       document.removeEventListener('pointerup', up)
     }
   }, [drag])
+
+  /* 拖拽中的组件对齐反馈：guides 决定是否渲染参考线，hitIds 是被命中的目标卡片（加一圈描边） */
+  const guides = settings.showGuides && drag !== null && drag.moved
+  const hitIds = new Set<string>(guides ? [...(drag.gx?.ids ?? []), ...(drag.gy?.ids ?? [])] : [])
 
   return (
     <>
@@ -539,21 +583,33 @@ export const App = () => {
       <div id="pager" style={{ transform: `translateX(-${cur * PAGE_W}px)` }}>
         {pages.map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
+            {/* 对齐参考线（当前页 · 拖拽中且真的吸住组件时）：贯穿整页；网格原点 → 页面坐标要加偏移 */}
+            {i === cur && drag !== null && guides && drag.gx !== null && (
+              <div className="align-guide v" style={{ left: GRID_LEFT + drag.gx.pos }} />
+            )}
+            {i === cur && drag !== null && guides && drag.gy !== null && (
+              <div className="align-guide h" style={{ top: GRID_TOP + drag.gy.pos }} />
+            )}
             <div className="grid" ref={i === cur ? gridRef : undefined}>
               {pg.map((it, idx) => (
                 <GridCard key={it.id} item={it} idx={idx} now={now} weather={weather}
                   flash={it.id === flashId}
                   dragging={drag?.id === it.id ? drag : null}
+                  alignHit={hitIds.has(it.id)}
                   onDragStart={(e) => {
                     if (e.button !== 0 || (e.target as HTMLElement).closest('.ia')) return
                     const g = gridRef.current
                     if (!g) return
                     const r = g.getBoundingClientRect()
                     const s = r.width / (COLS * CELL)
+                    const px = (e.clientX - r.left) / s
+                    const py = (e.clientY - r.top) / s
+                    /* 记下抓取偏移：拖动过程中卡片不会「跳」到指针下方 */
                     setDrag({
                       id: it.id, moved: false,
-                      x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s, c: it.c, r: it.r,
-                      scx: e.clientX, scy: e.clientY,
+                      x: px, y: py, scx: e.clientX, scy: e.clientY,
+                      offX: px - (it.c * CELL + INSET), offY: py - (it.r * CELL + INSET),
+                      c: it.c, r: it.r, gx: null, gy: null,
                     })
                   }} />
               ))}
@@ -682,7 +738,7 @@ export const App = () => {
 }
 
 /** 单张卡片：外框（点击开站 / 拖拽换位）+ 内容 + 名称标签 + 悬浮操作 */
-const GridCard = ({ item, idx, now, weather, flash, dragging, onDragStart }: {
+const GridCard = ({ item, idx, now, weather, flash, dragging, alignHit, onDragStart }: {
   item: GridItem
   /** 页内序号（入场动画渐次延迟用） */
   idx: number
@@ -690,7 +746,9 @@ const GridCard = ({ item, idx, now, weather, flash, dragging, onDragStart }: {
   weather: WeatherData | null
   /** 刚落位：播一次高亮提示，让用户看清新图标落在哪 */
   flash: boolean
-  dragging: { x: number; y: number; moved: boolean } | null
+  dragging: DragState | null
+  /** 被当前拖拽的对齐命中：加一圈描边，提示「和它对齐了」 */
+  alignHit: boolean
   onDragStart: (e: ReactPointerEvent) => void
 }) => {
   const c = cfg(item)
@@ -707,12 +765,13 @@ const GridCard = ({ item, idx, now, weather, flash, dragging, onDragStart }: {
     ...styleVarsOf(c),
   }
   const draggingStyle = dragging !== null && dragging.moved
-  const style = draggingStyle
-    ? { left: dragging.x, top: dragging.y, zIndex: 20, transition: 'none' }
+  /* 拖拽中直接渲染在候选格上（实时吸附显示），而不是跟随指针 —— 所见即所得 */
+  const style = dragging !== null && dragging.moved
+    ? { left: dragging.c * CELL + INSET, top: dragging.r * CELL + INSET, zIndex: 20, transition: 'none' }
     : { animationDelay: `${Math.min(idx * 22, 440)}ms` }
   return (
     <>
-      <div className={`item${draggingStyle ? ' dragging' : ''}${flash && !draggingStyle ? ' just-placed' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
+      <div className={`item${draggingStyle ? ' dragging' : ''}${flash && !draggingStyle ? ' just-placed' : ''}${alignHit && !draggingStyle ? ' align-hit' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
         data-id={item.id} data-t={item.t} data-act="item-open"
         onPointerDown={onDragStart}>
         <WidgetView item={item} now={now} weather={weather} />

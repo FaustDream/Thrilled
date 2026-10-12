@@ -120,6 +120,15 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   100%{box-shadow:0 0 0 0 transparent,0 8px 24px -12px rgba(15,23,42,.22);transform:none}
 }
 .item.just-placed{animation:item-placed 1.6s var(--ease)}
+/* 拖拽中：抓取光标；被对齐命中的目标卡片加一圈强调色描边（.page 前缀用于盖过 icon 卡的去卡片化 box-shadow:none） */
+.item.dragging{cursor:grabbing}
+.page .item.align-hit{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 60%,transparent)}
+/* 对齐参考线：拖拽吸附到其它卡片时贯穿整页的 1px 强调色线（每轴最多一条），松手即消失；
+   层级在卡片之上、浮层之下，且不拦截指针 */
+.align-guide{position:absolute;z-index:25;pointer-events:none;
+  background:color-mix(in srgb,var(--accent) 80%,transparent)}
+.align-guide.v{top:0;bottom:0;width:1px}
+.align-guide.h{left:0;right:0;height:1px}
 /* 名称标签已整体移除（用户需求）：卡片不再渲染 .item-label */
 #stage[data-hidetop='1'] .mode-pill{display:none}
 #stage[data-hidesearch='1'] .search-row{display:none}

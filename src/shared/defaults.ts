@@ -18,6 +18,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mascot: true,
   /* 网格对齐线出厂关：开启后页面常显网格，拖拽 / 添加组件时强制显示 */
   gridLines: false,
+  /* 对齐辅助出厂全开：网格是落点基座，组件对齐在阈值内覆盖它 */
+  snapItems: true,
+  showGuides: true,
   engineId: 'baidu',
   openMode: 'tab',
   autoFocus: false,

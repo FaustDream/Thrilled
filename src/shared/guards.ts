@@ -197,6 +197,8 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     hideSearch: boolish(o['hideSearch'], d.hideSearch),
     mascot: boolish(o['mascot'], d.mascot),
     gridLines: boolish(o['gridLines'], d.gridLines),
+    snapItems: boolish(o['snapItems'], d.snapItems),
+    showGuides: boolish(o['showGuides'], d.showGuides),
     engineId: strish(o['engineId'], d.engineId),
     openMode: openMode === 'link' || openMode === 'tab' || openMode === 'search' ? openMode : d.openMode,
     autoFocus: boolish(o['autoFocus'], d.autoFocus),

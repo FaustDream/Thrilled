@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PAGES, REPEATABLE_KINDS, isIconOnlyPage, mergeIconPages, normPages, placedKindsOf, prunePages, uid } from '../src/app/layout'
-import { CELL, COLS, INSET, ROWS, SIZES, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
+import { CELL, COLS, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, isLegalSize, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
   boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup,
@@ -93,6 +93,61 @@ describe('网格算法', () => {
   it('相邻边界不算重叠', () => {
     expect(overlaps(item(0, 0, 2, 2), item(2, 0, 2, 2))).toBe(false)
     expect(overlaps(item(0, 0, 2, 2), item(1, 1, 2, 2))).toBe(true)
+  })
+})
+
+describe('对齐吸附（snapAxis：网格基准 + 阈值内的组件对齐）', () => {
+  const box = (id: string, c: number, r: number, w: number, h: number) => ({ id, c, r, w, h })
+
+  it('没有可对齐的卡片时取最近网格格，且不产生参考线', () => {
+    expect(snapAxis(5.4, 2, COLS, [], 'x', SNAP_ALIGN_PX)).toEqual({ index: 5, guide: null })
+  })
+
+  it('阈值 ≤0（关闭组件吸附）时只用最近格', () => {
+    expect(snapAxis(5.6, 2, COLS, [box('a', 6, 0, 2, 2)], 'x', 0)).toEqual({ index: 6, guide: null })
+  })
+
+  it('起点边对齐：偏差在阈值内改用对齐格，并给出贯穿参考线的位置', () => {
+    expect(snapAxis(5.8, 2, COLS, [box('a', 6, 0, 2, 2)], 'x', SNAP_ALIGN_PX))
+      .toEqual({ index: 6, guide: { pos: 6 * CELL + INSET, ids: ['a'] } })
+  })
+
+  it('终点边对齐：本卡右边缘吸到目标右边缘', () => {
+    expect(snapAxis(6.2, 4, COLS, [box('a', 8, 0, 2, 2)], 'x', SNAP_ALIGN_PX))
+      .toEqual({ index: 6, guide: { pos: 10 * CELL - INSET, ids: ['a'] } })
+  })
+
+  it('居中：本卡中心吸到目标中心', () => {
+    expect(snapAxis(5.1, 2, COLS, [box('a', 4, 0, 4, 4)], 'x', SNAP_ALIGN_PX))
+      .toEqual({ index: 5, guide: { pos: 6 * CELL, ids: ['a'] } })
+  })
+
+  it('超出阈值就不吸：回到最近格且无参考线', () => {
+    expect(snapAxis(6.5, 2, COLS, [box('a', 6, 0, 2, 2)], 'x', SNAP_ALIGN_PX)).toEqual({ index: 7, guide: null })
+  })
+
+  it('两侧同偏差时收集多个目标（一起高亮）', () => {
+    const others = [box('a', 6, 0, 2, 2), box('b', 6, 4, 2, 2)]
+    expect(snapAxis(5.9, 2, COLS, others, 'x', SNAP_ALIGN_PX))
+      .toEqual({ index: 6, guide: { pos: 6 * CELL + INSET, ids: ['a', 'b'] } })
+  })
+
+  it('越界的目标候选被跳过（否则会把卡片放到网格之外）', () => {
+    /* 目标在最右（22+2=24），本卡 4 格宽：起点候选 22 与居中候选 21 都会被钳制 → 只剩终点候选 20，
+       而 21.9 距 20 已超阈值，于是落最近格（钳制后仍是 20）且不给参考线 */
+    expect(snapAxis(21.9, 4, COLS, [box('a', 22, 0, 2, 2)], 'x', SNAP_ALIGN_PX)).toEqual({ index: 20, guide: null })
+  })
+
+  it('垂直方向按 r / h 计算', () => {
+    expect(snapAxis(3.2, 2, ROWS, [box('a', 0, 3, 2, 4)], 'y', SNAP_ALIGN_PX))
+      .toEqual({ index: 3, guide: { pos: 3 * CELL + INSET, ids: ['a'] } })
+  })
+
+  it('nearOnAxis：重叠或间隙 ≤1 格算邻近，隔开更远则不算', () => {
+    expect(nearOnAxis(0, 2, 1, 3)).toBe(true) // 重叠
+    expect(nearOnAxis(0, 2, 3, 5)).toBe(true) // 间隙 1 格
+    expect(nearOnAxis(0, 2, 4, 6)).toBe(false) // 间隙 2 格
+    expect(nearOnAxis(5, 7, 0, 2)).toBe(false) // 完全隔开
   })
 })
 

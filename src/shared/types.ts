@@ -203,6 +203,10 @@ export interface AppSettings {
   mascot: boolean;
   /** 页面网格对齐线（添加 / 拖拽组件时辅助确认位置；拖拽中会强制显示） */
   gridLines: boolean;
+  /** 组件对齐吸附：拖拽时若与同页其它卡片的边缘 / 中心对齐，落点优先吸附到该位置 */
+  snapItems: boolean;
+  /** 吸附到其它卡片时显示贯穿页面的对齐参考线，并高亮目标卡片 */
+  showGuides: boolean;
   engineId: string;
   openMode: OpenMode;
   autoFocus: boolean;
