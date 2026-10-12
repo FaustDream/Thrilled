@@ -470,9 +470,19 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* 列表条目的来源标签：节日（橙）/ 自定义（灰） */
 .dt-tag{flex:0 0 auto;font-size:10px;padding:2px 6px;border-radius:6px;background:var(--line);color:var(--panel-sub)}
 .dt-tag.fest{background:rgba(251,146,60,.16);color:#d97706}
-/* 组件库：已放置组件的三档尺寸胶囊（小 / 宽 / 大），比通用胶囊更紧 */
-.lib-size{display:flex;gap:4px;flex:0 0 auto}
-.lib-size .cat{padding:4px 8px;font-size:11px;margin:0}
+/* 组件库：目录行 = 行 + 可展开的「默认大小」面板（库内不直接显示尺寸，展开选档 + 确认才生效） */
+.lib-kind{border-bottom:1px solid var(--line)}
+.sec-card>.lib-kind:last-child{border-bottom:none}
+.lib-kind .eng-row{border-bottom:none}
+.lib-acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+/* 已单独设置过默认大小的类型：按钮转为主题色描边，作为轻提示（不暴露具体尺寸） */
+.lib-acts .btn.set{border-color:var(--accent);color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.lib-size-panel{padding:0 0 12px 34px}
+.lib-size-panel .cats{margin:10px 0 8px}
+/* 说明独占一行，操作按钮右对齐在下一行（窄面板里不被按钮挤成多行碎句） */
+.lib-size-foot{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
+.lib-size-note{flex:1 0 100%;font-size:11px;color:var(--panel-sub);line-height:1.5}
 .cat{font-size:12px;padding:5px 10px;border-radius:8px;background:var(--line);color:var(--panel-sub);cursor:pointer}
 .cat.active{background:var(--accent);color:#fff}
 .eng-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
@@ -897,8 +907,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .w-group{padding:calc(15 * var(--u))}
 .gcell-grid{gap:calc(10 * var(--u))}
 .gtile{border-radius:calc(14 * var(--u))}
-/* 尺寸档位置灰：该档低于组件能力下限（面板与组件库共用） */
-.cats .cat.dis,.lib-size .cat.dis{opacity:.4;cursor:not-allowed}
+/* 尺寸档位置灰：该档低于组件能力下限（配置弹窗与默认大小面板共用同一套胶囊） */
+.cats .cat.dis{opacity:.4;cursor:not-allowed}
 /* 小尺寸降级（@container 宽度查询，阈值都落在组件能力允许的档位内）：
    纯等比缩放会让「次要信息」在小卡上细到读不清，这里按宽度或整体或局部地减密度 */
 @container (width < 420px){

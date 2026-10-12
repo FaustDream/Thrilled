@@ -260,6 +260,17 @@ export interface AppSettings {
   shortcuts: Record<string, string>;
   /** 按组件类型的默认样式（新放置的实例继承；键为 WidgetKind，值为 shared/widget-style 的样式项） */
   styleDefaults: Record<string, WidgetStyle>;
+  /**
+   * 按组件类型的默认大小（组件库里逐个类型单独设置；新放置的实例按此落位，页面已有实例不变）。
+   * 键为 WidgetKind，值为六档尺寸之一；缺键 = 用定义表的出厂尺寸。
+   */
+  sizeDefaults: Record<string, WidgetSize>;
+}
+
+/** 组件尺寸（网格单位数，取值见 shared/grid 的 SIZES 六档） */
+export interface WidgetSize {
+  w: number;
+  h: number;
 }
 
 /**

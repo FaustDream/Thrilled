@@ -4,10 +4,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, prunePages, uid } from '../src/app/layout'
-import { CELL, COLS, INSET, LIBRARY_SIZES, ROWS, SIZES, findSlot, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
+import { CELL, COLS, INSET, ROWS, SIZES, findSlot, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
 import {
-  WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
-  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, sizeAllowed, sizeAllowedFor,
+  COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
+  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup,
 } from '../src/shared/widget-defs'
 import type { GridItem } from '../src/shared/types'
 
@@ -158,21 +158,43 @@ describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', ()
   })
 })
 
-describe('组件库数据（分组 / 三档尺寸 / 配置项上限）', () => {
-  it('每类小组件都归入唯一分组，三组都非空且覆盖全部类型', () => {
+describe('组件库数据（分组 / 默认大小 / 配置项上限）', () => {
+  it('每类小组件都归入唯一的类型分组，三个类型组都非空且覆盖全部类型', () => {
     const kinds = Object.keys(WIDGET_DEFS)
     const groups: Record<string, string | undefined> = WIDGET_GROUPS
     expect(kinds.filter((k) => groups[k] === undefined)).toEqual([])
-    for (const g of WIDGET_GROUPS_ORDER) {
+    for (const g of ['时间', '信息', '图标'] as const) {
       expect(WIDGET_LIST.filter((w) => WIDGET_GROUPS[w.t] === g).length, `${g} 组为空`).toBeGreaterThan(0)
     }
-    /* 「内容」分组随其组件（新闻 / 音乐 / 每日一言 / 木鱼）整体移除 */
-    expect(WIDGET_GROUPS_ORDER).toEqual(['信息', '工具', '导航'])
+    /* 分组按组件类型重排（时间 / 信息 / 图标），并新增置顶的「常用」 */
+    expect(WIDGET_GROUPS_ORDER).toEqual(['常用', '时间', '信息', '图标'])
+    for (const w of WIDGET_LIST) expect(groups[w.t], `${w.n} 缺少类型分组`).not.toBeUndefined()
   })
 
-  it('尺寸三档都是合法尺寸（小 / 宽 / 大）', () => {
-    expect(LIBRARY_SIZES.map((s) => `${s.k}${s.w}x${s.h}`)).toEqual(['小2x2', '宽4x2', '大4x4'])
-    for (const s of LIBRARY_SIZES) expect(isLegalSize(s.w, s.h), `${s.k} 不是合法档位`).toBe(true)
+  it('「常用」是置顶快捷组：按内置高频清单给出，成员仍保留自己的类型分组', () => {
+    expect(COMMON_KINDS.length).toBeGreaterThan(0)
+    expect(widgetsInGroup('常用').map((w) => w.t)).toEqual([...COMMON_KINDS])
+    for (const k of COMMON_KINDS) {
+      expect(WIDGET_DEFS[k], `${k} 不是已知组件`).toBeDefined()
+      expect(WIDGET_GROUPS[k], `${k} 缺少类型分组`).not.toBeUndefined()
+    }
+  })
+
+  it('类型分组取件拼起来覆盖全部组件（无遗漏、无重复）', () => {
+    const grouped = WIDGET_GROUPS_ORDER.filter((g) => g !== '常用').flatMap((g) => widgetsInGroup(g).map((w) => w.t))
+    expect([...grouped].sort()).toEqual(Object.keys(WIDGET_DEFS).sort())
+  })
+
+  it('新放置实例的尺寸：优先用该类设置的默认大小，坏值 / 内容装不下时回退出厂尺寸', () => {
+    /* 未设置 → 出厂尺寸 */
+    expect(placeSizeOf('clock', {}, {})).toEqual(WIDGET_DEFS.clock.units)
+    /* 已设置且合法 → 用默认大小 */
+    expect(placeSizeOf('clock', {}, { clock: { w: 8, h: 4 } })).toEqual({ w: 8, h: 4 })
+    /* 低于组件下限（归一化会拦，这里是兜底路径）→ 回退出厂尺寸 */
+    expect(placeSizeOf('cal', {}, { cal: { w: 2, h: 2 } })).toEqual(WIDGET_DEFS.cal.units)
+    /* 图标格容器按实例内容收紧：应用多到该档装不下 → 回退出厂尺寸 */
+    const apps = Array.from({ length: 100 }, (_, i) => `https://a${i}.com`)
+    expect(placeSizeOf('group', { apps }, { group: { w: 4, h: 2 } })).toEqual(WIDGET_DEFS.group.units)
   })
 
   /* 通用段 2 项（名称标签 / 显示标题 / 透明度按需展开）+ 专属 ≤3 项；

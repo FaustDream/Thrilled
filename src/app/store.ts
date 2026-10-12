@@ -8,7 +8,7 @@
 import { create } from 'zustand'
 import { DEFAULT_PAGES, clonePages, mergeIconPages, prunePages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
-import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
+import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { getWeather, type WeatherData } from '../core/weather'
@@ -34,6 +34,7 @@ import type {
   WallFocus,
   WallpaperSource,
   WidgetKind,
+  WidgetSize,
 } from '../shared/types'
 
 export type { SkinPack } from '../shared/types'
@@ -125,6 +126,8 @@ interface AppState {
   /** 修改来源名称 / API 基址（镜像地址） */
   updateWallSource: (id: string, patch: Partial<Pick<WallpaperSource, 'name' | 'apiBase'>>) => void
   place: (kind: WidgetKind, config?: Record<string, unknown>) => void
+  /** 组件库：设置 / 清除某类组件的默认大小（新放置的实例按此落位，页面已有实例不变） */
+  setSizeDefault: (t: WidgetKind, size: WidgetSize | null) => void
   updateConfig: (id: string, patch: Record<string, unknown>) => void
   resize: (id: string, w: number, h: number) => void
   move: (id: string, c: number, r: number) => boolean
@@ -330,6 +333,19 @@ export const useApp = create<AppState>()((set, get) => ({
     toast: '已恢复默认快捷键',
   })),
 
+  /* ---------- 组件库：按类型的默认大小（新放置的实例按此落位） ---------- */
+  setSizeDefault: (t, size) => set((s) => {
+    /* 保持不可变更新：先摘掉该类型的旧设置，再按需写回新档位（size === null 即恢复出厂大小） */
+    const next = Object.fromEntries(Object.entries(s.settings.sizeDefaults).filter(([k]) => k !== t))
+    if (size !== null) next[t] = size
+    return {
+      settings: { ...s.settings, sizeDefaults: next },
+      toast: size === null
+        ? `已恢复「${WIDGET_DEFS[t].n}」的出厂大小`
+        : `「${WIDGET_DEFS[t].n}」的默认大小已设为 ${size.w}×${size.h}（之后新增的实例按此落位）`,
+    }
+  }),
+
   /* ---------- 实例样式（配置弹窗「样式」段） ---------- */
   applyStyle: (id, patch) => set((s) => ({
     pages: s.pages.map((pg) => pg.map((it) => (it.id === id
@@ -450,8 +466,10 @@ export const useApp = create<AppState>()((set, get) => ({
     const def = WIDGET_DEFS[kind]
     const curIdx = s.cur
     const page = [...(list[curIdx] ?? [])]
+    /* 尺寸：优先该类组件的默认大小（组件库 →「默认大小」设置；缺省 / 坏值回退定义表尺寸） */
+    const size = placeSizeOf(kind, config, s.settings.sizeDefaults)
     const item: GridItem = {
-      id: `i${Date.now().toString(36)}`, c: 0, r: 0, w: def.units.w, h: def.units.h, t: kind,
+      id: `i${Date.now().toString(36)}`, c: 0, r: 0, w: size.w, h: size.h, t: kind,
       /* 新实例先套该类组件的默认样式（「设为该组件默认」写入的），再叠放置时的显式配置 */
       config: { label: def.n, ...(s.settings.styleDefaults[kind] ?? {}), ...config },
     }
@@ -474,11 +492,13 @@ export const useApp = create<AppState>()((set, get) => ({
     let placed = 0
     set((s) => {
       const list = s.pages.map((pg) => [...pg])
+      /* 批量落位的网址图标同样遵循该类型的默认大小（缺省 2×2） */
+      const size = placeSizeOf('icon', {}, s.settings.sizeDefaults)
       let curIdx = s.cur
       let seq = 0
       for (const entry of entries) {
         let page = list[curIdx] ?? []
-        let slot = findSlot(page, 2, 2)
+        let slot = findSlot(page, size.w, size.h)
         if (slot === null && list.length < MAX_PAGES) {
           curIdx = list.length
           list.push([])
@@ -486,7 +506,7 @@ export const useApp = create<AppState>()((set, get) => ({
           slot = { c: 0, r: 0 }
         }
         if (slot === null) break
-        page.push({ id: `b${Date.now().toString(36)}${seq++}`, c: slot.c, r: slot.r, w: 2, h: 2, t: 'icon', config: { label: entry.label, url: entry.url } })
+        page.push({ id: `b${Date.now().toString(36)}${seq++}`, c: slot.c, r: slot.r, w: size.w, h: size.h, t: 'icon', config: { label: entry.label, url: entry.url } })
         list[curIdx] = page
         placed++
       }

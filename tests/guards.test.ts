@@ -124,6 +124,23 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(normalizeSettings({ dockApps: 'bad' }).dockApps).toEqual(DEFAULT_SETTINGS.dockApps)
     expect(normalizeSettings(null).dockApps).toEqual(DEFAULT_SETTINGS.dockApps)
   })
+
+  it('按类型的默认大小：只留六档内且在该组件能力区间的项，坏值 / 未知类型丢弃', () => {
+    const s = normalizeSettings({
+      sizeDefaults: {
+        clock: { w: 8, h: 4 },      // 合法
+        fav: { w: 2, h: 4 },        // 合法
+        cal: { w: 2, h: 2 },        // 低于日历的尺寸下限（4×2 起）→ 丢弃
+        icon: { w: 3, h: 3 },       // 不是六档 → 丢弃
+        todo: { w: '4', h: 2 },     // 类型错 → 丢弃
+        nope: { w: 2, h: 2 },       // 未知组件类型 → 丢弃
+        weather: null,              // 结构错 → 丢弃
+      },
+    })
+    expect(s.sizeDefaults).toEqual({ clock: { w: 8, h: 4 }, fav: { w: 2, h: 4 } })
+    expect(normalizeSettings({}).sizeDefaults).toEqual({})
+    expect(normalizeSettings(null).sizeDefaults).toEqual(DEFAULT_SETTINGS.sizeDefaults)
+  })
 })
 
 describe('引擎与皮肤归一化', () => {

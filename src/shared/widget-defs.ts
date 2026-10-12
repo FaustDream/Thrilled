@@ -5,7 +5,7 @@
  * 实例决定：位置与尺寸（布局）+ config（内容）
  * 纯数据无 React 依赖 → app（渲染 / 编辑弹窗）与 core（导入校验 / 迁移）共用。
  */
-import type { WidgetDefinition, WidgetKind } from './types';
+import type { WidgetDefinition, WidgetKind, WidgetSize } from './types';
 import { CELL, INSET, groupFits } from './grid';
 
 export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
@@ -101,23 +101,35 @@ export const fromLegacyKind = (t: string, config: Record<string, unknown>): { t:
   return null;
 };
 
-/* ---------- 组件库分组（个性化 → 组件库：信息 / 工具 / 导航） ---------- */
+/* ---------- 组件库分组（个性化 → 组件库：常用 / 时间 / 信息 / 图标） ---------- */
 
-/** 组件库分组名 */
-export type WidgetGroup = '信息' | '工具' | '导航';
+/** 组件库分组名（「常用」是跨类型的置顶快捷组，其余按组件类型归类） */
+export type WidgetGroup = '常用' | '时间' | '信息' | '图标';
 
-/** 分组展示顺序 */
-export const WIDGET_GROUPS_ORDER: readonly WidgetGroup[] = ['信息', '工具', '导航'];
+/** 分组展示顺序（常用置顶） */
+export const WIDGET_GROUPS_ORDER: readonly WidgetGroup[] = ['常用', '时间', '信息', '图标'];
 
-/** 每类小组件归属的分组（组件库按此分组浏览；每类只属一组） */
-export const WIDGET_GROUPS: Readonly<Record<WidgetKind, WidgetGroup>> = {
-  clock: '信息', cal: '信息', weather: '信息', countdown: '信息',
-  todo: '工具', fav: '工具',
-  icon: '导航', folder: '导航', group: '导航',
+/** 每类小组件归属的类型分组（组件库按此分组浏览；每类只属一组） */
+export const WIDGET_GROUPS: Readonly<Record<WidgetKind, Exclude<WidgetGroup, '常用'>>> = {
+  clock: '时间', cal: '时间', countdown: '时间',
+  weather: '信息', todo: '信息',
+  icon: '图标', folder: '图标', fav: '图标', group: '图标',
 };
+
+/** 「常用」分组的内置高频清单（出厂固定，不随使用情况变化；成员仍保留自己的类型分组） */
+export const COMMON_KINDS: readonly WidgetKind[] = ['clock', 'weather', 'todo', 'icon'];
 
 /** 组件库清单（定义表生成；原「经典语录」别名入口随每日一言一并移除） */
 export const WIDGET_LIST: readonly WidgetDefinition[] = Object.keys(WIDGET_DEFS).map((k) => WIDGET_DEFS[k as WidgetKind]);
+
+/**
+ * 某分组下要展示的组件：常用组按内置高频清单的顺序给出（该组是置顶快捷入口，
+ * 与下面的类型组重复展示），其余组按类型归属过滤（组内顺序沿用定义表）。
+ */
+export const widgetsInGroup = (g: WidgetGroup): readonly WidgetDefinition[] =>
+  g === '常用'
+    ? COMMON_KINDS.map((k) => WIDGET_DEFS[k])
+    : WIDGET_LIST.filter((w) => WIDGET_GROUPS[w.t] === g);
 
 /* ---------- 配置读取（定义默认值 ⊕ 实例覆盖值） ---------- */
 
@@ -179,4 +191,17 @@ export const sizeAllowedFor = (
     return groupFits(apps.length, w, h);
   }
   return true;
+};
+
+/**
+ * 新放置实例采用的尺寸：优先用户为该类型单独设置的默认大小（组件库 →「默认大小」），
+ * 未设置 / 坏值 / 当前内容装不下时回退定义表尺寸。
+ */
+export const placeSizeOf = (
+  t: WidgetKind,
+  config: Record<string, unknown>,
+  sizeDefaults: Record<string, WidgetSize>,
+): { w: number; h: number } => {
+  const p = sizeDefaults[t];
+  return p !== undefined && sizeAllowedFor(t, config, p.w, p.h) ? p : WIDGET_DEFS[t].units;
 };

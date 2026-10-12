@@ -10,11 +10,12 @@
 import { z } from 'zod';
 import { BLUR_MAX_PX, MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
+import { isLegalSize } from './grid';
 import { normalizeShortcuts } from './shortcuts';
 import { isBlankStyle, normStyle } from './widget-style';
-import { WIDGET_KINDS, fromLegacyKind } from './widget-defs';
+import { WIDGET_KINDS, fromLegacyKind, sizeAllowed } from './widget-defs';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
-import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource, WidgetStyle } from './types';
+import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource, WidgetKind, WidgetSize, WidgetStyle } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -244,7 +245,27 @@ export const normalizeSettings = (v: unknown): AppSettings => {
       : [...d.wallSources],
     shortcuts: normalizeShortcuts(o['shortcuts']),
     styleDefaults: normStyleDefaults(o['styleDefaults']),
+    sizeDefaults: normSizeDefaults(o['sizeDefaults']),
   };
+};
+
+/**
+ * 按类型的默认大小归一化：只认已知组件类型 + 六档合法 + 落在该组件的能力区间内，
+ * 坏值直接丢弃（该类型回到定义表尺寸）——`{}` 即「该类没有单独设置默认大小」。
+ */
+const normSizeDefaults = (v: unknown): Record<string, WidgetSize> => {
+  if (typeof v !== 'object' || v === null) return {};
+  const out: Record<string, WidgetSize> = {};
+  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
+    if (!WIDGET_KINDS.has(k)) continue;
+    if (typeof raw !== 'object' || raw === null) continue;
+    const o = raw as Record<string, unknown>;
+    const w = typeof o['w'] === 'number' ? o['w'] : -1;
+    const h = typeof o['h'] === 'number' ? o['h'] : -1;
+    if (!isLegalSize(w, h) || !sizeAllowed(k as WidgetKind, w, h)) continue;
+    out[k] = { w, h };
+  }
+  return out;
 };
 
 /**
