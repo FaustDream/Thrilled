@@ -113,13 +113,17 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* 新落位的卡片：一次性高亮（描边脉冲 + 轻微上浮），让用户一眼看到新增的图标 / 容器落在哪；
    动画期间会覆盖 .item[data-t='icon'] 的去卡片化 box-shadow:none，播完自动回到常态，故不影响既有风格 */
 @keyframes item-placed{
-  0%{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 78%,transparent),0 10px 26px -12px rgba(15,23,42,.3);
-    transform:translateY(-5px) scale(1.05)}
-  60%{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 50%,transparent),0 10px 26px -12px rgba(15,23,42,.3);
+  0%{box-shadow:0 0 0 4px var(--accent),0 0 0 12px color-mix(in srgb,var(--accent) 20%,transparent),0 14px 32px -12px rgba(15,23,42,.36);
+    background:color-mix(in srgb,var(--card-bg) 88%,transparent);
+    transform:translateY(-6px) scale(1.06)}
+  55%{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 72%,transparent),0 0 0 9px color-mix(in srgb,var(--accent) 10%,transparent),0 14px 32px -12px rgba(15,23,42,.3);
+    background:color-mix(in srgb,var(--card-bg) 55%,transparent);
     transform:none}
-  100%{box-shadow:0 0 0 0 transparent,0 8px 24px -12px rgba(15,23,42,.22);transform:none}
+  100%{box-shadow:0 0 0 0 transparent,0 8px 24px -12px rgba(15,23,42,.22);background:transparent;transform:none}
 }
-.item.just-placed{animation:item-placed 1.6s var(--ease)}
+/* 新落位卡片的一次性高亮：强调色描边 + 光晕 + 临时浅底——去卡片化的图标 / 容器也因此有了可见承载；
+   动画结束后自动回到常态（fill-mode 默认 none，不残留背景），故不影响既有的「无卡片化」风格 */
+.item.just-placed{animation:item-placed 1.9s var(--ease)}
 /* 拖拽中：抓取光标；被对齐命中的目标卡片加一圈强调色描边（.page 前缀用于盖过 icon 卡的去卡片化 box-shadow:none） */
 .item.dragging{cursor:grabbing}
 .page .item.align-hit{box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) 60%,transparent)}

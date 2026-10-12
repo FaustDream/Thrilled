@@ -116,6 +116,7 @@ const AddPanel = () => {
   const settings = useApp((s) => s.settings)
   const setSetting = useApp((s) => s.setSetting)
   const showToast = useApp((s) => s.showToast)
+  const setDrawer = useApp((s) => s.setDrawer)
   /* 页签状态放 store：Dock 右键「配置快捷方式」等入口需要先切页签再开抽屉 */
   const tab = useApp((s) => s.addTab)
   const setTab = useApp((s) => s.setAddTab)
@@ -184,6 +185,8 @@ const AddPanel = () => {
     }
     if (link !== null && toDock) addToDock(label, link)
     setName(''); setUrl(''); setIcon(''); setFolderName('')
+    /* 收起抽屉，让新图标 / 容器直接露出来（页签与列表位置仍在 store，下次打开回到原处） */
+    setDrawer(null)
   }
 
   const pickIcon = (f: File | undefined): void => {
@@ -219,7 +222,8 @@ const AddPanel = () => {
           </div>
           <div className="nv-grid">
             {nvList.map((it) => (
-              <div className="nv-item" key={it.label} title={it.url !== '' ? it.url : it.label} onClick={() => place('icon', { label: it.label, url: it.url })}>
+              <div className="nv-item" key={it.label} title={it.url !== '' ? it.url : it.label}
+                onClick={() => { place('icon', { label: it.label, url: it.url }); setDrawer(null) }}>
                 <SiteIcon url={it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''} name={it.label} cls="nv-ico" fs={18} size={56} />
                 <div className="nv-name">{it.label}</div>
               </div>
@@ -255,7 +259,7 @@ const AddPanel = () => {
                   {bmList.length === 0 && <Hint>浏览器收藏夹里没有可添加的 http(s) 书签（开发预览环境没有书签数据，请在扩展中使用）。</Hint>}
                   {bmList.map((e) => (
                     <div className="dt-row" key={e.url}
-                      onClick={() => { place('icon', { label: e.label, url: e.url }); showToast(`已添加「${e.label}」快捷方式`) }}>
+                      onClick={() => { place('icon', { label: e.label, url: e.url }); showToast(`已添加「${e.label}」快捷方式`); setDrawer(null) }}>
                       <SiteIcon url={e.url} name={e.label} cls="dt-ico" fs={13} size={30} />
                       <span className="dt-name">{e.label}</span>
                       <span className="dt-host">{hostOf(e.url)}</span>
@@ -666,6 +670,7 @@ const ComponentLibraryTab = () => {
   const remove = useApp((st) => st.remove)
   const reorderItems = useApp((st) => st.reorderItems)
   const setModal = useApp((st) => st.setModal)
+  const setDrawer = useApp((st) => st.setDrawer)
   /* 已单独设置过默认大小的类型数（只用于摘要，不暴露具体尺寸） */
   const sized = useApp((st) => Object.keys(st.settings.sizeDefaults).length)
   const [dragId, setDragId] = useState<string | null>(null)
@@ -725,7 +730,7 @@ const ComponentLibraryTab = () => {
                 </div>
                 <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
                   title={isAdded ? '该组件已在页面上；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
-                  onClick={() => place(w.t)}>{isAdded ? '已添加' : '添加'}</button>
+                  onClick={() => { place(w.t); setDrawer(null) }}>{isAdded ? '已添加' : '添加'}</button>
               </div>
             )
           })}
@@ -1434,6 +1439,7 @@ interface LogVersion {
 const CHANGELOG: readonly LogVersion[] = [
   {
     v: '4.4', d: '2026-09-30 – 2026-10-12', items: [
+      { k: '优化', s: '添加网站的图标 / 容器后自动露出新卡片并高亮', d: '右键一级、添加抽屉（网址导航点站点 / 自定义页签确认添加 / 从书签快速添加）与组件库「添加」三处都是「一步生成、不弹任何表单」；此前抽屉开着时新卡片落在页面里被挡住，看起来像「没反应」，现在这三处单次添加后会自动收起抽屉（批量导入不收起），并播一次 1.9s 高亮——强调色描边 + 外圈光晕 + 临时浅底，让去卡片化的图标 / 容器也看得清。编辑仍走后续操作：卡片悬浮 ✎ 或右键卡片「编辑信息」' },
       { k: '新增', s: '对齐辅助：网格与组件对齐统一吸附', d: '拖拽卡片时每轴独立选格——以最近网格格为基准（卡片始终落在格上），若同页邻近卡片的边缘或中心偏差不超过 0.3 格（22px）则改用偏差最小的对齐格；某轴只参考「另一轴重叠或间隙 ≤1 格」的卡片，避免整页同列 / 同行的卡片一起被高亮（实测未加该约束时一次拖拽高亮 7 张）。拖动中卡片实时落在候选格上并保留抓取偏移（不再跳到指针下），吸附到组件时显示贯穿整页的参考线并高亮目标卡片；按 Esc 取消拖拽、松手即消失。设置 → 通用 →「对齐辅助」新增「组件吸附」与「显示对齐参考线」开关（均默认开）。不做拖拽缩放、放置时对齐与间距均分' },
       { k: '优化', s: '「添加网站图标 / 添加网站容器」改为一步生成', d: '两项提到右键菜单第一级的前两项，点下去直接在右键所在的格生成图标 / 容器，不再先弹表单（原来「新建网址图标」会先弹「新建站点」弹窗）；编辑改由后续操作触发——点卡片悬浮的 ✎ 或右键卡片「编辑信息」。新落位的卡片会播放一次性高亮（描边脉冲 + 轻微上浮，1.6 秒），让用户一眼看到新图标落在哪；「添加到 Dock 快捷方式」仍保留弹窗（Dock 需要网址才有意义）' },
       { k: '优化', s: '添加抽屉的「书签」分组在窄面板下被挤出可视区', d: '网址导航网格原为固定 3 列，且卡片没有 min-width:0——nowrap 的长书签名会把列的最小宽度撑到 170px，三列合计比面板内容区宽出 110px，右侧卡片被裁、面板底部还冒出横向滚动条。改为按面板宽度自适应列数（宽面板双列、更窄自动降为单列），卡片与名称都允许窄于内容（min-width:0，长名称走省略号），抽屉内容区不再出现横向滚动，只保留纵向滚动' },

@@ -276,7 +276,7 @@ export const App = () => {
   /* 落位提示：新卡片的高亮动画播完即清标记，避免之后的重渲染再播一次 */
   useEffect(() => {
     if (flashId === null) return
-    const t = setTimeout(() => useApp.setState({ flashId: null }), 1700)
+    const t = setTimeout(() => useApp.setState({ flashId: null }), 2100)
     return () => clearTimeout(t)
   }, [flashId])
   useEffect(() => {
