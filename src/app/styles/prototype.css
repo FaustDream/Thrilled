@@ -227,14 +227,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .dock-sep{width:1px;height:34px;margin:0 14px;background:var(--label-color);opacity:.22;flex:0 0 auto}
 .dock-item{width:64px;height:60px;display:flex;align-items:center;justify-content:center;
   position:relative;cursor:pointer}
-.dock-icon{width:46px;height:46px;border-radius:15px;font-size:22px;flex:0 0 auto;overflow:hidden;
-  box-shadow:0 6px 16px rgba(6,12,24,.16);
-  transition:transform .16s var(--ease)}
+.dock-icon{width:46px;height:46px;border-radius:15px;font-size:22px;flex:0 0 auto;overflow:hidden}
 .dock-icon.circle{border-radius:50%}
 .dock-favicon{width:38px;height:38px;object-fit:cover;display:flex;align-items:center;justify-content:center}
 .dock-fn{background:rgba(255,255,255,.42);color:var(--label-color)}
 .dock-fn svg{width:21px;height:21px}
-.dock-item:hover .dock-icon{transform:scale(1.16) translateY(-2px)}
 .dock-name{display:none;position:absolute;top:4px;left:50%;transform:translate(-50%,-100%) scale(.92);
   background:rgba(15,23,42,.86);color:#fff;font-size:12px;padding:4px 10px;border-radius:8px;
   white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .16s,transform .16s}
@@ -639,8 +636,6 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .dock-bar{border-radius:var(--radius-xl);padding:16px 12px;
   box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 24px 56px -14px rgba(6,12,24,.42);
   backdrop-filter:blur(var(--blur-dock)) saturate(1.5)}
-.dock-icon{transition:transform .26s var(--ease-spring),box-shadow .26s}
-.dock-item:hover .dock-icon{transform:scale(1.16) translateY(-1px)}
 .dock-sep{opacity:.22}
 
 /* —— 模式胶囊 —— */
@@ -715,9 +710,20 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* —— Dock：玻璃磨砂悬浮栏（苹果式尺寸），快捷方式显 favicon、功能键显线性图标 —— */
 .dock-bar{border-radius:24px;padding:9px 12px;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 18px 44px -14px rgba(15,23,42,.30)}
-.dock-icon{box-shadow:0 6px 16px rgba(6,12,24,.16)}
-.dock-fn{background:rgba(255,255,255,.42);box-shadow:none}
-.dock-item:hover .dock-icon{transform:scale(1.16) translateY(-2px);box-shadow:0 10px 22px rgba(6,12,24,.20)}
+/* 悬停反馈为「排他式」：指针一次只落在一个图标上，故同一时刻只有一个图标处于激活动画，其余保持静止。
+   进入走弹性缓动（--ease-spring 微过冲）显得「活」，离开走平滑缓出（--ease）回落不抖；
+   缩放 / 上浮 / 光晕强度随「悬停与激活态」透明度（--ga-hover）联动，调到 0 即整体消失。
+   --dock-sh 是静止态投影：功能键本就无投影，用透明占位保证过渡起点一致、不出现突兀新增。 */
+.dock-icon{--dock-sh:0 6px 16px rgba(6,12,24,.16);box-shadow:var(--dock-sh);
+  transform-origin:50% 100%;will-change:transform;
+  transition:transform .22s var(--ease),box-shadow .22s var(--ease)}
+.dock-fn{background:rgba(255,255,255,.42);--dock-sh:0 0 transparent}
+.dock-item:hover .dock-icon{
+  transition:transform .34s var(--ease-spring),box-shadow .34s var(--ease-spring);
+  transform:scale(calc(1 + .18 * var(--ga-hover))) translateY(calc(-5px * var(--ga-hover)));
+  box-shadow:var(--dock-sh),
+    0 0 0 4px color-mix(in srgb,var(--accent) calc(var(--ga-hover) * 30%),transparent),
+    0 14px 26px -8px color-mix(in srgb,var(--accent) calc(var(--ga-hover) * 45%),transparent)}
 .dock-sep{display:block;opacity:.22}
 .dock-actions{margin-left:0}
 
@@ -788,9 +794,6 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .grid-hint{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
   pointer-events:none;max-width:560px}
 
-/* ============ 20. Dock 苹果式放大（v4.4 保留） ============ */
-/* 放大由 App.dockMagnify 按指针接近度内联写入 transform：原点贴底向上生长，短过渡跟手 */
-.dock-icon{transform-origin:50% 100%;transition:transform .13s ease-out;will-change:transform}
 .grid-hint .gh-title{font-size:20px;font-weight:600;color:var(--label-color);opacity:.55}
 .grid-hint .gh-sub{font-size:13px;color:var(--label-color);opacity:.42;line-height:1.8;margin-top:10px}
 

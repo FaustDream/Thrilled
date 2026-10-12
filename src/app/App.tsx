@@ -5,7 +5,7 @@
  * 平台行为：打开链接走 core/link-opener（打开方式设置），壁纸走 core/wallpaper（IndexedDB）。
  */
 import { useEffect, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
 import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
@@ -125,28 +125,11 @@ export const App = () => {
   const [vpRatio, setVpRatio] = useState(() => window.innerWidth / Math.max(1, window.innerHeight))
   const inputRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
-  const dockBarRef = useRef<HTMLDivElement | null>(null)
   const wheelAt = useRef(0)
 
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
-  /* ---------- Dock 苹果式悬停放大（指针接近度 → 余弦衰减缩放，图标原点贴底向上生长） ---------- */
-  const dockMagnify = (e: ReactMouseEvent) => {
-    const bar = dockBarRef.current
-    if (bar === null) return
-    const px = e.clientX
-    const radius = 130 * stage.scale
-    bar.querySelectorAll<HTMLElement>('.dock-item').forEach((it) => {
-      const r = it.getBoundingClientRect()
-      const k = Math.max(0, 1 - Math.abs(px - (r.left + r.width / 2)) / radius)
-      const icon = it.querySelector<HTMLElement>('.dock-icon')
-      if (icon !== null) icon.style.transform = k > 0 ? `scale(${(1 + 0.42 * Math.sin((k * Math.PI) / 2)).toFixed(3)})` : ''
-    })
-  }
-  const dockMagnifyReset = (): void => {
-    dockBarRef.current?.querySelectorAll<HTMLElement>('.dock-icon').forEach((el) => { el.style.transform = '' })
-  }
 
   /* ---------- 启动：持久化恢复 + 天气 + 首访欢迎 ---------- */
   useEffect(() => {
@@ -635,10 +618,10 @@ export const App = () => {
         </div>
       )}
 
-      {/* Dock：用户快捷方式（favicon 图标）+ 功能键 新增/个性化/设置 */}
+      {/* Dock：用户快捷方式（favicon 图标）+ 功能键 新增/个性化/设置；悬停反馈为纯 CSS 排他动效（prototype.css 第 17 节），一次只激活指针下的那一个图标 */}
       {settings.mascot && (
         <div className="dock">
-          <div className="dock-bar" ref={dockBarRef} onMouseMove={dockMagnify} onMouseLeave={dockMagnifyReset}>
+          <div className="dock-bar">
             <div className="dock-apps">
               {dockApps.slice(0, settings.dockCount).map((app, i) => (
                 <div className="dock-item" key={`dock-${i}`} data-act="dock-app" data-v={app.url} data-idx={String(i)}
