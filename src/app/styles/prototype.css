@@ -276,12 +276,6 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .ctx-item:hover{background:var(--menu-hover)}
 .ctx-arrow{width:0;height:0;border-left:5px solid var(--panel-sub);border-top:4px solid transparent;
   border-bottom:4px solid transparent;opacity:.7}
-.ctx-switch{width:34px;height:18px;border-radius:9px;background:rgba(148,163,184,.55);position:relative;
-  flex:0 0 auto;transition:background .18s}
-.ctx-switch i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;
-  transition:left .18s}
-.ctx-switch.on{background:var(--accent)}
-.ctx-switch.on i{left:18px}
 .ctx-sub{position:absolute;left:100%;top:-6px;margin-left:2px;width:186px;border-radius:10px;padding:6px 0;
   background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
   backdrop-filter:blur(var(--blur-menu));
@@ -290,10 +284,6 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .ctx.flip .ctx-sub{left:auto;right:100%;margin-left:0;margin-right:2px}
 .ctx-sub-item{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;cursor:pointer;position:relative}
 .ctx-sub-item:hover{background:var(--menu-hover)}
-/* 网址导航：分类行再悬停展开站点列（浏览器书单菜单式的两级飞出）；嵌套层同样贴边翻转 */
-.ctx-sub-item:hover>.ctx-sub{display:block}
-.ctx-sub .ctx-sub{top:-6px;z-index:2}
-.nav-cat-n{flex:1}
 .ctx-check{width:14px;height:14px;flex:0 0 auto;color:var(--accent);visibility:hidden}
 .ctx-sub-item.on .ctx-check{visibility:visible}
 

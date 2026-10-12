@@ -1,100 +1,22 @@
 /**
- * 右键菜单（全局 11 项 + 卡片 6 项，见 docs/v4/02-UI规格.md §7）
- * 二级菜单与开关按 UiTab 实测复刻；「更换小组件」是内容模型带来的新入口（可换引用类型）；
- * 「网址导航」是导航功能并入右键菜单的入口（分类 → 站点两级飞子菜单，点击新标签打开）。
+ * 右键菜单（卡片 6 项 + Dock 图标 5 项）
+ *
+ * 空白处的全局菜单已整体移除（网址导航 / 打开方式 / 搜索栏 / Dock栏 / 极简模式 / 隐藏项目 /
+ * 搜索引擎 / Dock 快捷栏 / 网格对齐线 / 站内消息 / 更新记录），右键交还浏览器原生菜单；
+ * 这些功能的入口仍在设置、个性化与「添加」抽屉里。二级菜单按 UiTab 实测复刻。
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp } from './store'
 import { WIDGET_DEFS, sizeAllowedFor } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
 import { stage } from './stage'
-import { CheckIcon, Icon } from './icons'
+import { CheckIcon } from './icons'
 import { cfg } from './widgets'
-import { NAVI, siteUrlOf } from './brands'
-import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
 import type { WidgetKind } from '../shared/types'
-
-const OPEN_MODES: readonly (readonly [string, string])[] = [
-  ['link', '当前窗口打开链接'], ['tab', '打开新标签页'], ['search', '当前窗口打开搜索结果'],
-]
 
 const SubItem = ({ on, children, act, v }: { on?: boolean; children: React.ReactNode; act: string; v?: string }) => (
   <div className={`ctx-sub-item${on ? ' on' : ''}`} data-act={act} data-v={v}>{<span className="ctx-check"><CheckIcon /></span>}{children}</div>
 )
-
-/** 网址导航飞子菜单的一项分类（名称 + 站点列表；无内置网址的条目不进菜单，整类为空则不列） */
-const navCatRows = (bm: readonly BookmarkEntry[]): readonly { c: string; l: readonly { label: string; url: string }[] }[] => {
-  const rows = [
-    ...NAVI.map((x) => ({ c: x.c, l: x.l.map((n) => ({ label: n, url: siteUrlOf(n) ?? '' })).filter((it) => it.url !== '') })),
-    ...(bm.length > 0 ? [{ c: '书签', l: bm.map((e) => ({ label: e.label, url: e.url })) }] : []),
-  ]
-  return rows.filter((r) => r.l.length > 0)
-}
-
-const GlobalMenu = () => {
-  const engines = useApp((s) => s.engines)
-  const engineId = useApp((s) => s.settings.engineId)
-  const openMode = useApp((s) => s.settings.openMode)
-  const labels = useApp((s) => s.settings.labels)
-  const mode = useApp((s) => s.settings.mode)
-  const hideSearch = useApp((s) => s.settings.hideSearch)
-  const mascot = useApp((s) => s.settings.mascot)
-  const gridLines = useApp((s) => s.settings.gridLines)
-  /* 浏览器书签（有则作为「书签」分类追加进导航飞子菜单；dev 预览无 chrome.bookmarks 时静默跳过） */
-  const [bm, setBm] = useState<readonly BookmarkEntry[]>([])
-  useEffect(() => {
-    void (async () => {
-      const tree = await readBookmarkTree()
-      setBm(tree === null ? [] : collectBookmarks(tree))
-    })()
-  }, [])
-  const visible = engines.filter((e) => !e.hidden)
-  const Sw = ({ on }: { on: boolean }) => <span className={`ctx-switch${on ? ' on' : ''}`}><i /></span>
-  return (
-    <>
-      <div className="ctx-item"><span>网址导航</span><span className="ctx-arrow" />
-        <div className="ctx-sub" style={{ maxHeight: 480, overflow: 'auto' }}>
-          {navCatRows(bm).map((cat) => (
-            <div className="ctx-sub-item nav-cat" key={cat.c}>
-              <span className="nav-cat-n">{cat.c}</span>
-              <span className="ctx-arrow" />
-              <div className="ctx-sub">
-                {cat.l.map((it) => <SubItem key={it.label} act="nav-open" v={it.url}>{it.label}</SubItem>)}
-              </div>
-            </div>
-          ))}
-          <SubItem act="open-add-tab" v="0">管理导航站点…</SubItem>
-        </div>
-      </div>
-      <div className="ctx-item"><span>打开方式</span><span className="ctx-arrow" />
-        <div className="ctx-sub">
-          {OPEN_MODES.map(([k, n]) => <SubItem key={k} on={openMode === k} act="open-mode" v={k}>{n}</SubItem>)}
-        </div>
-      </div>
-      <div className="ctx-item" data-act="ctx-tog" data-v="hideSearch"><span>搜索栏</span><Sw on={hideSearch} /></div>
-      <div className="ctx-item"><span>Dock栏</span><span className="ctx-arrow" />
-        <div className="ctx-sub">
-          <SubItem act="open-drawer" v="personal">栏透明度</SubItem>
-          <SubItem act="open-drawer" v="personal">栏应用数量</SubItem>
-          <SubItem act="open-drawer" v="personal">栏图标</SubItem>
-          <SubItem act="open-add-tab" v="2">添加 / 配置快捷方式</SubItem>
-        </div>
-      </div>
-      <div className="ctx-item" data-act="set-mode" data-v="minimal"><span>极简模式</span><Sw on={mode === 'minimal'} /></div>
-      <div className="ctx-item" data-act="ctx-tog" data-v="labels"><span>隐藏项目</span><Sw on={!labels} /></div>
-      <div className="ctx-item"><span>搜索引擎</span><span className="ctx-arrow" />
-        <div className="ctx-sub">
-          {visible.map((e) => <SubItem key={e.id} on={e.id === engineId} act="eng-set" v={e.id}>{e.name}</SubItem>)}
-          <SubItem act="engine-manage">管理搜索引擎</SubItem>
-        </div>
-      </div>
-      <div className="ctx-item" data-act="ctx-tog" data-v="mascot"><span>Dock 快捷栏</span><Sw on={mascot} /></div>
-      <div className="ctx-item" data-act="ctx-tog" data-v="gridLines"><span>网格对齐线</span><Sw on={gridLines} /></div>
-      <div className="ctx-item" data-act="msg"><span>站内消息</span></div>
-      <div className="ctx-item" data-act="open-log"><span>更新记录</span></div>
-    </>
-  )
-}
 
 const CardMenu = ({ id }: { id: string }) => {
   const pages = useApp((s) => s.pages)
@@ -147,7 +69,8 @@ const DockMenu = ({ idx }: { idx: number }) => {
   )
 }
 
-/** 菜单宿主：位置 / 贴边翻转都在这里算（坐标系是 1920×945 的 stage） */
+/** 菜单宿主：位置 / 贴边翻转都在这里算（坐标系是 1920×945 的 stage）
+ *  只有卡片与 Dock 图标的右键会走到这里；空白处由 App 的 contextmenu 处理直接放行给浏览器 */
 export const ContextMenu = () => {
   const ctx = useApp((s) => s.ctx)
   const ref = useRef<HTMLDivElement | null>(null)
@@ -166,9 +89,7 @@ export const ContextMenu = () => {
   if (!ctx) return null
   return (
     <div id="ctx" ref={ref} className={`ctx show${box.flip ? ' flip' : ''}`} style={{ left: box.x, top: box.y }}>
-      {ctx.dock !== null ? <DockMenu idx={ctx.dock} /> : ctx.id ? <CardMenu id={ctx.id} /> : <GlobalMenu />}
+      {ctx.dock !== null ? <DockMenu idx={ctx.dock} /> : ctx.id !== null ? <CardMenu id={ctx.id} /> : null}
     </div>
   )
 }
-
-export const GearIcon = Icon.gear

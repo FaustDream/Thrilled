@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey } from './store'
+import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState } from './store'
 import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
@@ -14,7 +14,7 @@ import { WidgetView, SiteIcon, cfg, str, styleVarsOf } from './widgets'
 import { normTodoItems } from '../core/utils'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
-import { Drawer, Modal, settingTabOf } from './panels'
+import { Drawer, Modal } from './panels'
 import { Icon } from './icons'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
@@ -268,8 +268,6 @@ export const App = () => {
           }
           break
         }
-        /* 右键「网址导航」飞子菜单：站点统一新标签页打开（新标签页不离开当前主页） */
-        case 'nav-open': st.openCtx(null); openByMode(st, v, 'link', 'tab'); break
         case 'engine-open': {
           setHistoryOpen(false)
           /* 引擎图标点击行为可在设置里改为「切换下一个引擎」（对只用一两个引擎的人更快） */
@@ -289,7 +287,6 @@ export const App = () => {
           break
         }
         case 'engine-manage': st.setEnginePanel(false); st.setDrawer('setting'); st.showToast('已打开设置 · 搜索引擎'); break
-        case 'open-log': st.setSettingsTab(settingTabOf('关于')); st.setDrawer('setting'); st.showToast('已打开设置 · 更新记录'); break
         case 'eng-set': st.setEngine(v); st.showToast('该搜索引擎正在使用中'); break
         case 'eng-hide': st.toggleEngineHidden(v); break
         case 'search-go': runSearch('btn'); setHistoryOpen(false); break
@@ -298,7 +295,6 @@ export const App = () => {
         case 'sp-del': useApp.setState({ history: st.history.filter((h) => h !== v) }); break
         case 'set-mode': st.setMode(v as 'minimal' | 'standard'); break
         case 'go-page': st.goPage(Number(v)); break
-        case 'open-drawer': st.setDrawer((v || 'personal') as DrawerKey); break
         case 'dock-app': {
           st.openCtx(null)
           if (v !== '') openByMode(st, v, 'link')
@@ -308,16 +304,8 @@ export const App = () => {
         case 'dock-rename': case 'dock-url': case 'dock-remove': case 'dock-config':
           dockMenuAct(name, v)
           break
-        /* 菜单入口：打开添加抽屉并切到指定页签（快捷方式集中管理） */
-        case 'open-add-tab': st.setAddTab(Number(v) || 0); st.setDrawer('add'); break
         case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', setting: 'setting' } as const)[v] ?? 'setting'); break
         case 'open-modal': st.setModal(v as 'theme'); break
-        case 'ctx-tog': {
-          const k = v as 'labels' | 'mascot' | 'hideSearch' | 'gridLines'
-          st.toggle(k)
-          break
-        }
-        case 'msg': st.showToast('暂无消息'); break
         case 'item-edit': st.openCtx(null); st.setModal('editItem'); break
         case 'item-del': st.remove(id); break
         case 'item-swap': st.swapKind(id, v as GridItem['t']); break
@@ -370,18 +358,22 @@ export const App = () => {
       if (!inEngine) st.setEnginePanel(false)
     }
     const cm = (e: MouseEvent) => {
+      /* 只有卡片与 Dock 图标保留自定义右键菜单；空白处不再拦截，交还浏览器原生菜单（全局菜单已移除） */
+      const target = e.target as HTMLElement
+      const host = target.closest?.('.item')
+      const dockHost = target.closest?.('.dock-apps .dock-item')
+      const id = host?.getAttribute('data-id') ?? null
+      const dockIdx = dockHost?.getAttribute('data-idx') ?? null
+      if (id === null && dockIdx === null) return
       e.preventDefault()
       const el = stageRef.current
       if (!el) return
       const r = el.getBoundingClientRect()
       const s = r.width / stage.w
-      const host = (e.target as HTMLElement).closest?.('.item')
-      const dockHost = (e.target as HTMLElement).closest?.('.dock-apps .dock-item')
-      const dockIdx = dockHost?.getAttribute('data-idx') ?? null
       const next: CtxState = {
         x: Math.min((e.clientX - r.left) / s, stage.w - 240),
         y: (e.clientY - r.top) / s,
-        id: host?.getAttribute('data-id') ?? null,
+        id,
         dock: dockIdx !== null ? Number(dockIdx) : null,
       }
       useApp.getState().openCtx(next)
