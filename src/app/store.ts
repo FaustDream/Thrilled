@@ -48,7 +48,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'theme' | 'addEngine' | 'editItem' | 'itemDetail' | 'backup' | 'restore' | 'reset'
+export type ModalKey = 'theme' | 'addEngine' | 'editItem' | 'itemDetail' | 'kindSizes' | 'backup' | 'restore' | 'reset'
 
 export interface CtxState {
   x: number
@@ -126,8 +126,8 @@ interface AppState {
   /** 修改来源名称 / API 基址（镜像地址） */
   updateWallSource: (id: string, patch: Partial<Pick<WallpaperSource, 'name' | 'apiBase'>>) => void
   place: (kind: WidgetKind, config?: Record<string, unknown>) => void
-  /** 组件库：设置 / 清除某类组件的默认大小（新放置的实例按此落位，页面已有实例不变） */
-  setSizeDefault: (t: WidgetKind, size: WidgetSize | null) => void
+  /** 组件库：整体设置各类组件的默认大小（键 = 组件类型，缺键 = 用定义表出厂尺寸；只影响之后新增的实例） */
+  setSizeDefaults: (next: Record<string, WidgetSize>) => void
   updateConfig: (id: string, patch: Record<string, unknown>) => void
   resize: (id: string, w: number, h: number) => void
   move: (id: string, c: number, r: number) => boolean
@@ -333,18 +333,14 @@ export const useApp = create<AppState>()((set, get) => ({
     toast: '已恢复默认快捷键',
   })),
 
-  /* ---------- 组件库：按类型的默认大小（新放置的实例按此落位） ---------- */
-  setSizeDefault: (t, size) => set((s) => {
-    /* 保持不可变更新：先摘掉该类型的旧设置，再按需写回新档位（size === null 即恢复出厂大小） */
-    const next = Object.fromEntries(Object.entries(s.settings.sizeDefaults).filter(([k]) => k !== t))
-    if (size !== null) next[t] = size
-    return {
+  /* ---------- 组件库：按类型的默认大小（弹窗里逐个类型设好、确认后一次性写入） ---------- */
+  setSizeDefaults: (next) => {
+    const n = Object.keys(next).length
+    set((s) => ({
       settings: { ...s.settings, sizeDefaults: next },
-      toast: size === null
-        ? `已恢复「${WIDGET_DEFS[t].n}」的出厂大小`
-        : `「${WIDGET_DEFS[t].n}」的默认大小已设为 ${size.w}×${size.h}（之后新增的实例按此落位）`,
-    }
-  }),
+      toast: n === 0 ? '已全部恢复为出厂大小' : `已更新 ${n} 类组件的默认大小（之后新增的实例按此落位）`,
+    }))
+  },
 
   /* ---------- 实例样式（配置弹窗「样式」段） ---------- */
   applyStyle: (id, patch) => set((s) => ({

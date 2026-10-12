@@ -650,8 +650,8 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
 const EMPTY_PAGE: GridItem[] = []
 
 /**
- * 组件库：管「放什么」——已放置列表（拖拽排序、··· 配置 / 移除）+ 目录（常用置顶 + 按组件类型分组、已添加显示灰态）。
- * 库内不直接展示尺寸：每类组件可在目录行单独设「默认大小」（展开选档 + 确认才生效，只影响之后新增的实例），
+ * 组件库：管「放什么」——已放置列表（拖拽排序、··· 配置 / 移除）+ 目录（常用置顶 + 按组件类型分组、已添加显示灰态）
+ *  + 底部的「组件默认大小」（尺寸设置集中在那一处，不在每类组件上摊开）。
  * 单个实例的尺寸仍在页面卡片右键菜单「修改尺寸」或这里 ··· →「配置」里调整。
  */
 const ComponentLibraryTab = () => {
@@ -661,12 +661,9 @@ const ComponentLibraryTab = () => {
   const remove = useApp((st) => st.remove)
   const reorderItems = useApp((st) => st.reorderItems)
   const setModal = useApp((st) => st.setModal)
-  const sizeDefaults = useApp((st) => st.settings.sizeDefaults)
-  const setSizeDefault = useApp((st) => st.setSizeDefault)
+  /* 已单独设置过默认大小的类型数（只用于摘要，不暴露具体尺寸） */
+  const sized = useApp((st) => Object.keys(st.settings.sizeDefaults).length)
   const [dragId, setDragId] = useState<string | null>(null)
-  /* 目录里展开了「默认大小」面板的组件类型；sizeSel 是面板内待确认的档位（确认前不写入设置） */
-  const [sizeFor, setSizeFor] = useState<WidgetKind | null>(null)
-  const [sizeSel, setSizeSel] = useState<WidgetSize | null>(null)
   const page = pages[cur] ?? EMPTY_PAGE
   /* 已添加判定跨页：任意页存在该类型即「已添加」——防止一处已放、另一处再点添加造成状态冲突（用户需求） */
   const added = new Set(pages.flat().map((it) => it.t))
@@ -674,17 +671,6 @@ const ComponentLibraryTab = () => {
   const openConfig = (id: string): void => {
     useApp.setState({ itemId: id })
     setModal('editItem')
-  }
-  /** 展开 / 收起某类组件的「默认大小」面板（展开时带出该类当前设置，未设置则留空 = 用出厂大小） */
-  const toggleSizePanel = (t: WidgetKind): void => {
-    if (sizeFor === t) { setSizeFor(null); return }
-    setSizeFor(t)
-    setSizeSel(sizeDefaults[t] ?? null)
-  }
-  /** 二次确认：确认后才写入该类默认大小（只影响之后新增的实例） */
-  const confirmSize = (t: WidgetKind): void => {
-    setSizeDefault(t, sizeSel)
-    setSizeFor(null)
   }
   return (
     <>
@@ -725,53 +711,75 @@ const ComponentLibraryTab = () => {
         <SecCard key={g} t={g} info={g === '常用' ? '出厂固定的高频组件，置顶方便快速添加（与其类型分组里是同一个组件）。' : undefined}>
           {widgetsInGroup(g).map((w) => {
             const isAdded = added.has(w.t)
-            const custom = sizeDefaults[w.t] !== undefined
             return (
-              <div className="lib-kind" key={w.t}>
-                <div className="eng-row">
-                  <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div>{w.n}</div>
-                    <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
-                  </div>
-                  <div className="lib-acts">
-                    <button className={`btn sm ghost${custom ? ' set' : ''}`}
-                      title={custom ? '已单独设置默认大小，点击修改' : '设置该类组件新放置时的默认大小'}
-                      onClick={() => toggleSizePanel(w.t)}>默认大小</button>
-                    <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
-                      title={isAdded ? '该组件已在页面上；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
-                      onClick={() => place(w.t)}>{isAdded ? '已添加' : '添加'}</button>
-                  </div>
+              <div className="eng-row" key={w.t}>
+                <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div>{w.n}</div>
+                  <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
                 </div>
-                {sizeFor === w.t && (
-                  <div className="lib-size-panel">
-                    <div className="cats">
-                      {SIZES.filter((sz) => sizeAllowed(w.t, sz.w, sz.h)).map((sz) => (
-                        <div key={`${sz.w}x${sz.h}`}
-                          className={`cat${sizeSel !== null && sizeSel.w === sz.w && sizeSel.h === sz.h ? ' active' : ''}`}
-                          onClick={() => setSizeSel({ w: sz.w, h: sz.h })}>{sz.w}×{sz.h}</div>
-                      ))}
-                    </div>
-                    <div className="lib-size-foot">
-                      <span className="lib-size-note">
-                        {sizeSel === null
-                          ? `未单独设置：新增的${w.n}用出厂大小`
-                          : `确认后，之后新增的${w.n}按 ${sizeSel.w}×${sizeSel.h} 落位；页面已有实例不变`}
-                      </span>
-                      {custom && (
-                        <button className="btn sm ghost"
-                          onClick={() => { setSizeDefault(w.t, null); setSizeFor(null) }}>恢复出厂大小</button>
-                      )}
-                      <button className="btn sm ghost" onClick={() => setSizeFor(null)}>取消</button>
-                      <button className="btn sm" disabled={sizeSel === null} onClick={() => confirmSize(w.t)}>确认</button>
-                    </div>
-                  </div>
-                )}
+                <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
+                  title={isAdded ? '该组件已在页面上；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
+                  onClick={() => place(w.t)}>{isAdded ? '已添加' : '添加'}</button>
               </div>
             )
           })}
         </SecCard>
       ))}
+      <SecCard t="组件默认大小" info="设置每类组件新放置时的默认大小，只影响之后新增的实例（页面已有实例不变）；单个实例的尺寸在页面右键菜单「修改尺寸」或上面「页面组件」列表的 ··· →「配置」里调。">
+        <div className="ks-entry">
+          <span className="ks-summary">{sized === 0 ? '全部组件使用出厂大小' : `已单独设置 ${sized} 类组件，其余使用出厂大小`}</span>
+          <button className="btn sm" onClick={() => setModal('kindSizes')}>设置</button>
+        </div>
+      </SecCard>
+    </>
+  )
+}
+
+/**
+ * 组件库 →「组件默认大小」弹窗：按分组列出各类组件，选好档位后点「确认设置」才写入（二次确认）。
+ * 「出厂」= 不单独设置、用定义表尺寸；只影响之后新增的实例。
+ */
+const KindSizeModal = () => {
+  const setModal = useApp((s) => s.setModal)
+  const sizeDefaults = useApp((s) => s.settings.sizeDefaults)
+  const setSizeDefaults = useApp((s) => s.setSizeDefaults)
+  /* 草稿：确认前不改动设置；键缺失 = 该类用出厂尺寸 */
+  const [draft, setDraft] = useState<Record<string, WidgetSize>>(sizeDefaults)
+  const pick = (t: WidgetKind, size: WidgetSize | null): void => {
+    const rest = Object.fromEntries(Object.entries(draft).filter(([k]) => k !== t))
+    setDraft(size === null ? rest : { ...rest, [t]: size })
+  }
+  return (
+    <>
+      <h2>组件默认大小</h2>
+      <p className="sub">设置每类组件新放置时的默认大小；点「确认设置」才生效，只影响之后新增的实例，页面已有实例保持不变。「出厂」= 用定义表尺寸。</p>
+      {WIDGET_GROUPS_ORDER.filter((g) => g !== '常用').map((g) => (
+        <div className="ks-group" key={g}>
+          <div className="sec-title">{g}</div>
+          {widgetsInGroup(g).map((w) => {
+            const cur = draft[w.t]
+            return (
+              <div className="ks-row" key={w.t}>
+                <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
+                <span className="ks-name">{w.n}</span>
+                <div className="cats">
+                  <div className={`cat${cur === undefined ? ' active' : ''}`} onClick={() => pick(w.t, null)}>出厂</div>
+                  {SIZES.filter((sz) => sizeAllowed(w.t, sz.w, sz.h)).map((sz) => (
+                    <div key={`${sz.w}x${sz.h}`}
+                      className={`cat${cur !== undefined && cur.w === sz.w && cur.h === sz.h ? ' active' : ''}`}
+                      onClick={() => pick(w.t, { w: sz.w, h: sz.h })}>{sz.w}×{sz.h}</div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      ))}
+      <div className="btn-row end" style={{ marginTop: 18 }}>
+        <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
+        <button className="btn" onClick={() => { setSizeDefaults(draft); setModal(null) }}>确认设置</button>
+      </div>
     </>
   )
 }
@@ -1420,7 +1428,7 @@ const CHANGELOG: readonly LogVersion[] = [
   {
     v: '4.4', d: '2026-09-30 – 2026-10-12', items: [
       { k: '优化', s: '组件库分组按组件类型重排：时间 / 信息 / 图标，并新增置顶的「常用」组', d: '原「信息 / 工具 / 导航」改为按组件类型归类——时间 = 时钟 / 日历 / 倒计时，信息 = 天气 / 待办，图标 = 网站图标 / 图标文件夹 / 收藏夹 / 图标格容器；「常用」组出厂固定展示高频组件（时钟 / 天气 / 待办 / 网站图标），作为置顶快捷入口，成员仍保留自己的类型分组（常用组与其类型组里都会出现）' },
-      { k: '调整', s: '组件库不再展示尺寸：改为按组件类型单独设置「默认大小」，确认后生效', d: '已放置列表行上的「小 / 宽 / 大」三档尺寸胶囊移除，库内不再出现卡片大小与宽度；单个实例的尺寸仍可在页面右键菜单「修改尺寸」或 ··· →「配置」里调整。目录里每类组件新增「默认大小」入口：展开后在六档中选档、点「确认」才写入（选档过程不即时生效），只影响之后新增的该类型实例，页面已有实例保持不变；已单独设置过的类型以主题色描边提示，并可一键「恢复出厂大小」。新增设置项 sizeDefaults 随文档持久化，归一化只认六档且落在该组件能力区间内的值' },
+      { k: '调整', s: '组件库不再展示尺寸：改为「组件默认大小」集中设置，确认后生效', d: '已放置列表行上的「小 / 宽 / 大」三档尺寸胶囊移除，各类组件的目录行也不出现尺寸设置项，库内不再展示卡片的大小与宽度；设置集中在页签底部的「组件默认大小」卡片——点开弹窗按分组给每类组件选档（含「出厂」= 定义表尺寸），点「确认设置」才写入（选档 / 取消都不改设置），只影响之后新增的该类型实例，页面已有实例保持不变。新增设置项 sizeDefaults 随文档持久化，归一化只认六档且落在该组件能力区间内的值；单个实例的尺寸仍在页面右键菜单「修改尺寸」或「页面组件」列表的 ··· →「配置」里调整' },
       { k: '移除', s: '七类组件下架：新闻热点 / 翻译 / 计算器 / AI 对话 / 每日一言 / 木鱼 / 音乐', d: '按用户需求移除前四类（均为占位或演示数据），并整体移除「内容」分组（每日一言 / 木鱼 / 音乐）；组件库由 18 项收敛为 9 类（时钟 / 日历 / 天气 / 待办 / 倒计时 / 收藏夹 + 网站图标 / 图标文件夹 / 图标格容器），分组由四组并为三组（信息 / 工具 / 导航）。连带清理：鼓励语料库 core/quotes.ts、极简模式悬浮语、「换一条鼓励语」快捷键、昵称设置项、透明度里的「每日一言」项，以及 8 个音乐 / 木鱼 / 计算器 / 翻译专用图标与对应 CSS。出厂三页重新配平（被移除组件的占位改由图标格容器与网址图标补齐，仍每页 240 格 100% 填满）；存量页面里这些类型的卡片载入时按未知类型丢弃' },
       { k: '调整', s: '「纪念日」并入「倒计时」：倒计时新增第三种计时模式', d: '倒计时组件的「计时模式」由两档变三档（下班倒计时 / 倒数日 / 纪念日）：纪念日模式以标题行 + 大号天数（天 / 周 / 月 / 年换算）呈现，主读数与倒数列表、吉祥物共用同一套卡片；原纪念日卡的「标题 / 起始日期 / 天数单位」三项与倒计时定义表同名，改在详情弹窗内录入（专属字段仍守 3 项）。存量纪念日卡片在文档载入与旧备份导入时自动转接为倒计时的纪念日模式（位置、标题、起始日期、单位原样保留）。出厂第 3 页 8,0 的纪念日位改为下班倒计时，两卡并列' },
       { k: '优化', s: '「页面组件」列表里名称留空的行只剩一个字形图标', d: '出厂每日一言实例的 label 是空串，而列表取值用的是 ??（只对 null / undefined 生效），空串被当作有效名称直接渲染 → 该行没有文字。改为空串（trim 后）回退组件显示名，惠及所有名称留空的实例' },
@@ -2191,6 +2199,8 @@ export const Modal = () => {
             </div>
           </>
         )
+      case 'kindSizes':
+        return <KindSizeModal />
       case 'editItem':
         return item !== null ? <EditCardModal item={item} /> : <h2>编辑卡片</h2>
       case 'itemDetail':

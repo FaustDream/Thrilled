@@ -470,19 +470,18 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* 列表条目的来源标签：节日（橙）/ 自定义（灰） */
 .dt-tag{flex:0 0 auto;font-size:10px;padding:2px 6px;border-radius:6px;background:var(--line);color:var(--panel-sub)}
 .dt-tag.fest{background:rgba(251,146,60,.16);color:#d97706}
-/* 组件库：目录行 = 行 + 可展开的「默认大小」面板（库内不直接显示尺寸，展开选档 + 确认才生效） */
-.lib-kind{border-bottom:1px solid var(--line)}
-.sec-card>.lib-kind:last-child{border-bottom:none}
-.lib-kind .eng-row{border-bottom:none}
-.lib-acts{display:flex;align-items:center;gap:6px;flex:0 0 auto}
-/* 已单独设置过默认大小的类型：按钮转为主题色描边，作为轻提示（不暴露具体尺寸） */
-.lib-acts .btn.set{border-color:var(--accent);color:var(--accent);
-  background:color-mix(in srgb,var(--accent) 14%,transparent)}
-.lib-size-panel{padding:0 0 12px 34px}
-.lib-size-panel .cats{margin:10px 0 8px}
-/* 说明独占一行，操作按钮右对齐在下一行（窄面板里不被按钮挤成多行碎句） */
-.lib-size-foot{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex-wrap:wrap}
-.lib-size-note{flex:1 0 100%;font-size:11px;color:var(--panel-sub);line-height:1.5}
+/* 组件库底部「组件默认大小」入口：一行摘要 + 设置按钮（尺寸设置集中一处，不摊在每个组件上） */
+.ks-entry{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.ks-summary{font-size:12px;color:var(--panel-sub)}
+/* 「组件默认大小」弹窗：按分组列出各类组件，一行 = 图标 + 名称 + 档位胶囊（出厂 / 该组件装得下的档位） */
+.ks-group>.sec-title{font-size:12px;font-weight:500;margin:14px 0 2px}
+.ks-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
+.ks-row:last-child{border-bottom:none}
+.ks-row .er-ico{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;
+  justify-content:center;color:#fff;font-size:11px;font-weight:700;flex:0 0 auto}
+.ks-name{flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ks-row .cats{margin:0;gap:4px;flex-wrap:nowrap}
+.ks-row .cat{padding:4px 8px;font-size:11px}
 .cat{font-size:12px;padding:5px 10px;border-radius:8px;background:var(--line);color:var(--panel-sub);cursor:pointer}
 .cat.active{background:var(--accent);color:#fff}
 .eng-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px}
