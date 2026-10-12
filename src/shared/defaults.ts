@@ -12,7 +12,8 @@ export const DEFAULT_DOCK_APPS: readonly DockApp[] = [];
 
 export const DEFAULT_SETTINGS: AppSettings = {
   mode: 'standard',
-  labels: true,
+  /* 图标名称出厂不常显：保持纯字形，需要辨认时悬停看提示 */
+  iconNames: false,
   hideTop: false,
   hideSearch: false,
   mascot: true,

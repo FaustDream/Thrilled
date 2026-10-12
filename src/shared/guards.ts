@@ -192,7 +192,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
   const normalizedMode = mode === 'minimal' || mode === 'standard' ? mode : d.mode;
   return {
     mode: normalizedMode,
-    labels: boolish(o['labels'], d.labels),
+    iconNames: boolish(o['iconNames'], d.iconNames),
     hideTop: boolish(o['hideTop'], d.hideTop),
     hideSearch: boolish(o['hideSearch'], d.hideSearch),
     mascot: boolish(o['mascot'], d.mascot),

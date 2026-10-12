@@ -197,7 +197,8 @@ export interface DockApp {
 /** v4 界面设置（本地持久化，云同步见 01 §5） */
 export interface AppSettings {
   mode: ViewMode;
-  labels: boolean;
+  /** 图标卡在字形下方常显网站名称（悬停气泡不受此开关影响，始终可用） */
+  iconNames: boolean;
   hideTop: boolean;
   hideSearch: boolean;
   mascot: boolean;

@@ -342,6 +342,24 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .ctx-sub-item.dis:hover{background:transparent}
 .ctx-sub-tag{margin-left:auto;font-size:11px;color:var(--panel-sub);flex:0 0 auto}
 
+/* ============ 9.1 图标提示气泡 ============ */
+/* 图标卡 / 图标格容器里的格子 / 图标文件夹 / Dock 图标共用的悬停提示（名称 + 域名），
+   用来辨认字形相似或重复的站点。固定深色底、不随皮肤——工具提示这类瞬时浮层用反色，
+   明暗壁纸与各皮肤上都清晰，也和右键菜单拉开层次；画在舞台顶层（卡片与图标格容器都 overflow:hidden）。
+   动效克制：140ms 淡入 + 4px 位移，翻转（浮在元素下方）时位移方向相反。 */
+.icon-tip{position:absolute;z-index:calc(var(--z-dropdown) - 1);pointer-events:none;
+  max-width:240px;padding:6px 10px;border-radius:9px;
+  background:rgba(15,23,42,.88);backdrop-filter:blur(6px);
+  box-shadow:0 10px 26px -8px rgba(6,12,24,.5);
+  opacity:0;transform:translateY(4px);
+  transition:opacity .14s var(--ease),transform .14s var(--ease)}
+.icon-tip.below{transform:translateY(-4px)}
+.icon-tip.show{opacity:1;transform:none}
+.icon-tip .it-name{font-size:13px;font-weight:600;color:#fff;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-tip .it-host{font-size:11px;color:rgba(255,255,255,.7);margin-top:1px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
 /* ============ 10. 抽屉 ============ */
 .dw-mask{position:absolute;inset:0;background:rgba(8,12,20,.34);z-index:calc(var(--z-drawer) - 1);
   opacity:0;pointer-events:none;transition:opacity .24s var(--ease)}
@@ -953,6 +971,19 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .item .v-icon{width:calc(60 * var(--u) * var(--w-ico,1));height:calc(60 * var(--u) * var(--w-ico,1));
   font-size:calc(31 * var(--u) * var(--w-ico,1));border-radius:calc(14 * var(--u))}
 .item .v-icon.lat{font-size:calc(17 * var(--u) * var(--w-ico,1))}
+/* 图标常显名称（设置 → 通用 →「图标显示名称」）：名字落在卡片下沿之外（相邻卡片间距 50px，
+   放得下这一行），字形保持居中不动。不放卡内是因为图标卡只有 98px 宽，卡内的底部一行要么给
+   名字要么给悬浮按钮（✎ / 🗑，两者合计 48px）——实测会重叠掉一半名字。
+   长名称单行省略号，全名与域名仍可在悬停气泡里看到。
+   可读性靠双层描边：文字线芯取「名称标签」令牌（= 设置里的「字体颜色」），
+   描边取 --mask-color（浅色皮肤白、深色皮肤近黑）——亮壁纸看得到深色线芯、暗壁纸看得到边缘。 */
+.item.named{overflow:visible}
+.item-note{position:absolute;left:0;right:0;top:100%;margin-top:calc(4 * var(--u));padding:1px 3px;
+  text-align:center;font-size:calc(12 * var(--u));font-weight:600;line-height:1.25;
+  color:var(--label-color);pointer-events:none;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  text-shadow:0 1px 2px var(--mask-color),0 -1px 2px var(--mask-color),
+    1px 0 2px var(--mask-color),-1px 0 2px var(--mask-color)}
 /* 图标格容器：内边距 / 格子间距 / 圆角随卡片（格子边长本身由 groupGrid 依实际框算出） */
 .w-group{padding:calc(15 * var(--u))}
 .gcell-grid{gap:calc(10 * var(--u))}

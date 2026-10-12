@@ -45,12 +45,17 @@ export const styleVarsOf = (c: Record<string, unknown>): Record<string, string> 
  * 统一图标容器：底色取容器令牌，品牌色只用于字形（全站唯一一种图标语言）。
  * fs / size 均可省略——省略时尺寸交给 CSS（卡内图标按 --u 随卡片等比缩放，Dock 与导航仍显式传入）。
  */
-export const TileGlyph = ({ name, cls, fs, size }: { name: string; cls: string; fs?: number | undefined; size?: number | undefined }) => {
+export const TileGlyph = ({ name, cls, fs, size, tip }: {
+  name: string; cls: string; fs?: number | undefined; size?: number | undefined
+  /** 悬停提示的名称（图标格容器里的格子只有名称、没有网址，故不带域名）；省略则不提示 */
+  tip?: string | undefined
+}) => {
   const b = brandOf(name)
   const font = fs === undefined ? undefined : b.latin ? Math.round(fs * 0.74) : fs
   return (
     <div
       className={`${cls}${b.latin ? ' lat' : ''}`}
+      {...(tip === undefined ? {} : { 'data-tip': tip, 'aria-label': tip })}
       style={{ color: b.color, ...(font === undefined ? {} : { fontSize: font }), ...(size === undefined ? {} : { width: size, height: size }) }}
     >
       {/* 图形单独一层：容器底色（--ga-tile）与图形本身（--ga-glyph / --ga-dockIcon）可分别调节 */}
@@ -292,7 +297,8 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
         <div className="w-group" style={{ position: 'absolute', inset: 0, paddingBottom: GROUP_PAD }}>
           <div className={`gcell-grid${over ? ' scroll' : ''}`}
             style={{ gridTemplateColumns: `repeat(${cols},${cell}px)`, gridTemplateRows: `repeat(${rows},${cell}px)` }}>
-            {apps.map((n) => <TileGlyph key={n} name={n} cls="gtile" fs={Math.round(cell * 0.38)} />)}
+            {/* 格子只有品牌字形：悬停给出站点名（字形相似时靠它辨认），见 app/tip.tsx */}
+            {apps.map((n) => <TileGlyph key={n} name={n} cls="gtile" fs={Math.round(cell * 0.38)} tip={n} />)}
           </div>
         </div>
       )

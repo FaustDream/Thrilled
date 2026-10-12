@@ -20,7 +20,7 @@ import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
-import { daysUntil, getGreetingByHour, monthCells, normalizeSiteUrl, normTodoItems, type TodoEntry } from '../core/utils'
+import { daysUntil, getGreetingByHour, hostOf, monthCells, normalizeSiteUrl, normTodoItems, type TodoEntry } from '../core/utils'
 import { dockAppsWith, dockFailText, type DockAddResult } from '../shared/dock'
 import { normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { weatherText } from '../core/weather'
@@ -102,11 +102,6 @@ const SliderRow = ({ l, info, min, max, value, display, onInput }: {
 )
 
 /* ---------- 网址导航数据（原创分类命名，04 §6 等价实现；与右键菜单共用，见 brands.ts） ---------- */
-
-/** 展示用主机名（书签列表右缘小字）；解析失败原样显示 */
-const hostOf = (url: string): string => {
-  try { return new URL(url).host } catch { return url }
-}
 
 /* ============================== 添加 ============================== */
 
@@ -1334,6 +1329,10 @@ const SettingGeneralTab = () => {
         <SwitchRow l="显示对齐参考线" d="吸附到其它卡片时显示贯穿参考线并高亮目标卡片" on={s.showGuides} onToggle={() => setSetting('showGuides', !s.showGuides)} />
         <SwitchRow l="显示网格对齐线" d="按 24×10 网格常显对齐线；拖拽与添加组件时强制显示" on={s.gridLines} onToggle={() => setSetting('gridLines', !s.gridLines)} />
       </SecCard>
+      <SecCard t="图标名称" info="网站图标的字形相似或重复时用来辨认每个图标代表哪个站点。悬停提示默认开启且不受下面的开关影响，这里只决定「要不要让名称常显出来」。">
+        <SwitchRow l="图标显示名称" d="在图标下方常显站点名称；关闭时仍可悬停图标查看名称与域名"
+          on={s.iconNames} onToggle={() => setSetting('iconNames', !s.iconNames)} />
+      </SecCard>
     </>
   )
 }
@@ -1439,6 +1438,7 @@ interface LogVersion {
 const CHANGELOG: readonly LogVersion[] = [
   {
     v: '4.4', d: '2026-09-30 – 2026-10-12', items: [
+      { k: '新增', s: '图标悬停提示：名称 + 域名，可让图标下方常显名称', d: '字形相似或重复的网站图标原来无从辨认（图标卡既无文字也无原生 title）。现在悬停网格上的图标卡、图标格容器里的格子、图标文件夹卡与 Dock 图标，都会在元素上方（放不下则翻到下方）浮出提示：第一行站点名称、第二行域名（图标格容器里的格子只有名称，那里没有网址数据）。延迟 250ms 才出现——鼠标横扫一排图标时不至于闪一片；移出 100ms 淡出。气泡固定深色底、不随皮肤，明暗壁纸与各皮肤上都清晰；画在舞台顶层而非元素内部——卡片与图标格容器都是 overflow:hidden，挂在里面会被裁掉。Dock 图标原有的浏览器原生 title 一并换成同一套气泡，避免延迟冒出的原生提示盖住它。设置 → 通用新增「图标显示名称」：开启后在图标下方常显站点名——纯文字 + 双层描边（外圈取皮肤明暗派生的描边色，亮壁纸看得到深色线芯、暗壁纸看得到浅色边缘），文字色取「名称标签」令牌即设置里的「字体颜色」（该设置此前只作用于网格线与页码点等装饰，现在对图标名生效），长名称单行省略号，全名与域名仍可在悬停气泡里看到；出厂关闭，保持纯字形。连带清理失效字段 settings.labels（「隐藏图标标签」开关当年移除后数据仍在、无人读取），由新设置 iconNames 承担；主机名提取 hostOf 由添加面板的局部函数提为 core/utils 共享' },
       { k: '优化', s: '添加网站的图标 / 容器后自动露出新卡片并高亮', d: '右键一级、添加抽屉（网址导航点站点 / 自定义页签确认添加 / 从书签快速添加）与组件库「添加」三处都是「一步生成、不弹任何表单」；此前抽屉开着时新卡片落在页面里被挡住，看起来像「没反应」，现在这三处单次添加后会自动收起抽屉（批量导入不收起），并播一次 1.9s 高亮——强调色描边 + 外圈光晕 + 临时浅底，让去卡片化的图标 / 容器也看得清。编辑仍走后续操作：卡片悬浮 ✎ 或右键卡片「编辑信息」' },
       { k: '新增', s: '对齐辅助：网格与组件对齐统一吸附', d: '拖拽卡片时每轴独立选格——以最近网格格为基准（卡片始终落在格上），若同页邻近卡片的边缘或中心偏差不超过 0.3 格（22px）则改用偏差最小的对齐格；某轴只参考「另一轴重叠或间隙 ≤1 格」的卡片，避免整页同列 / 同行的卡片一起被高亮（实测未加该约束时一次拖拽高亮 7 张）。拖动中卡片实时落在候选格上并保留抓取偏移（不再跳到指针下），吸附到组件时显示贯穿整页的参考线并高亮目标卡片；按 Esc 取消拖拽、松手即消失。设置 → 通用 →「对齐辅助」新增「组件吸附」与「显示对齐参考线」开关（均默认开）。不做拖拽缩放、放置时对齐与间距均分' },
       { k: '优化', s: '「添加网站图标 / 添加网站容器」改为一步生成', d: '两项提到右键菜单第一级的前两项，点下去直接在右键所在的格生成图标 / 容器，不再先弹表单（原来「新建网址图标」会先弹「新建站点」弹窗）；编辑改由后续操作触发——点卡片悬浮的 ✎ 或右键卡片「编辑信息」。新落位的卡片会播放一次性高亮（描边脉冲 + 轻微上浮，1.6 秒），让用户一眼看到新图标落在哪；「添加到 Dock 快捷方式」仍保留弹窗（Dock 需要网址才有意义）' },

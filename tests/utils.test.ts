@@ -3,7 +3,7 @@
  * + 月历网格（日历详情弹窗）+ 待办条目归一化（待办详情弹窗）
  */
 import { describe, expect, it } from 'vitest'
-import { daysUntil, monthCells, normalizeSiteUrl, normTodoItems, pushHistory } from '../src/core/utils'
+import { daysUntil, hostOf, monthCells, normalizeSiteUrl, normTodoItems, pushHistory } from '../src/core/utils'
 
 const NOW = new Date(2026, 9, 10) // 2026-10-10
 
@@ -108,5 +108,18 @@ describe('normalizeSiteUrl：网址规范化（右键新建站点 / 自定义表
     expect(normalizeSiteUrl('   ')).toBeNull()
     expect(normalizeSiteUrl('ftp://a.com')).toBeNull()
     expect(normalizeSiteUrl('not a url')).toBeNull()
+  })
+})
+
+describe('hostOf：展示用主机名（图标提示气泡第二行 / 书签列表小字）', () => {
+  it('去掉协议与路径，保留端口', () => {
+    expect(hostOf('https://a.com/x?y=1')).toBe('a.com')
+    expect(hostOf('http://a.com:8080/p')).toBe('a.com:8080')
+  })
+
+  it('裸域名与无法解析的输入原样返回', () => {
+    expect(hostOf('baidu.com')).toBe('baidu.com')
+    expect(hostOf('不是网址')).toBe('不是网址')
+    expect(hostOf('')).toBe('')
   })
 })

@@ -45,6 +45,18 @@ export function normalizeSiteUrl(raw: string): string | null {
   }
 }
 
+/**
+ * 展示用主机名（去掉协议与路径，保留端口）：图标提示气泡的第二行、书签列表右缘小字都用它。
+ * 解析失败原样返回，便于把裸域名 / 异常输入照实显示出来。
+ */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
 /* ===== 问候 ===== */
 
 /** 时段问候（每日一言卡 / 模式说明共用语料） */

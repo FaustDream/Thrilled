@@ -12,9 +12,10 @@ import type { AxisSnap } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
 import { WidgetView, SiteIcon, cfg, str, styleVarsOf } from './widgets'
-import { normTodoItems } from '../core/utils'
+import { hostOf, normTodoItems } from '../core/utils'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
+import { IconTip } from './tip'
 import { Drawer, Modal } from './panels'
 import { Icon } from './icons'
 import { openLink, buildSearchUrl } from '../core/link-opener'
@@ -708,8 +709,9 @@ export const App = () => {
           <div className="dock-bar">
             <div className="dock-apps">
               {dockApps.slice(0, settings.dockCount).map((app, i) => (
+                /* 名称与域名挂成提示数据（悬停气泡，见 app/tip.tsx）；不再用原生 title，避免双重气泡 */
                 <div className="dock-item" key={`dock-${i}`} data-act="dock-app" data-v={app.url} data-idx={String(i)}
-                  title={app.name}>
+                  data-tip={app.name} data-tip-host={hostOf(app.url)} aria-label={app.name}>
                   <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`}>
                     <SiteIcon url={app.url} name={app.name} cls="dock-favicon" fs={24} size={38} />
                   </div>
@@ -719,7 +721,7 @@ export const App = () => {
             {dockApps.length > 0 && <div className="dock-sep" />}
             <div className="dock-actions">
               {DOCK_ACTIONS.map(([act, label, icon]) => (
-                <div className="dock-item" key={act} data-act="dock-act" data-v={act} title={label}>
+                <div className="dock-item" key={act} data-act="dock-act" data-v={act} data-tip={label} aria-label={label}>
                   <div className="dock-icon dock-fn">{icon()}</div>
                 </div>
               ))}
@@ -729,6 +731,7 @@ export const App = () => {
       )}
 
       <ContextMenu />
+      <IconTip />
       <Drawer />
       <Modal />
       <div className={`toast${toastMsg ? ' show' : ''}`}>{toastMsg}</div>
@@ -752,6 +755,15 @@ const GridCard = ({ item, idx, now, weather, flash, dragging, alignHit, onDragSt
   onDragStart: (e: ReactPointerEvent) => void
 }) => {
   const c = cfg(item)
+  const iconNames = useApp((s) => s.settings.iconNames)
+  /* 图标卡 / 图标文件夹卡：名称与域名挂成提示数据（悬停气泡读它，见 app/tip.tsx）；
+     字形相似或重复时靠它辨认——名称留空则退回域名 */
+  const label = str(c['label']).trim()
+  const tipCard = item.t === 'icon' || item.t === 'folder'
+  const host = tipCard && str(c['url']) !== '' ? hostOf(str(c['url'])) : ''
+  const name = tipCard ? (label !== '' ? label : host) : ''
+  /* 「图标显示名称」开启时常显（见 prototype.css .item-note）；容器格子与 Dock 仍只靠悬停 */
+  const note = iconNames && item.t === 'icon' ? name : ''
   /* 通用配置：卡片透明度（config.opacity 为数字时覆盖全局 --ga-card，未设置则跟随全局） */
   const ov = c['opacity']
   const cardVars = typeof ov === 'number' ? { ['--ga-card' as string]: (1 - GLASS_ALPHA_FACTOR * ov).toFixed(3) } : {}
@@ -771,11 +783,14 @@ const GridCard = ({ item, idx, now, weather, flash, dragging, alignHit, onDragSt
     : { animationDelay: `${Math.min(idx * 22, 440)}ms` }
   return (
     <>
-      <div className={`item${draggingStyle ? ' dragging' : ''}${flash && !draggingStyle ? ' just-placed' : ''}${alignHit && !draggingStyle ? ' align-hit' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
+      <div className={`item${draggingStyle ? ' dragging' : ''}${flash && !draggingStyle ? ' just-placed' : ''}${alignHit && !draggingStyle ? ' align-hit' : ''}${note !== '' ? ' named' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
         data-id={item.id} data-t={item.t} data-act="item-open"
+        {...(name === '' ? {} : { 'data-tip': name, 'aria-label': name, ...(host === '' ? {} : { 'data-tip-host': host }) })}
         onPointerDown={onDragStart}>
         <WidgetView item={item} now={now} weather={weather} />
-        {/* 名称标签已整体移除（用户需求）：卡片不再显示左下角组件名；名称仍用于网址图标命名与文件夹卡 */}
+        {/* 名称不再作为固定标签渲染（其余组件仍不显示组件名）；仅图标卡在开启「图标显示名称」时
+            于字形下方常显站点名，其余情况靠悬停气泡（app/tip.tsx）辨认 */}
+        {note !== '' && <div className="item-note">{note}</div>}
         <div className="item-acts">
           <div className="ia" data-act="item-edit" title="编辑">{Icon.edit()}</div>
           <div className="ia" data-act="item-del" title="删除">{Icon.trash()}</div>
