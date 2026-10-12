@@ -6,7 +6,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState } from './store'
+import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey, type NewSiteTarget } from './store'
 import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
@@ -23,7 +23,7 @@ import { GLASS_ALPHA_FACTOR, GLASS_FADED_KEYS, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN
 import { SHORTCUT_DEFS, comboOf, isBareCombo } from '../shared/shortcuts'
 import { computeWallFocus } from '../core/wallpaper-focus'
 import type { WeatherData } from '../core/weather'
-import type { GridItem, OpenMode } from '../shared/types'
+import type { GridItem, OpenMode, WidgetKind } from '../shared/types'
 
 const allItems = (pages: GridItem[][]): GridItem[] => pages.flat()
 
@@ -126,6 +126,8 @@ export const App = () => {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const wheelAt = useRef(0)
+  /* 当前页网格元素：拖拽吸附与空白处右键的「格」换算共用（故提到组件顶部声明） */
+  const gridRef = useRef<HTMLDivElement | null>(null)
 
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
@@ -295,6 +297,19 @@ export const App = () => {
         case 'sp-del': useApp.setState({ history: st.history.filter((h) => h !== v) }); break
         case 'set-mode': st.setMode(v as 'minimal' | 'standard'); break
         case 'go-page': st.goPage(Number(v)); break
+        /* 空白处右键菜单：新建站点弹窗（落点由菜单项预选）、添加组件、打开三个面板 */
+        case 'newsite': {
+          const cell = st.ctx?.cell ?? { c: 0, r: 0 }
+          st.openNewSite({ c: cell.c, r: cell.r, to: v as NewSiteTarget })
+          break
+        }
+        case 'place-kind': {
+          st.place(v as WidgetKind, {}, st.ctx?.cell ?? undefined)
+          st.openCtx(null)
+          break
+        }
+        case 'drawer-open': st.setDrawer(v as DrawerKey); break
+        case 'ctx-blocked': st.showToast(v); st.openCtx(null); break
         case 'dock-app': {
           st.openCtx(null)
           if (v !== '') openByMode(st, v, 'link')
@@ -358,23 +373,35 @@ export const App = () => {
       if (!inEngine) st.setEnginePanel(false)
     }
     const cm = (e: MouseEvent) => {
-      /* 只有卡片与 Dock 图标保留自定义右键菜单；空白处不再拦截，交还浏览器原生菜单（全局菜单已移除） */
+      /* 三类目标各有菜单：卡片 / Dock 图标 / 空白处；输入框与浮层内部保留浏览器原生菜单（粘贴、复制） */
       const target = e.target as HTMLElement
+      if (target.closest?.('input, textarea, .dw, .modal-mask, .search-panel, #enginePanel')) return
       const host = target.closest?.('.item')
       const dockHost = target.closest?.('.dock-apps .dock-item')
       const id = host?.getAttribute('data-id') ?? null
       const dockIdx = dockHost?.getAttribute('data-idx') ?? null
-      if (id === null && dockIdx === null) return
-      e.preventDefault()
       const el = stageRef.current
       if (!el) return
+      e.preventDefault()
       const r = el.getBoundingClientRect()
       const s = r.width / stage.w
+      /* 空白处：把右键位置换算成网格格（新建图标的落位参考）；卡片与 Dock 菜单不需要 */
+      let cell: { c: number; r: number } | null = null
+      const g = gridRef.current
+      if (id === null && dockIdx === null && g !== null) {
+        const gr = g.getBoundingClientRect()
+        const gs = gr.width / (COLS * CELL)
+        cell = {
+          c: Math.round(((e.clientX - gr.left) / gs - INSET) / CELL),
+          r: Math.round(((e.clientY - gr.top) / gs - INSET) / CELL),
+        }
+      }
       const next: CtxState = {
         x: Math.min((e.clientX - r.left) / s, stage.w - 240),
         y: (e.clientY - r.top) / s,
         id,
         dock: dockIdx !== null ? Number(dockIdx) : null,
+        cell,
       }
       useApp.getState().openCtx(next)
     }
@@ -438,7 +465,6 @@ export const App = () => {
   }, [])
 
   /* ---------- 拖拽换位（指针 + 网格吸附） ---------- */
-  const gridRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     if (!drag) return
     const move = (e: PointerEvent) => {
@@ -524,7 +550,7 @@ export const App = () => {
               {pg.length === 0 && (
                 <div className="grid-hint">
                   <div className="gh-title">这里可以放小组件和网站</div>
-                  <div className="gh-sub">点击底部 Dock 的「+」→ 小组件页签有 9 类可选（时钟 / 日历 / 待办 / 天气 / 倒计时…），网址导航与自定义网站也在那里；右键空白处可直接打开「网址导航」</div>
+                  <div className="gh-sub">右键空白处可快速新建网址图标或添加到 Dock；也可以在底部 Dock 点「+」，添加抽屉里有网址导航 / 自定义网站 / Dock 快捷方式，组件库在「个性化」里</div>
                 </div>
               )}
             </div>

@@ -3,7 +3,7 @@
  * 结构与文案按 docs/v4/02-UI规格.md §8、§6.1、§6.3、§7 与原型冻结内容落地。
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useApp, type DrawerKey } from './store'
+import { useApp, type DrawerKey, type NewSiteTarget } from './store'
 import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
@@ -19,7 +19,8 @@ import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
-import { daysUntil, getGreetingByHour, monthCells, normTodoItems, type TodoEntry } from '../core/utils'
+import { daysUntil, getGreetingByHour, monthCells, normalizeSiteUrl, normTodoItems, type TodoEntry } from '../core/utils'
+import { dockAppsWith, dockFailText, type DockAddResult } from '../shared/dock'
 import { normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { weatherText } from '../core/weather'
 import { openLink } from '../core/link-opener'
@@ -145,12 +146,11 @@ const AddPanel = () => {
   /* 自定义页书签快速添加的过滤列表 */
   const bmList = (bm ?? []).filter((e) => bkFilter.trim() === '' || e.label.toLowerCase().includes(bkFilter.trim().toLowerCase()))
 
-  /** 加进 Dock 快捷方式（去重，最多 dockCount 个；返回 ok / dup / full 供调用方提示） */
+  /** 加进 Dock 快捷方式（去重 + 上限判定在 shared/dock；返回 ok / dup / full 供调用方提示） */
   const addToDock = (label: string, link: string): 'ok' | 'dup' | 'full' => {
-    const apps = settings.dockApps
-    if (apps.some((a) => a.url === link)) return 'dup'
-    if (apps.length >= settings.dockCount) return 'full'
-    setSetting('dockApps', [...apps, { name: label, url: link }])
+    const r = dockAppsWith(settings.dockApps, settings.dockCount, label, link)
+    if (!r.ok) return r.reason
+    setSetting('dockApps', r.apps)
     return 'ok'
   }
 
@@ -171,13 +171,17 @@ const AddPanel = () => {
 
   const addCustom = (): void => {
     const label = name.trim() || '未命名'
-    if (url.trim() !== '' && toDock) addToDock(label, url.trim())
+    /* URL 规则与右键「新建站点」一致：裸域名补 https://，非法输入给提示 */
+    const link = normalizeSiteUrl(url)
+    if (url.trim() !== '' && link === null) { showToast('请输入有效的网址，例如 baidu.com'); return }
     if (folderName.trim() !== '') {
       // 02 §8：自定义网站可选创建图标格容器
       place('group', { label: folderName.trim(), apps: [label] })
     } else {
-      place('icon', { label, url, ...(icon !== '' ? { icon } : {}) })
+      if (link === null) { showToast('请输入网站链接'); return }
+      place('icon', { label, url: link, ...(icon !== '' ? { icon } : {}) })
     }
+    if (link !== null && toDock) addToDock(label, link)
     setName(''); setUrl(''); setIcon(''); setFolderName('')
   }
 
@@ -2060,6 +2064,75 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
   )
 }
 
+/* ============================== 新建站点（空白处右键） ============================== */
+
+const NEW_SITE_TARGETS: readonly { k: NewSiteTarget; n: string }[] = [
+  { k: 'page', n: '页面图标' },
+  { k: 'dock', n: 'Dock 快捷方式' },
+  { k: 'both', n: '两者都加' },
+]
+
+/** 新建站点弹窗的结果提示（页面 / Dock 两处落位各自成败的组合） */
+const newSiteToast = (placed: boolean, dock: DockAddResult | null, dockCount: number): string => {
+  const fail = dock !== null && !dock.ok ? dockFailText(dock.reason, dockCount) : ''
+  if (placed) {
+    if (dock === null) return '已添加到页面'
+    return dock.ok ? '已添加到页面与 Dock' : `已添加到页面；${fail}`
+  }
+  if (dock?.ok) return '已添加到底部 Dock'
+  return fail !== '' ? fail : '最多 5 页，已没有位置可放'
+}
+
+/**
+ * 空白处右键「新建网址图标 / 添加到 Dock 快捷方式」共用的轻量弹窗：
+ * 网址 + 名称（留空取域名）、落点三选一；页面落位用右键所在的格，被占则就近。
+ */
+const NewSiteModal = () => {
+  const draft = useApp((s) => s.newSite)
+  const place = useApp((s) => s.place)
+  const settings = useApp((s) => s.settings)
+  const setSetting = useApp((s) => s.setSetting)
+  const setModal = useApp((s) => s.setModal)
+  const showToast = useApp((s) => s.showToast)
+  const [to, setTo] = useState<NewSiteTarget>(draft?.to ?? 'page')
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+
+  const submit = (): void => {
+    const link = normalizeSiteUrl(url)
+    if (link === null) { showToast('请输入有效的网址，例如 baidu.com'); return }
+    const label = name.trim() !== '' ? name.trim() : hostOf(link)
+    const at = draft === null ? undefined : { c: draft.c, r: draft.r }
+    const dockRes = to === 'page' ? null : dockAppsWith(settings.dockApps, settings.dockCount, label, link)
+    const placed = to === 'dock' ? false : place('icon', { label, url: link }, at)
+    if (dockRes !== null && dockRes.ok) setSetting('dockApps', dockRes.apps)
+    showToast(newSiteToast(placed, dockRes, settings.dockCount))
+    setModal(null)
+  }
+
+  return (
+    <>
+      <h2>新建站点</h2>
+      <p className="sub">只填网址就行（不写 https:// 也会自动补全）；页面图标落在右键位置，被占则就近。</p>
+      <div className="f-row"><label className="f-label">网址</label>
+        <input className="f-input" placeholder="例如 baidu.com" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus /></div>
+      <div className="f-row"><label className="f-label">名称（可选，留空取域名）</label>
+        <input className="f-input" placeholder="例如 百度" value={name} onChange={(e) => setName(e.target.value)} /></div>
+      <div className="f-row"><label className="f-label">添加到哪里</label>
+        <div className="btn-row">
+          {NEW_SITE_TARGETS.map((t) => (
+            <button key={t.k} className={`btn sm${to === t.k ? '' : ' ghost'}`} onClick={() => setTo(t.k)}>{t.n}</button>
+          ))}
+        </div>
+      </div>
+      <div className="btn-row end" style={{ marginTop: 16 }}>
+        <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
+        <button className="btn" onClick={submit}>确认添加</button>
+      </div>
+    </>
+  )
+}
+
 export const Modal = () => {
   const modal = useApp((s) => s.modal)
   const setModal = useApp((s) => s.setModal)
@@ -2082,7 +2155,7 @@ export const Modal = () => {
   const engImgFile = useRef<HTMLInputElement | null>(null)
   const item = pages[cur]?.find((x) => x.id === itemId) ?? null
   if (!modal) return null
-  const narrow = modal === 'backup' || modal === 'restore' || modal === 'reset'
+  const narrow = modal === 'backup' || modal === 'restore' || modal === 'reset' || modal === 'newSite'
   const body = () => {
     switch (modal) {
       case 'theme':
@@ -2199,6 +2272,8 @@ export const Modal = () => {
         )
       case 'kindSizes':
         return <KindSizeModal />
+      case 'newSite':
+        return <NewSiteModal />
       case 'editItem':
         return item !== null ? <EditCardModal item={item} /> : <h2>编辑卡片</h2>
       case 'itemDetail':

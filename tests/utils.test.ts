@@ -3,7 +3,7 @@
  * + 月历网格（日历详情弹窗）+ 待办条目归一化（待办详情弹窗）
  */
 import { describe, expect, it } from 'vitest'
-import { daysUntil, monthCells, normTodoItems, pushHistory } from '../src/core/utils'
+import { daysUntil, monthCells, normalizeSiteUrl, normTodoItems, pushHistory } from '../src/core/utils'
 
 const NOW = new Date(2026, 9, 10) // 2026-10-10
 
@@ -90,5 +90,23 @@ describe('normTodoItems：待办条目归一化（待办详情弹窗）', () => 
   it('上限 50 条：脏数据再长也不会撑爆卡片配置', () => {
     const many = Array.from({ length: 80 }, (_, i) => ({ txt: `t${i}`, done: false }))
     expect(normTodoItems(many)).toHaveLength(50)
+  })
+})
+
+describe('normalizeSiteUrl：网址规范化（右键新建站点 / 自定义表单共用）', () => {
+  it('裸域名补 https://', () => {
+    expect(normalizeSiteUrl('baidu.com')).toBe('https://baidu.com/')
+    expect(normalizeSiteUrl('  example.com/a?b=1  ')).toBe('https://example.com/a?b=1')
+  })
+
+  it('已带 http(s) 协议的原样保留', () => {
+    expect(normalizeSiteUrl('https://a.com/x?y=1')).toBe('https://a.com/x?y=1')
+    expect(normalizeSiteUrl('http://a.com')).toBe('http://a.com/')
+  })
+
+  it('空串 / 非 http(s) 协议 / 非法输入一律 null', () => {
+    expect(normalizeSiteUrl('   ')).toBeNull()
+    expect(normalizeSiteUrl('ftp://a.com')).toBeNull()
+    expect(normalizeSiteUrl('not a url')).toBeNull()
   })
 })

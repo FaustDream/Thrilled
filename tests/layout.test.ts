@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, prunePages, uid } from '../src/app/layout'
-import { CELL, COLS, INSET, ROWS, SIZES, findSlot, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
+import { CELL, COLS, INSET, ROWS, SIZES, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
   boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup,
@@ -68,6 +68,26 @@ describe('网格算法', () => {
     const rows: GridItem[] = []
     for (let r = 0; r < ROWS; r += 2) for (let c = 0; c < COLS; c += 2) rows.push(item(c, r, 2, 2))
     expect(findSlot(rows, 2, 2)).toBeNull()
+  })
+
+  it('findSlotNear 空页落在目标格', () => {
+    expect(findSlotNear([], 2, 2, { c: 6, r: 3 })).toEqual({ c: 6, r: 3 })
+  })
+
+  it('findSlotNear 目标格放不下时落在最近空位', () => {
+    /* 前两行被整行占满，目标 (2,0) 落不下 → 最近空位是 (2,2) */
+    expect(findSlotNear([item(0, 0, 24, 2)], 2, 2, { c: 2, r: 0 })).toEqual({ c: 2, r: 2 })
+  })
+
+  it('findSlotNear 越界目标格钳制到合法范围', () => {
+    expect(findSlotNear([], 2, 2, { c: 99, r: 99 })).toEqual({ c: COLS - 2, r: ROWS - 2 })
+    expect(findSlotNear([], 2, 2, { c: -5, r: -5 })).toEqual({ c: 0, r: 0 })
+  })
+
+  it('整页占满时 findSlotNear 返回 null', () => {
+    const rows: GridItem[] = []
+    for (let r = 0; r < ROWS; r += 2) for (let c = 0; c < COLS; c += 2) rows.push(item(c, r, 2, 2))
+    expect(findSlotNear(rows, 2, 2, { c: 4, r: 4 })).toBeNull()
   })
 
   it('相邻边界不算重叠', () => {

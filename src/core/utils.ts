@@ -25,6 +25,26 @@ export function stripHtml(html: string): string {
     .trim();
 }
 
+/* ===== URL ===== */
+
+/**
+ * 规范化用户输入的网址：无协议时补 https://，只接受 http(s) 且主机名非空。
+ * 失败返回 null（调用方负责提示），避免把 "baidu.com" 这类裸域名当成相对地址存取。
+ */
+export function normalizeSiteUrl(raw: string): string | null {
+  const s = raw.trim();
+  if (s === '') return null;
+  const withProto = /^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : `https://${s}`;
+  try {
+    const u = new URL(withProto);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (u.hostname === '') return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
 /* ===== 问候 ===== */
 
 /** 时段问候（每日一言卡 / 模式说明共用语料） */

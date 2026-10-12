@@ -49,6 +49,35 @@ export const findSlot = (
   return null
 };
 
+/**
+ * 找离目标格最近的空位：先试目标格本身（钳制到合法范围），被占则遍历全部合法落点取平方距离最小者。
+ * 用于空白处右键「新建」——在哪儿右键就长在哪儿，放不下才就近。
+ */
+export const findSlotNear = (
+  page: readonly { c: number; r: number; w: number; h: number }[],
+  w: number,
+  h: number,
+  target: { c: number; r: number },
+): { c: number; r: number } | null => {
+  const tc = Math.max(0, Math.min(COLS - w, target.c));
+  const tr = Math.max(0, Math.min(ROWS - h, target.r));
+  let best: { c: number; r: number } | null = null;
+  let bestD = Infinity;
+  for (let r = 0; r + h <= ROWS; r++) {
+    for (let c = 0; c + w <= COLS; c++) {
+      const hit = page.some((it) => it.c < c + w && c < it.c + it.w && it.r < r + h && r < it.r + it.h);
+      if (hit) continue;
+      const d = (c - tc) * (c - tc) + (r - tr) * (r - tr);
+      if (d === 0) return { c, r };
+      if (d < bestD) {
+        bestD = d;
+        best = { c, r };
+      }
+    }
+  }
+  return best;
+};
+
 /** 卡片绝对定位（px）：单元格块内四边内缩 */
 export const itemBox = (it: { c: number; r: number; w: number; h: number }): string =>
   `left:${it.c * CELL + INSET}px;top:${it.r * CELL + INSET}px;width:${it.w * CELL - 2 * INSET}px;height:${it.h * CELL - 2 * INSET}px`;

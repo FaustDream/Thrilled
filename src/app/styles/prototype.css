@@ -286,6 +286,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .ctx-sub-item:hover{background:var(--menu-hover)}
 .ctx-check{width:14px;height:14px;flex:0 0 auto;color:var(--accent);visibility:hidden}
 .ctx-sub-item.on .ctx-check{visibility:visible}
+/* 菜单分组分隔线（空白处菜单：新建 3 项 / 打开 3 项） */
+.ctx-sep{height:1px;margin:6px 10px;background:var(--line)}
+/* 禁用项：置灰且不参与 hover 位移；点击由 App.onAct 的 ctx-blocked 给出原因 */
+.ctx-item.dis{opacity:.4;cursor:default}
+.ctx-item.dis:hover{background:transparent;padding-left:14px}
 
 /* ============ 10. 抽屉 ============ */
 .dw-mask{position:absolute;inset:0;background:rgba(8,12,20,.34);z-index:calc(var(--z-drawer) - 1);
