@@ -106,6 +106,56 @@ const panda = () => (
   </svg>
 )
 
+/**
+ * 倒计时卡（「下班倒计时 / 倒数日」已合并为一个组件）：
+ * 主读数按计时模式切换——下班时刻 HH:MM:SS（到点停在 00:00:00）/ 目标日期天数（已过显示「天前」）；
+ * 倒数列表（节日 + 用户自定义，按剩余天数升序）与吉祥物两模式共用，仅 4 格高的卡片显示列表，
+ * 4×2 矮卡只留主读数（即原「倒数日」卡的形态，日期行由 @container 窄卡规则隐去）。
+ */
+const CountdownCard = ({ item, c, now }: { item: GridItem; c: Record<string, unknown>; now: Date }) => {
+  const dayMode = str(c['mode'], '下班倒计时') === '倒数日'
+  const dateStr = str(c['date'], '2027-01-01')
+  const days = dayMode ? daysUntil(dateStr, now) : null
+  const at = str(c['at'], '18:00').split(':')
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
+  const left = Math.max(0, Math.floor((end.getTime() - now.getTime()) / 1000))
+  const timer = `${p2(Math.floor(left / 3600))}:${p2(Math.floor(left / 60) % 60)}:${p2(left % 60)}`
+  const rows = item.h >= 4
+    ? upcomingRows(normCountdownEntries(c['entries']), bool(c['showFestivals']), now).slice(0, 4)
+    : []
+  /* 吉祥物三态：留空 = 内置熊猫 SVG（兼容旧配置 showMascot:false）；填「无」隐藏；填 emoji 自定义 */
+  const mascot = str(c['mascotEmoji'], bool(c['showMascot']) === false ? '无' : '').trim()
+  return (
+    <div className={`w-cd${dayMode ? ' day' : ''}`} style={{ position: 'absolute', inset: 0 }}>
+      <div className="cd-l">
+        <div className="cd-hint">{dayMode ? '距离目标日' : '坚持住，距下班只有'}</div>
+        <div className="cd-time">
+          {dayMode
+            ? (days === null ? '--' : <>{Math.abs(days)}<span className="cd-unit">{days < 0 ? '天前' : '天'}</span></>)
+            : timer}
+        </div>
+        {dayMode && <div className="cd-date">{dateStr}</div>}
+        {rows.length > 0 && (
+          <div className="cd-grid">
+            {rows.map((r, i) => (
+              <div className="cd-entry" key={String(i)} title={r.note ?? ''}>
+                <span className="cd-label">{r.name}</span>
+                <span className="cd-val">{Math.abs(r.days)}{r.days < 0 ? '天前' : '天'}</span>
+                {r.progress !== null && <span className="cd-bar"><i style={{ width: `${Math.round(r.progress * 100)}%` }} /></span>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      {mascot !== '无' && (
+        <div className="cd-mascot">
+          {mascot === '' ? panda() : <span className="cd-emoji">{mascot}</span>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export const HOT: readonly (readonly [string, string])[] = [
   ['台风“桦加沙”最新路径公布', '326.4万'], ['国庆中秋假期出行全指南', '298.1万'],
   ['我国成功发射新一组低轨卫星', '256.7万'], ['新能源汽车下乡政策发布', '218.3万'],
@@ -262,41 +312,9 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
         </div>
       )
     }
-    case 'countdown': {
-      /* 下班倒计时 + 倒数列表（节日 + 用户自定义，按剩余天数升序；发薪 / 工资等隐私占位已移除） */
-      const at = str(c['at'], '18:00').split(':')
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
-      const left = Math.max(0, Math.floor((end.getTime() - now.getTime()) / 1000))
-      const t = `${p2(Math.floor(left / 3600))}:${p2(Math.floor(left / 60) % 60)}:${p2(left % 60)}`
-      const rows = upcomingRows(normCountdownEntries(c['entries']), bool(c['showFestivals']), now)
-        .slice(0, item.h >= 4 ? 4 : 2)
-      /* 吉祥物三态：留空 = 内置熊猫 SVG（兼容旧配置 showMascot:false）；填「无」隐藏；填 emoji 自定义 */
-      const mascot = str(c['mascotEmoji'], bool(c['showMascot']) === false ? '无' : '').trim()
-      return (
-        <div className="w-cd" style={{ position: 'absolute', inset: 0 }}>
-          <div className="cd-l">
-            <div className="cd-hint">坚持住，距下班只有</div>
-            <div className="cd-time">{t}</div>
-            {rows.length > 0 && (
-              <div className="cd-grid">
-                {rows.map((r, i) => (
-                  <div className="cd-entry" key={String(i)} title={r.note ?? ''}>
-                    <span className="cd-label">{r.name}</span>
-                    <span className="cd-val">{Math.abs(r.days)}{r.days < 0 ? '天前' : '天'}</span>
-                    {r.progress !== null && <span className="cd-bar"><i style={{ width: `${Math.round(r.progress * 100)}%` }} /></span>}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          {mascot !== '无' && (
-            <div className="cd-mascot">
-              {mascot === '' ? panda() : <span className="cd-emoji">{mascot}</span>}
-            </div>
-          )}
-        </div>
-      )
-    }
+    case 'countdown':
+      /* 下班倒计时 + 倒数日合并（原「倒数日」独立组件已并入）：模式与读数见 CountdownCard */
+      return <CountdownCard item={item} c={c} now={now} />
     case 'ann': {
       const date = str(c['date'], '2020-05-20')
       const t0 = Date.parse(date)
@@ -327,21 +345,6 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
           <span className="fish-num">{num(c['count'], 0)}</span>
         </div>
       )
-    case 'countday': {
-      /* 专属配置：目标日期——剩余天数由日期算出（今天 0 天、已过为「天前」） */
-      const left = daysUntil(str(c['date']), now)
-      return (
-        <div className="w-count" style={{ position: 'absolute', inset: 0 }}>
-          <div className="ct-top">{str(c['title'], '距离目标日')}</div>
-          <div className="ct-mid">
-            <span className="ct-num">{left === null ? '--' : Math.abs(left)}</span>
-            <span className="ct-unit">{left !== null && left < 0 ? '天前' : '天'}</span>
-          </div>
-          {/* 宽卡扩展信息行：目标日期（窄卡由 @container 隐去） */}
-          <div className="ct-date">{str(c['date'], '2027-01-01')}</div>
-        </div>
-      )
-    }
     case 'calc':
       return (
         <div className="w-mini" style={{ position: 'absolute', inset: 0 }}>

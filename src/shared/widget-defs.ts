@@ -65,26 +65,19 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     ],
     def: { title: '与MiNa相识', date: '2020-05-20', unitLabel: '天' },
   },
-  countday: {
-    t: 'countday', n: '倒数日', g: '倒', c: '#A855F7', s: '距离目标日期的天数', units: { w: 4, h: 2 },
-    fields: [
-      { k: 'title', l: '标题', t: 'text', ph: '距离目标日' },
-      { k: 'date', l: '目标日期', t: 'text', ph: '2026-10-01' },
-      /* color 字段：留空表示跟随主题（ColorField 的「跟随主题」） */
-      { k: 'accent', l: '强调色', t: 'color' },
-    ],
-    def: { title: '距离元旦', date: '2027-01-01', accent: '' },
-  },
   countdown: {
-    t: 'countdown', n: '下班倒计时', g: '班', c: '#FB923C', s: '下班倒计时 + 节日倒数', units: { w: 8, h: 4 },
-    /* 大号计时 + 节日倒数列表 + 吉祥物：短边小于 4 格时同样无法阅读 */
-    min: { w: 4, h: 4 },
+    t: 'countdown', n: '倒计时', g: '倒', c: '#FB923C', s: '下班倒计时 + 倒数日', units: { w: 8, h: 4 },
+    /* 两种计时模式共用一套卡片：主读数（下班时刻 HH:MM:SS / 目标日期天数）+ 倒数列表 + 吉祥物。
+       倒数列表与吉祥物需要 4 格高才装得下；4×2 矮卡只留主读数（即原「倒数日」的形态），故下限 4×2 */
+    min: { w: 4, h: 2 },
     fields: [
+      { k: 'mode', l: '计时模式', t: 'sel', o: ['下班倒计时', '倒数日'] },
       { k: 'at', l: '下班时刻', t: 'text', ph: '18:00' },
-      { k: 'showFestivals', l: '显示节日倒数', t: 'bool' },
-      { k: 'mascotEmoji', l: '吉祥物图形', t: 'text', ph: '留空熊猫 / emoji / 无' },
+      { k: 'date', l: '目标日期', t: 'text', ph: '2027-01-01' },
     ],
-    def: { at: '18:00', showFestivals: true, mascotEmoji: '' },
+    /* showFestivals / mascotEmoji 不占字段配额（录入在详情弹窗），但默认值仍归定义表：
+       渲染侧按「定义默认值 ⊕ 实例覆盖值」合成，旧配置（含 showMascot 兼容）也走这里 */
+    def: { mode: '下班倒计时', at: '18:00', date: '2027-01-01', showFestivals: true, mascotEmoji: '' },
   },
   fav: {
     t: 'fav', n: '收藏夹', g: '藏', c: '#F59E0B', s: '管理浏览器书签收藏夹', units: { w: 2, h: 4 },
@@ -156,6 +149,14 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
 /** 全部小组件类型键集合（导入 / 持久化校验用） */
 export const WIDGET_KINDS: ReadonlySet<string> = new Set(Object.keys(WIDGET_DEFS));
 
+/**
+ * 旧类型转接：「倒数日」已并入「倒计时」（倒数日模式）——
+ * 存量文档与旧备份导入时放行并转换，位置 / 尺寸 / 目标日期 / 强调色原样保留；
+ * 无旧类型返回 null（调用方按未知类型丢弃）。
+ */
+export const fromLegacyKind = (t: string, config: Record<string, unknown>): { t: WidgetKind; config: Record<string, unknown> } | null =>
+  t === 'countday' ? { t: 'countdown', config: { ...config, mode: '倒数日' } } : null;
+
 /* ---------- 组件库分组（个性化 → 组件库：信息 / 工具 / 内容 / 导航） ---------- */
 
 /** 组件库分组名 */
@@ -166,7 +167,7 @@ export const WIDGET_GROUPS_ORDER: readonly WidgetGroup[] = ['信息', '工具', 
 
 /** 每类小组件归属的分组（组件库按此分组浏览；每类只属一组） */
 export const WIDGET_GROUPS: Readonly<Record<WidgetKind, WidgetGroup>> = {
-  clock: '信息', cal: '信息', weather: '信息', countday: '信息', countdown: '信息', ann: '信息',
+  clock: '信息', cal: '信息', weather: '信息', countdown: '信息', ann: '信息',
   todo: '工具', calc: '工具', trans: '工具', ai: '工具', fav: '工具',
   news: '内容', quote: '内容', music: '内容', woodfish: '内容',
   icon: '导航', folder: '导航', group: '导航',

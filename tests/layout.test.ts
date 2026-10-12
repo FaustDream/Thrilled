@@ -95,6 +95,15 @@ describe('布局导入归一化（normPages）', () => {
     expect(normPages('bad')).toEqual([])
     expect(normPages([])).toEqual([])
   })
+
+  it('旧类型「倒数日」转接为「倒计时」倒数日模式（旧备份导入不丢卡）', () => {
+    const pages = normPages([{ c: 4, r: 2, w: 4, h: 2, t: 'countday', config: { title: '距离元旦', date: '2027-01-01', accent: '#A855F7' } }])
+    expect(pages).toHaveLength(1)
+    expect(pages[0]?.[0]).toMatchObject({
+      c: 4, r: 2, w: 4, h: 2, t: 'countdown',
+      config: { title: '距离元旦', date: '2027-01-01', accent: '#A855F7', mode: '倒数日' },
+    })
+  })
 })
 
 describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', () => {
@@ -161,6 +170,16 @@ describe('组件库数据（分组 / 三档尺寸 / 配置项上限）', () => {
     }
   })
 
+  /* 默认配置必须覆盖全部字段键：渲染按「定义默认值 ⊕ 实例覆盖值」合成，
+     缺键会让该功能静默丢失（字段挪去详情弹窗管理时，默认值仍要留在 def） */
+  it('定义表默认配置覆盖全部专属字段', () => {
+    for (const w of WIDGET_LIST) {
+      for (const f of w.fields) {
+        expect(f.k in w.def, `${w.n} 的默认配置缺字段 ${f.k}`).toBe(true)
+      }
+    }
+  })
+
   it('专属字段只用受支持的字段类型（含 range / color 的配套参数）', () => {
     const types = new Set(['text', 'num', 'list', 'bool', 'sel', 'range', 'color'])
     for (const w of WIDGET_LIST) {
@@ -204,8 +223,8 @@ describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）'
     /* 时钟（自然 4×4）：出厂就放在 4×2，不缩小；8×4 受高度限制同样不放大 */
     expect(scaleOf('clock', 4, 2)).toBe(1)
     expect(scaleOf('clock', 8, 4)).toBe(1)
-    /* 倒数日（自然 4×2）：放进 8×4 时受宽度限制 → 2.2 倍 */
-    expect(scaleOf('countday', 8, 4)).toBeCloseTo(2.2, 2)
+    /* 天气（自然 4×2）：放进 8×4 时受宽度限制 → 2.2 倍 */
+    expect(scaleOf('weather', 8, 4)).toBeCloseTo(2.2, 2)
     /* 新闻（自然 8×4）：4×4 是缩小方向 → 1 */
     expect(scaleOf('news', 4, 4)).toBe(1)
   })
@@ -238,13 +257,19 @@ describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）'
     expect(sizeAllowed('group', 2, 2)).toBe(false)
   })
 
-  it('小尺寸组件只受六档合法性约束（图标 / 倒数日 / 木鱼可到 2×2）；时钟因 44px 时间裁切而下限 4×2', () => {
+  it('小尺寸组件只受六档合法性约束（图标 / 木鱼可到 2×2）；时钟因 44px 时间裁切而下限 4×2', () => {
     expect(sizeAllowed('icon', 2, 2)).toBe(true)
-    expect(sizeAllowed('countday', 2, 2)).toBe(true)
     expect(sizeAllowed('woodfish', 2, 2)).toBe(true)
     expect(sizeAllowed('clock', 2, 2)).toBe(false)
     expect(sizeAllowed('clock', 4, 2)).toBe(true)
     expect(sizeAllowed('clock', 4, 4)).toBe(true)
+  })
+
+  it('倒计时（下班 / 倒数日合并）下限 4×2：矮卡只留主读数，列表与吉祥物需 4 格高', () => {
+    expect(sizeAllowed('countdown', 2, 2)).toBe(false)
+    expect(sizeAllowed('countdown', 4, 2)).toBe(true)
+    expect(sizeAllowed('countdown', 4, 4)).toBe(true)
+    expect(sizeAllowed('countdown', 8, 4)).toBe(true)
   })
 
   it('出厂布局的每张卡片都在对应组件的尺寸能力区间内（含按实例内容收紧）', () => {

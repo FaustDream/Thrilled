@@ -195,6 +195,20 @@ describe('持久化文档解析（parseStoredDoc）', () => {
     expect(out?.pages[0]?.[0]?.id).toBe('b')
   })
 
+  it('旧类型「倒数日」转接为「倒计时」倒数日模式（位置 / 目标日期 / 强调色保留）', () => {
+    const d = doc()
+    d.pages = [[
+      { id: 'a', c: 16, r: 0, w: 4, h: 2, t: 'countday' as unknown as 'icon', config: { title: '距离元旦', date: '2027-01-01', accent: '#A855F7' } },
+      { id: 'b', c: 0, r: 0, w: 2, h: 2, t: 'icon', config: {} },
+    ]]
+    const out = parseStoredDoc(d, WIDGET_KINDS)
+    expect(out?.pages[0]).toHaveLength(2)
+    expect(out?.pages[0]?.[0]).toMatchObject({
+      id: 'a', c: 16, r: 0, w: 4, h: 2, t: 'countdown',
+      config: { title: '距离元旦', date: '2027-01-01', accent: '#A855F7', mode: '倒数日' },
+    })
+  })
+
   it('整份布局全坏 → 返回 null（调用方重新种入出厂布局）', () => {
     const d = doc()
     d.pages = [[{ id: 'a', c: 0, r: 0, w: 2, h: 2, t: 'hacker' as unknown as 'icon', config: {} }]]

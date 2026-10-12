@@ -18,7 +18,6 @@ export type WidgetKind =
   | 'weather'
   | 'todo'
   | 'ann'
-  | 'countday'
   | 'countdown'
   | 'fav'
   | 'quote'

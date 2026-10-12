@@ -6,7 +6,7 @@
  * 单套页面（隐私模式已并入标准模式）：出厂以原隐私页为第 1 页，原标准两页依次并入。
  */
 import type { GridItem, LayoutDoc, ModePages, WidgetKind } from '../shared/types';
-import { WIDGET_KINDS } from '../shared/widget-defs';
+import { WIDGET_KINDS, fromLegacyKind } from '../shared/widget-defs';
 import { COLS, MAX_PAGES, ROWS, findSlot } from '../shared/grid';
 
 let seq = 0
@@ -40,7 +40,7 @@ const PRIVACY_SEED: ModePages = [
   [
     G(0, 0, 4, 2, 'clock', { label: '时钟' }), G(4, 0, 4, 2, 'weather', { label: '天气' }),
     G(8, 0, 4, 2, 'todo', { label: '待办清单' }), G(12, 0, 4, 2, 'fav', { label: '收藏夹' }),
-    G(16, 0, 4, 2, 'countday', { label: '倒数日' }), G(20, 0, 4, 2, 'cal', { label: '日历' }),
+    G(16, 0, 4, 2, 'countdown', { label: '倒数日', mode: '倒数日' }), G(20, 0, 4, 2, 'cal', { label: '日历' }),
     G(0, 2, 4, 4, 'news'), G(4, 2, 4, 4, 'music'), G(8, 2, 8, 4, 'countdown', { label: '下班倒计时' }),
     G(16, 2, 4, 4, 'ai'), G(20, 2, 4, 4, 'group', { apps: ['微信', 'QQ', '钉钉', '飞书', 'Gmail', 'Discord', 'Telegram', '语雀', 'Notion', 'DeepSeek', 'Claude', 'ChatGPT'] }),
     G(0, 6, 8, 4, 'group', { apps: ['淘宝', '京东', '小红书', '豆瓣', '知乎', '微博', '哔哩哔哩', '快手', 'Spotify', 'YouTube', 'GitHub', 'Figma', 'Medium', 'Reddit', 'V2EX', 'Notion', '语雀', '掘金', 'CSDN', '少数派', 'Product Hunt', 'Dribbble', 'Stack Overflow', 'Netflix'] }),
@@ -55,7 +55,7 @@ const STANDARD_SEED: ModePages = [
   [
     G(0, 0, 8, 4, 'news'), G(8, 0, 4, 2, 'weather', { label: '天气' }),
     G(8, 2, 4, 2, 'todo', { label: '待办' }), G(12, 0, 4, 2, 'cal', { label: '日历' }),
-    G(12, 2, 4, 2, 'countday', { label: '倒数日' }), G(16, 0, 4, 4, 'clock', { label: '时钟' }),
+    G(12, 2, 4, 2, 'countdown', { label: '倒数日', mode: '倒数日' }), G(16, 0, 4, 4, 'clock', { label: '时钟' }),
     G(20, 0, 2, 4, 'fav', { label: '收藏夹' }),
     G(22, 0, 2, 2, 'icon', { label: 'Gmail', url: 'https://mail.google.com' }),
     G(22, 2, 2, 2, 'icon', { label: 'GitHub', url: 'https://github.com' }),
@@ -98,14 +98,17 @@ export const clonePages = (pages: ModePages): ModePages => JSON.parse(JSON.strin
 const normItem: (x: unknown) => GridItem | null = (x) => {
   if (typeof x !== 'object' || x === null) return null
   const o = x as Record<string, unknown>
-  const t = typeof o['t'] === 'string' && WIDGET_KINDS.has(o['t']) ? o['t'] : ''
   const w = typeof o['w'] === 'number' ? o['w'] : 0
   const h = typeof o['h'] === 'number' ? o['h'] : 0
-  if (t === '' || w <= 0 || h <= 0) return null
+  if (w <= 0 || h <= 0) return null
+  const config = typeof o['config'] === 'object' && o['config'] !== null ? (o['config'] as Record<string, unknown>) : {}
+  /* 旧类型（「倒数日」已并入「倒计时」）转接；未知类型丢弃 */
+  const raw = typeof o['t'] === 'string' ? o['t'] : ''
+  const mapped = WIDGET_KINDS.has(raw) ? { t: raw, config } : fromLegacyKind(raw, config)
+  if (mapped === null) return null
   const c = Math.max(0, Math.min(COLS - w, typeof o['c'] === 'number' ? o['c'] : 0))
   const r = Math.max(0, Math.min(ROWS - h, typeof o['r'] === 'number' ? o['r'] : 0))
-  const config = typeof o['config'] === 'object' && o['config'] !== null ? (o['config'] as Record<string, unknown>) : {}
-  return { id: typeof o['id'] === 'string' ? o['id'] : uid(), c, r, w, h, t: t as WidgetKind, config }
+  return { id: typeof o['id'] === 'string' ? o['id'] : uid(), c, r, w, h, t: mapped.t as WidgetKind, config: mapped.config }
 }
 
 /** 导入的页集合：支持「多页（数组套数组）」与「扁平数组 = 单页」，坏数据丢弃 */

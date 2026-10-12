@@ -1395,7 +1395,8 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
-    v: '4.4', d: '2026-09-30 – 2026-10-10', items: [
+    v: '4.4', d: '2026-09-30 – 2026-10-12', items: [
+      { k: '调整', s: '「倒数日」并入「倒计时」：一个控件两种计时', d: '「下班倒计时」与「倒数日」合并为「倒计时」组件——新增「计时模式」选项（下班倒计时 / 倒数日）：下班模式主读数为到下班时刻的 HH:MM:SS（到点停住）；倒数日模式主读数为距离目标日期的天数（强调色大字号 + 「天 / 天前」单位 + 宽卡日期行，即原「倒数日」卡的读数）。节日倒数列表与吉祥物两模式共用，仅 4 格高的卡片显示列表（原 4×4 以下显示 2 行的分支移除）；4×2 矮卡只留主读数，尺寸下限由 4×4 放宽到 4×2（原倒数日卡正是 4×2，形态不变）。「显示节日倒数」与「吉祥物图形」两个字段移入详情弹窗（与倒数列表管理同屏，消除原先两处录入的重复），专属字段仍守 3 项（计时模式 / 下班时刻 / 目标日期）；组件库由 19 项收敛为 18 项。存量「倒数日」卡片在文档载入与旧备份导入时自动转为「倒计时」的倒数日模式（位置 / 目标日期 / 强调色原样保留），无需手动重建' },
       { k: '优化', s: '极简页面：胶囊收起只显图标，功能键移入 Dock', d: '模式胶囊悬停展开「极简 / 标准」两个选项（去除说明文字）；右上头像移除，新增 / 个性化 / 设置改由底部 Dock 承载' },
       { k: '优化', s: 'Dock 改版：手动新增，支持右键改名与移除', d: '出厂快捷方式清空、由用户手动新增（「添加」抽屉勾选「同时添加到底部 Dock」）；图标显示站点 favicon（失败回退品牌字形）；苹果式尺寸与玻璃质感' },
       { k: '优化', s: '极简模式：日期 / 搜索框 / 鼓励语视觉重做', d: '日期改「2026年9月30日」格式、时钟 84px；搜索框未聚焦为透明胶囊白描边、聚焦展开为白色玻璃卡片；鼓励语悬浮在 Dock 上方；搜索历史与引擎面板跟随新位置' },
@@ -1924,20 +1925,12 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
           </div>
         </>
       )
-    case 'countday': {
-      const left = daysUntil(str(c['date']), now)
-      body = (
-        <>
-          <div className="dt-clock">
-            <div className="dt-sub">{str(c['title'], '距离目标日')} · {str(c['date'], '2027-01-01')}</div>
-            <div className="dt-time">{left === null ? '--' : Math.abs(left)}<span className="dt-unit">{left !== null && left < 0 ? '天前' : '天'}</span></div>
-            <div className="dt-sub">{left === null ? '日期未设置，请在编辑配置里填写' : left > 0 ? `还有 ${left} 天到达目标日` : left === 0 ? '就是今天' : `目标日已过去 ${-left} 天`}</div>
-          </div>
-        </>
-      )
-      break
-    }
     case 'countdown': {
+      /* 两种计时模式：下班时刻（实时倒计时，已过则顺计时）或目标日期（天数，已过显示「天前」）；
+         倒数列表与吉祥物两模式共用 */
+      const dayMode = str(c['mode'], '下班倒计时') === '倒数日'
+      const dateStr = str(c['date'], '2027-01-01')
+      const days = dayMode ? daysUntil(dateStr, now) : null
       const at = str(c['at'], '18:00').split(':')
       const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
       const left = Math.floor((end.getTime() - now.getTime()) / 1000)
@@ -1947,10 +1940,17 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
       body = (
         <>
           <div className="dt-clock">
-            <div className="dt-sub">{passed ? '已过目标时刻' : '距目标时刻'}（今天 {str(c['at'], '18:00')}）</div>
-            <div className="dt-time">{t}</div>
+            <div className="dt-sub">{dayMode ? `距离目标日 · ${dateStr}` : `${passed ? '已过目标时刻' : '距目标时刻'}（今天 ${str(c['at'], '18:00')}）`}</div>
+            <div className="dt-time">
+              {dayMode ? (days === null ? '--' : Math.abs(days)) : t}
+              {dayMode && <span className="dt-unit">{days !== null && days < 0 ? '天前' : '天'}</span>}
+            </div>
+            {dayMode && (
+              <div className="dt-sub">{days === null ? '日期未设置，请在编辑配置里填写' : days > 0 ? `还有 ${days} 天到达目标日` : days === 0 ? '就是今天' : `目标日已过去 ${-days} 天`}</div>
+            )}
           </div>
           <CountdownEntries item={item} />
+          <SwitchRow l="显示节日倒数" on={bool(c['showFestivals'])} onToggle={() => updateConfig(item.id, { showFestivals: !bool(c['showFestivals']) })} />
           <div className="f-row"><label className="f-label">吉祥物图形</label>
             <input className="f-input" value={str(c['mascotEmoji'])} placeholder="留空显示内置熊猫；填任意 emoji（如 🐶 🌙 ⭐）；填「无」隐藏"
               onChange={(e) => updateConfig(item.id, { mascotEmoji: e.target.value })} />

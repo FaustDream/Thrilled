@@ -12,7 +12,7 @@ import { BLUR_MAX_PX, MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
 import { normalizeShortcuts } from './shortcuts';
 import { isBlankStyle, normStyle } from './widget-style';
-import { WIDGET_KINDS } from './widget-defs';
+import { WIDGET_KINDS, fromLegacyKind } from './widget-defs';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
 import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource, WidgetStyle } from './types';
 
@@ -265,23 +265,25 @@ const normStyleDefaults = (v: unknown): Record<string, WidgetStyle> => {
 /** 网格坐标归一化（数字 + 边界钳制） */
 const gridNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : -1);
 
-/** 卡片实例归一化：未知类型丢弃（坏数据不进布局） */
+/** 卡片实例归一化：未知类型丢弃（坏数据不进布局）；旧类型（「倒数日」）转接为「倒计时」 */
 export const normalizeGridItem = (v: unknown, kinds: ReadonlySet<string>): StoredDoc['pages'][number][number] | null => {
   if (typeof v !== 'object' || v === null) return null;
   const o = v as Record<string, unknown>;
-  const t = typeof o['t'] === 'string' && kinds.has(o['t']) ? o['t'] : null;
   const w = gridNum(o['w']);
   const h = gridNum(o['h']);
-  if (t === null || w <= 0 || h <= 0) return null;
+  if (w <= 0 || h <= 0) return null;
   const config = typeof o['config'] === 'object' && o['config'] !== null ? (o['config'] as Record<string, unknown>) : {};
+  const raw = typeof o['t'] === 'string' ? o['t'] : '';
+  const mapped = kinds.has(raw) ? { t: raw, config } : fromLegacyKind(raw, config);
+  if (mapped === null) return null;
   return {
     id: typeof o['id'] === 'string' && o['id'] !== '' ? o['id'] : `i${Math.random().toString(36).slice(2, 8)}`,
     c: Math.max(0, gridNum(o['c'])),
     r: Math.max(0, gridNum(o['r'])),
     w,
     h,
-    t: t as StoredDoc['pages'][number][number]['t'],
-    config,
+    t: mapped.t as StoredDoc['pages'][number][number]['t'],
+    config: mapped.config,
   };
 };
 
