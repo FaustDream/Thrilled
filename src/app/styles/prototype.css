@@ -266,31 +266,45 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .mc-date{font-size:26px;font-weight:400;opacity:.96;margin-top:8px;letter-spacing:2px}
 
 /* ============ 9. 右键菜单 ============ */
-.ctx{position:absolute;width:196px;color:var(--menu-text);border-radius:10px;
-  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
+/* 底色带可读下限（复杂壁纸上不发糊）、描边随文字色派生（深浅皮肤自适应）、圆角收敛为 10px；
+   三类菜单（空白处 / 卡片 / Dock）共用同一套宿主与条目样式 */
+.ctx{position:absolute;width:196px;color:var(--panel-text);border-radius:10px;
+  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * (0.24 + var(--ga-menu) * 0.76) * 100%),transparent);
   backdrop-filter:blur(var(--blur-menu));
-  padding:6px 0;box-shadow:0 16px 44px rgba(6,12,24,.3);z-index:var(--z-dropdown);display:none}
-.ctx.show{display:block}
-.ctx-item{height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px;
-  padding:0 14px;font-size:14px;cursor:pointer;position:relative}
+  border:1px solid color-mix(in srgb,var(--panel-text) 12%,transparent);
+  padding:6px 0;box-shadow:0 20px 48px -16px rgba(15,23,42,.34);
+  z-index:var(--z-dropdown);display:none;transform-origin:top left}
+.ctx.show{display:block;animation:ctx-in .16s var(--ease)}
+.ctx.hide{display:block;animation:ctx-out .1s linear both}
+.ctx.flip{transform-origin:top right}
+@keyframes ctx-in{from{opacity:0;transform:translateY(4px) scale(.98)}to{opacity:1;transform:none}}
+@keyframes ctx-out{from{opacity:1;transform:none}to{opacity:0;transform:scale(.99)}}
+.ctx-item{height:40px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:0 14px;font-size:14px;cursor:pointer;position:relative;transition:background .12s linear}
 .ctx-item:hover{background:var(--menu-hover)}
-.ctx-arrow{width:0;height:0;border-left:5px solid var(--panel-sub);border-top:4px solid transparent;
-  border-bottom:4px solid transparent;opacity:.7}
+.ctx-arrow{width:0;height:0;border-left:6px solid var(--panel-sub);border-top:5px solid transparent;
+  border-bottom:5px solid transparent;opacity:.6;transition:border-left-color .12s,opacity .12s,transform .12s}
+.ctx-item:hover .ctx-arrow{border-left-color:var(--accent);opacity:1;transform:translateX(2px)}
 .ctx-sub{position:absolute;left:100%;top:-6px;margin-left:2px;width:186px;border-radius:10px;padding:6px 0;
-  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * var(--ga-menu) * 100%),transparent);
+  background:color-mix(in srgb,var(--menu-bg) calc(var(--g-alpha) * (0.24 + var(--ga-menu) * 0.76) * 100%),transparent);
   backdrop-filter:blur(var(--blur-menu));
-  box-shadow:0 16px 44px rgba(6,12,24,.3);display:none}
-.ctx-item:hover>.ctx-sub{display:block}
+  border:1px solid color-mix(in srgb,var(--panel-text) 12%,transparent);
+  box-shadow:0 20px 48px -16px rgba(15,23,42,.34);display:none}
+.ctx-item:hover>.ctx-sub{display:block;animation:ctx-sub-in .13s var(--ease)}
+@keyframes ctx-sub-in{from{opacity:0;transform:translateX(-5px)}to{opacity:1;transform:none}}
 .ctx.flip .ctx-sub{left:auto;right:100%;margin-left:0;margin-right:2px}
-.ctx-sub-item{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;cursor:pointer;position:relative}
+.ctx.flip .ctx-item:hover>.ctx-sub{animation-name:ctx-sub-in-flip}
+@keyframes ctx-sub-in-flip{from{opacity:0;transform:translateX(5px)}to{opacity:1;transform:none}}
+.ctx-sub-item{height:36px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;
+  cursor:pointer;position:relative;transition:background .12s linear}
 .ctx-sub-item:hover{background:var(--menu-hover)}
 .ctx-check{width:14px;height:14px;flex:0 0 auto;color:var(--accent);visibility:hidden}
 .ctx-sub-item.on .ctx-check{visibility:visible}
-/* 菜单分组分隔线（空白处菜单：新建 3 项 / 打开 3 项） */
-.ctx-sep{height:1px;margin:6px 10px;background:var(--line)}
-/* 禁用项：置灰且不参与 hover 位移；点击由 App.onAct 的 ctx-blocked 给出原因 */
+/* 菜单分组分隔线（空白处菜单：新建 3 项 / 打开 3 项）：比正文线更淡，上下留白 */
+.ctx-sep{height:1px;margin:7px 12px;background:color-mix(in srgb,var(--panel-text) 10%,transparent)}
+/* 禁用项：置灰且不参与 hover 反馈；点击由 App.onAct 的 ctx-blocked 给出原因 */
 .ctx-item.dis{opacity:.4;cursor:default}
-.ctx-item.dis:hover{background:transparent;padding-left:14px}
+.ctx-item.dis:hover{background:transparent}
 
 /* ============ 10. 抽屉 ============ */
 .dw-mask{position:absolute;inset:0;background:rgba(8,12,20,.34);z-index:calc(var(--z-drawer) - 1);
@@ -628,13 +642,13 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .search-go-btn{transition:background .16s,transform .16s var(--ease-spring)}
 .search-go-btn:hover{background:color-mix(in srgb,var(--accent) 20%,transparent);transform:scale(1.06)}
 
-/* —— 浮层统一：更深层的分层阴影 —— */
-.search-panel,.engine-panel,.ctx,.ctx-sub{box-shadow:var(--shadow-pop)}
-.search-panel,.engine-panel,.ctx,.ctx-sub{border-radius:14px}
+/* —— 浮层统一：更深层的分层阴影（右键菜单的阴影与圆角在 §9 定义，不在此覆盖） —— */
+.search-panel,.engine-panel{box-shadow:var(--shadow-pop)}
+.search-panel,.engine-panel{border-radius:14px}
 
-/* —— 右键菜单：条目微动效 —— */
-.ctx-item,.ctx-sub-item,.ep-row{transition:background .14s,padding-left .14s}
-.ctx-item:hover,.ep-row:hover{padding-left:18px}
+/* —— 引擎面板：条目左移微动效（右键菜单只过渡底色，不做位移） —— */
+.ep-row{transition:background .14s,padding-left .14s}
+.ep-row:hover{padding-left:18px}
 
 /* —— Dock：悬浮栏升级 —— */
 .dock-bar{border-radius:var(--radius-xl);padding:16px 12px;
@@ -738,8 +752,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* —— 模式胶囊：轻投影玻璃 —— */
 .mode-pill{box-shadow:0 10px 28px -12px rgba(6,12,24,.30);border-radius:14px}
 
-/* —— 浮层阴影收敛（统一单层柔和投影） —— */
-.ctx,.ctx-sub,.engine-panel,.search-panel{box-shadow:0 18px 44px -16px rgba(15,23,42,.30)}
+/* —— 浮层阴影收敛（统一单层柔和投影；右键菜单见 §9） —— */
+.engine-panel,.search-panel{box-shadow:0 18px 44px -16px rgba(15,23,42,.30)}
 .modal,.dw{box-shadow:0 24px 60px -20px rgba(15,23,42,.34)}
 .toast{box-shadow:0 10px 28px -12px rgba(15,23,42,.36)}
 

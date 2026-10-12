@@ -6,7 +6,7 @@
  * （见 App 的 contextmenu 处理）。二级菜单按 UiTab 实测复刻。
  */
 import { useEffect, useRef, useState } from 'react'
-import { useApp } from './store'
+import { useApp, type CtxState } from './store'
 import { WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
 import { MAX_PAGES, SIZES, findSlot } from '../shared/grid'
 import { stage } from './stage'
@@ -108,26 +108,40 @@ const BlankMenu = () => {
   )
 }
 
-/** 菜单宿主：位置 / 贴边翻转都在这里算（坐标系是 1920×945 的 stage） */
+/** 关闭淡出时长（ms）：与 CSS 的 ctx-out 动画一致，期间保留 DOM 不卸载 */
+const CTX_FADE_MS = 100
+
+/** 菜单宿主：位置 / 贴边翻转都在这里算（坐标系是 1920×945 的 stage）
+ *  关闭时保留 CTX_FADE_MS 做淡出（ctx 置空即卸载就没有退场动画），淡出期间再次打开会取消卸载 */
 export const ContextMenu = () => {
   const ctx = useApp((s) => s.ctx)
   const ref = useRef<HTMLDivElement | null>(null)
+  const hideAt = useRef<number | null>(null)
+  const [snap, setSnap] = useState<CtxState | null>(null)
+  const [open, setOpen] = useState(false)
   const [box, setBox] = useState({ x: 0, y: 0, flip: false })
   useEffect(() => {
-    if (!ctx || !ref.current) return
+    if (hideAt.current !== null) { window.clearTimeout(hideAt.current); hideAt.current = null }
+    if (ctx !== null) { setSnap(ctx); setOpen(true); return }
+    setOpen(false)
+    hideAt.current = window.setTimeout(() => { hideAt.current = null; setSnap(null) }, CTX_FADE_MS)
+  }, [ctx])
+  useEffect(() => () => { if (hideAt.current !== null) window.clearTimeout(hideAt.current) }, [])
+  useEffect(() => {
+    if (snap === null || !ref.current) return
     const w = ref.current.offsetWidth
     const h = ref.current.offsetHeight
-    const flip = ctx.x + w > stage.w - 20
+    const flip = snap.x + w > stage.w - 20
     setBox({
-      x: flip ? Math.max(8, ctx.x - w - 120) : ctx.x,
-      y: ctx.y + h > stage.h - 20 ? Math.max(8, stage.h - h - 20) : ctx.y,
+      x: flip ? Math.max(8, snap.x - w - 120) : snap.x,
+      y: snap.y + h > stage.h - 20 ? Math.max(8, stage.h - h - 20) : snap.y,
       flip,
     })
-  }, [ctx])
-  if (!ctx) return null
+  }, [snap])
+  if (snap === null) return null
   return (
-    <div id="ctx" ref={ref} className={`ctx show${box.flip ? ' flip' : ''}`} style={{ left: box.x, top: box.y }}>
-      {ctx.dock !== null ? <DockMenu idx={ctx.dock} /> : ctx.id !== null ? <CardMenu id={ctx.id} /> : <BlankMenu />}
+    <div id="ctx" ref={ref} className={`ctx ${open ? 'show' : 'hide'}${box.flip ? ' flip' : ''}`} style={{ left: box.x, top: box.y }}>
+      {snap.dock !== null ? <DockMenu idx={snap.dock} /> : snap.id !== null ? <CardMenu id={snap.id} /> : <BlankMenu />}
     </div>
   )
 }
