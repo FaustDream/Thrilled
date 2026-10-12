@@ -14,8 +14,8 @@ import { SKIN_FIELDS } from '../shared/defaults'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
 import { STYLE_PRESETS, isBlankStyle } from '../shared/widget-style'
 import { Icon } from './icons'
-import { HOT, SiteIcon, bool, cfg, dateText, num, p2, str } from './widgets'
-import { siteUrlOf } from './brands'
+import { SiteIcon, bool, cfg, dateText, num, p2, str } from './widgets'
+import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
@@ -99,17 +99,7 @@ const SliderRow = ({ l, info, min, max, value, display, onInput }: {
   </div>
 )
 
-/* ---------- 网址导航数据（原创分类命名，04 §6 等价实现） ---------- */
-const NAVI: readonly { c: string; l: readonly string[] }[] = [
-  { c: '常用', l: ['百度', '哔哩哔哩', '知乎', '微博', '淘宝', '京东', 'GitHub', 'Gmail'] },
-  { c: '影音', l: ['爱奇艺', '腾讯视频', '网易云音乐', 'YouTube'] },
-  { c: '游戏', l: ['Steam', 'TapTap'] },
-  { c: '社交', l: ['微信', '知乎'] },
-  { c: '学习', l: ['学习通', '网易公开课', '语雀', 'Notion'] },
-  { c: '购物', l: ['京东', '天猫', '拼多多', '唯品会', '苏宁易购'] },
-  { c: '工具', l: ['翻译', '计算器', '截图', '二维码'] },
-  { c: 'AI', l: ['豆包', 'Kimi', '秘塔AI搜索', '通义千问'] },
-]
+/* ---------- 网址导航数据（原创分类命名，04 §6 等价实现；与右键菜单共用，见 brands.ts） ---------- */
 
 /** 展示用主机名（书签列表右缘小字）；解析失败原样显示 */
 const hostOf = (url: string): string => {
@@ -686,7 +676,8 @@ const ComponentLibraryTab = () => {
         )}
         {page.map((it, i) => {
           const def = WIDGET_DEFS[it.t]
-          const label = String(cfg(it)['label'] ?? def.n)
+          /* 名称为空（含出厂留空）时回退组件显示名：列表行不能只剩一个字形（用户反馈：每日一言行仅显图标） */
+          const label = str(cfg(it)['label']).trim() === '' ? def.n : String(cfg(it)['label'])
           return (
             <div className="eng-row sortable" key={it.id} draggable
               onDragStart={() => setDragId(it.id)}
@@ -778,7 +769,7 @@ const PersonalPanel = () => {
   const [previewId, setPreviewId] = useState('')
   const [wall, setWall] = useState<BgData | null>(null)
   const wallFile = useRef<HTMLInputElement | null>(null)
-  /* 透明度 12 项：前六项是玻璃底色，后六项是元素显隐强度（说明即各自的作用范围） */
+  /* 透明度 11 项：前六项是玻璃底色，后五项是元素显隐强度（说明即各自的作用范围） */
   const GLASS: readonly (readonly [GlassKey, string, string])[] = [
     ['card', '卡片', '资讯卡与小组件卡的玻璃底色'],
     ['tile', '图标容器', '图标方块与图标格的底座底色'],
@@ -789,7 +780,6 @@ const PersonalPanel = () => {
     ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'],
     ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡 / 任务浮层'],
     ['clock', '时间与日期', '时钟与日期文字（标准模式卡片内 + 极简模式大时钟）'],
-    ['quote', '每日一言', '问候语与鼓励语文字（每日一言卡 + 极简模式悬浮语）'],
     ['line', '边框与分隔线', '卡片描边、列表分隔线与浅色胶囊底，调低后界面更轻盈'],
     ['hover', '悬停与激活态', '菜单与列表的 hover 高亮、选中项描边的反馈强度'],
   ]
@@ -1272,7 +1262,7 @@ const SettingSearchTab = () => {
   )
 }
 
-/** 通用分区：打开方式（互斥单选，一行胶囊表达）→ 每日问候（文本字段） */
+/** 通用分区：打开方式（互斥单选，一行胶囊表达）→ 组件对齐（网格对齐线开关） */
 const SettingGeneralTab = () => {
   const s = useApp((st) => st.settings)
   const setSetting = useApp((st) => st.setSetting)
@@ -1285,11 +1275,8 @@ const SettingGeneralTab = () => {
           ))}
         </div>
       </SecCard>
-      <SecCard t="每日问候" info="用在每日一言卡：时段问候 + 昵称 + 竖线鼓励语；双击卡片可换一条鼓励语。">
-        <div className="f-row inline">
-          <label className="f-label">昵称</label>
-          <input className="f-input" value={s.nick} placeholder="主人" onChange={(e) => setSetting('nick', e.target.value)} />
-        </div>
+      <SecCard t="组件对齐" info="网格对齐线按 24×10 网格绘制在卡片背后（细线 = 单元格，粗线 = 偶数格即合法尺寸边界）：开启后常显，添加 / 拖拽组件时强制显示，用于确认落位；拖拽本身按网格吸附，对齐线只作视觉参照。">
+        <SwitchRow l="显示网格对齐线" on={s.gridLines} onToggle={() => setSetting('gridLines', !s.gridLines)} />
       </SecCard>
     </>
   )
@@ -1396,6 +1383,11 @@ interface LogVersion {
 const CHANGELOG: readonly LogVersion[] = [
   {
     v: '4.4', d: '2026-09-30 – 2026-10-12', items: [
+      { k: '移除', s: '七类组件下架：新闻热点 / 翻译 / 计算器 / AI 对话 / 每日一言 / 木鱼 / 音乐', d: '按用户需求移除前四类（均为占位或演示数据），并整体移除「内容」分组（每日一言 / 木鱼 / 音乐）；组件库由 18 项收敛为 9 类（时钟 / 日历 / 天气 / 待办 / 倒计时 / 收藏夹 + 网站图标 / 图标文件夹 / 图标格容器），分组由四组并为三组（信息 / 工具 / 导航）。连带清理：鼓励语料库 core/quotes.ts、极简模式悬浮语、「换一条鼓励语」快捷键、昵称设置项、透明度里的「每日一言」项，以及 8 个音乐 / 木鱼 / 计算器 / 翻译专用图标与对应 CSS。出厂三页重新配平（被移除组件的占位改由图标格容器与网址图标补齐，仍每页 240 格 100% 填满）；存量页面里这些类型的卡片载入时按未知类型丢弃' },
+      { k: '调整', s: '「纪念日」并入「倒计时」：倒计时新增第三种计时模式', d: '倒计时组件的「计时模式」由两档变三档（下班倒计时 / 倒数日 / 纪念日）：纪念日模式以标题行 + 大号天数（天 / 周 / 月 / 年换算）呈现，主读数与倒数列表、吉祥物共用同一套卡片；原纪念日卡的「标题 / 起始日期 / 天数单位」三项与倒计时定义表同名，改在详情弹窗内录入（专属字段仍守 3 项）。存量纪念日卡片在文档载入与旧备份导入时自动转接为倒计时的纪念日模式（位置、标题、起始日期、单位原样保留）。出厂第 3 页 8,0 的纪念日位改为下班倒计时，两卡并列' },
+      { k: '优化', s: '「页面组件」列表里名称留空的行只剩一个字形图标', d: '出厂每日一言实例的 label 是空串，而列表取值用的是 ??（只对 null / undefined 生效），空串被当作有效名称直接渲染 → 该行没有文字。改为空串（trim 后）回退组件显示名，惠及所有名称留空的实例' },
+      { k: '新增', s: '导航并入右键菜单：网址导航两级飞子菜单', d: '右键菜单新增「网址导航」项，悬停展开分类（常用 / 影音 / 游戏 / 社交 / 学习 / 购物 / 工具 / AI + 浏览器书签），再悬停分类展开站点列，点击站点一律新标签页打开（不离开当前主页）；末尾「管理导航站点…」直达添加抽屉的网址导航页签。参照浏览器书签菜单的成熟交互（分类 → 站点两级飞出、贴右边缘自动向左翻转）；页面上的网站图标 / 图标文件夹 / 图标格容器保持不变' },
+      { k: '新增', s: '网格对齐线：组件落位的视觉参照', d: '页面网格按 24×10 绘制在卡片背后——细线是单元格（74px），粗线是偶数格（即合法尺寸边界），卡片内缩 25px，线正好落在卡间缝隙。设置 → 通用新增「组件对齐」卡可常显，右键菜单也有「网格对齐线」快捷开关；拖拽组件时无论开关状态都强制显示，用于确认落位（拖拽本身仍按网格吸附，对齐线只作参照）' },
       { k: '调整', s: '「倒数日」并入「倒计时」：一个控件两种计时', d: '「下班倒计时」与「倒数日」合并为「倒计时」组件——新增「计时模式」选项（下班倒计时 / 倒数日）：下班模式主读数为到下班时刻的 HH:MM:SS（到点停住）；倒数日模式主读数为距离目标日期的天数（强调色大字号 + 「天 / 天前」单位 + 宽卡日期行，即原「倒数日」卡的读数）。节日倒数列表与吉祥物两模式共用，仅 4 格高的卡片显示列表（原 4×4 以下显示 2 行的分支移除）；4×2 矮卡只留主读数，尺寸下限由 4×4 放宽到 4×2（原倒数日卡正是 4×2，形态不变）。「显示节日倒数」与「吉祥物图形」两个字段移入详情弹窗（与倒数列表管理同屏，消除原先两处录入的重复），专属字段仍守 3 项（计时模式 / 下班时刻 / 目标日期）；组件库由 19 项收敛为 18 项。存量「倒数日」卡片在文档载入与旧备份导入时自动转为「倒计时」的倒数日模式（位置 / 目标日期 / 强调色原样保留），无需手动重建' },
       { k: '优化', s: '极简页面：胶囊收起只显图标，功能键移入 Dock', d: '模式胶囊悬停展开「极简 / 标准」两个选项（去除说明文字）；右上头像移除，新增 / 个性化 / 设置改由底部 Dock 承载' },
       { k: '优化', s: 'Dock 改版：手动新增，支持右键改名与移除', d: '出厂快捷方式清空、由用户手动新增（「添加」抽屉勾选「同时添加到底部 Dock」）；图标显示站点 favicon（失败回退品牌字形）；苹果式尺寸与玻璃质感' },
@@ -1808,9 +1800,6 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
   const showToast = useApp((s) => s.showToast)
   const updateConfig = useApp((s) => s.updateConfig)
   const weather = useApp((s) => s.weather)
-  const encourage = useApp((s) => s.encourage)
-  const playing = useApp((s) => s.playing)
-  const rollEncourage = useApp((s) => s.rollEncourage)
   const c = cfg(item)
   const def = WIDGET_DEFS[item.t]
   /* 时钟 / 倒计时详情需要每秒走字；其他类型不受影响（effect 内按类型决定是否启动定时器） */
@@ -1926,29 +1915,63 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
         </>
       )
     case 'countdown': {
-      /* 两种计时模式：下班时刻（实时倒计时，已过则顺计时）或目标日期（天数，已过显示「天前」）；
-         倒数列表与吉祥物两模式共用 */
-      const dayMode = str(c['mode'], '下班倒计时') === '倒数日'
+      /* 三种计时模式：下班时刻（实时倒计时，已过则顺计时）/ 目标日期（倒数日，已过显示「天前」）/
+         起始日期（纪念日，按天数单位换算）；倒数列表与吉祥物三模式共用 */
+      const mode = str(c['mode'], '下班倒计时')
       const dateStr = str(c['date'], '2027-01-01')
-      const days = dayMode ? daysUntil(dateStr, now) : null
+      const days = mode === '下班倒计时' ? null : daysUntil(dateStr, now)
       const at = str(c['at'], '18:00').split(':')
       const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
       const left = Math.floor((end.getTime() - now.getTime()) / 1000)
       const passed = left < 0
       const a = Math.abs(left)
       const t = `${p2(Math.floor(a / 3600))}:${p2(Math.floor(a / 60) % 60)}:${p2(a % 60)}`
+      const unit = str(c['unitLabel'], '天')
+      const past = days === null ? null : Math.abs(days)
+      const annNum = past === null ? null
+        : unit === '周' ? Math.floor(past / 7)
+        : unit === '月' ? Math.floor(past / 30)
+        : unit === '年' ? Math.floor(past / 365)
+        : past
+      /* 下次周年：起始日期的月 / 日，下一个还没到来的那天（沿用旧纪念日卡的信息，合并后收进详情） */
+      const md = /^\d{4}-(\d{2})-(\d{2})$/.exec(dateStr.trim())
+      const nextAnn = md === null ? null : new Date(now.getFullYear(), Number(md[1]) - 1, Number(md[2]))
+      if (nextAnn !== null && days !== null && days < 0) nextAnn.setFullYear(nextAnn.getFullYear() + 1)
+      const nextAnnText = nextAnn === null
+        ? ''
+        : `${nextAnn.getFullYear()}-${p2(nextAnn.getMonth() + 1)}-${p2(nextAnn.getDate())}`
       body = (
         <>
           <div className="dt-clock">
-            <div className="dt-sub">{dayMode ? `距离目标日 · ${dateStr}` : `${passed ? '已过目标时刻' : '距目标时刻'}（今天 ${str(c['at'], '18:00')}）`}</div>
-            <div className="dt-time">
-              {dayMode ? (days === null ? '--' : Math.abs(days)) : t}
-              {dayMode && <span className="dt-unit">{days !== null && days < 0 ? '天前' : '天'}</span>}
+            <div className="dt-sub">
+              {mode === '纪念日' ? `${str(c['title'], '与MiNa相识')} · ${dateStr}` : mode === '倒数日' ? `距离目标日 · ${dateStr}` : `${passed ? '已过目标时刻' : '距目标时刻'}（今天 ${str(c['at'], '18:00')}）`}
             </div>
-            {dayMode && (
+            <div className="dt-time">
+              {mode === '下班倒计时' ? t : mode === '纪念日' ? (annNum === null ? '--' : annNum) : days === null ? '--' : Math.abs(days)}
+              {mode !== '下班倒计时' && <span className="dt-unit">{mode === '纪念日' ? unit : days !== null && days < 0 ? '天前' : '天'}</span>}
+            </div>
+            {mode === '倒数日' && (
               <div className="dt-sub">{days === null ? '日期未设置，请在编辑配置里填写' : days > 0 ? `还有 ${days} 天到达目标日` : days === 0 ? '就是今天' : `目标日已过去 ${-days} 天`}</div>
             )}
+            {mode === '纪念日' && (
+              <div className="dt-sub">{days === null || nextAnnText === ''
+                ? '日期未设置，请在编辑配置里填写'
+                : `${days <= 0 ? `已过去 ${past} 天` : `还有 ${past} 天到达起始日`} · 距下次周年 ${nextAnnText} 还有 ${daysUntil(nextAnnText, now)} 天`}</div>
+            )}
           </div>
+          {mode === '纪念日' && (
+            <>
+              <div className="f-row"><label className="f-label">纪念日标题</label>
+                <input className="f-input" value={str(c['title'])} placeholder="与MiNa相识"
+                  onChange={(e) => updateConfig(item.id, { title: e.target.value })} />
+              </div>
+              <div className="f-row"><label className="f-label">天数单位</label>
+                <div className="cats">{['天', '周', '月', '年'].map((u) => (
+                  <div key={u} className={`cat${u === unit ? ' active' : ''}`} onClick={() => updateConfig(item.id, { unitLabel: u })}>{u}</div>
+                ))}</div>
+              </div>
+            </>
+          )}
           <CountdownEntries item={item} />
           <SwitchRow l="显示节日倒数" on={bool(c['showFestivals'])} onToggle={() => updateConfig(item.id, { showFestivals: !bool(c['showFestivals']) })} />
           <div className="f-row"><label className="f-label">吉祥物图形</label>
@@ -1959,73 +1982,6 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
       )
       break
     }
-    case 'ann': {
-      const date = str(c['date'], '2020-05-20')
-      const t0 = Date.parse(date)
-      const days = Number.isNaN(t0) ? 0 : Math.max(0, Math.floor((Date.now() - t0) / 86400000))
-      body = (
-        <div className="dt-clock">
-          <div className="dt-sub">{str(c['title'], '与MiNa相识')} · {date}</div>
-          <div className="dt-time">{days}<span className="dt-unit">{str(c['unitLabel'], '天')}</span></div>
-        </div>
-      )
-      break
-    }
-    case 'news':
-      body = (
-        <>
-          <div className="dt-list">
-            {HOT.map((h, i) => (
-              <div className="dt-row" key={h[0]} data-act="hot-open" data-v={h[0]}>
-                <span className="dt-rank">{i + 1}</span>
-                <span className="dt-name">{h[0]}</span>
-                <span className="dt-host">{h[1]}</span>
-              </div>
-            ))}
-          </div>
-          <Hint>榜单为内置演示数据，点条目查看打开行为。</Hint>
-        </>
-      )
-      break
-    case 'quote':
-      body = (
-        <div className="dt-clock">
-          <div className="dt-sub">{`${getGreetingByHour(now.getHours())}，${str(c['nick']) === '' ? useApp.getState().settings.nick : str(c['nick'])}`}</div>
-          <div className="dt-quote">{encourage}</div>
-          <div className="btn-row" style={{ justifyContent: 'center' }}>
-            <button className="btn sm ghost" onClick={rollEncourage}>换一句</button>
-          </div>
-        </div>
-      )
-      break
-    case 'woodfish': {
-      const step = Math.max(1, num(c['step'], 1))
-      body = (
-        <div className="dt-clock">
-          <div className="dt-time">{num(c['count'], 0)}<span className="dt-unit">功德</span></div>
-          <div className="btn-row" style={{ justifyContent: 'center' }}>
-            <button className="btn" onClick={() => updateConfig(item.id, { count: num(c['count'], 0) + step })}>功德 +{step}</button>
-          </div>
-        </div>
-      )
-      break
-    }
-    case 'music':
-      body = (
-        <>
-          <div className="dt-clock">
-            <div className="dt-sub">当前电台</div>
-            <div className="dt-quote">{str(c['station'], '熊猫Dj')}</div>
-          </div>
-          <div className="btn-row" style={{ justifyContent: 'center' }}>
-            <button className="btn sm ghost" data-act="music-prev">上一首</button>
-            <button className="btn" data-act="music-toggle">{playing ? '暂停' : '播放'}</button>
-            <button className="btn sm ghost" data-act="music-next">下一首</button>
-          </div>
-          <Hint>播放状态为界面演示；接入真实音频源后此页即成播放器。</Hint>
-        </>
-      )
-      break
     case 'group': {
       const apps = (Array.isArray(c['apps']) ? c['apps'] : []).filter((x): x is string => typeof x === 'string')
       body = (
@@ -2044,25 +2000,6 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
       )
       break
     }
-    case 'calc':
-      body = <Hint>计算器当前为占位组件：点击卡片不执行计算，副标题文案可在编辑配置里修改；完整计算能力在后续版本接入。</Hint>
-      break
-    case 'trans':
-      body = (
-        <>
-          <div className="dt-clock"><div className="dt-sub">语言方向</div><div className="dt-quote">{str(c['pair'], '中英互译 · 划词')}</div></div>
-          <Hint>翻译当前为占位组件，真实翻译服务在后续版本接入。</Hint>
-        </>
-      )
-      break
-    case 'ai':
-      body = (
-        <>
-          <div className="dt-clock"><div className="dt-sub">服务商</div><div className="dt-quote">{str(c['provider'], 'UiTab AI')}</div></div>
-          <Hint>AI 助手当前为占位组件，真实对话能力在后续版本接入。</Hint>
-        </>
-      )
-      break
     default:
       body = <Hint>该类型暂无详情视图。</Hint>
   }

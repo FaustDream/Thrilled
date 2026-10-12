@@ -28,7 +28,6 @@ const OLD = {
   ENGINE: 'engine',
   ENGINE_ORDER: 'engine_order',
   SEARCH_HISTORY: 'search_history',
-  NICKNAME: 'config_nickname',
   AUTO_FOCUS: 'auto_focus',
   SEARCH_RETAIN: 'search_retain',
   SEARCH_HIDE_BTN: 'search_hide_btn',
@@ -252,11 +251,9 @@ export async function migrateV3(factoryStandard: ModePages): Promise<MigrationRe
   const entries = toEntries(old.get(OLD.PAGES));
   const { pages: standard, appended } = appendIconPages(factoryStandard, entries);
   const { engines, engineId } = mapEngines(old.get(OLD.ENGINE_ORDER), old.get(OLD.ENGINE));
-  const nick = old.get(OLD.NICKNAME);
   const history = old.get(OLD.SEARCH_HISTORY);
   const settings: Partial<AppSettings> = {
     engineId,
-    ...(typeof nick === 'string' && nick.trim() !== '' ? { nick: nick.trim() } : {}),
     ...(old.get(OLD.AUTO_FOCUS) === 'true' ? { autoFocus: true } : {}),
     ...(old.get(OLD.SEARCH_RETAIN) === 'true' ? { searchKeep: true } : {}),
     ...(old.get(OLD.SEARCH_HIDE_BTN) === 'true' ? { hideBtn: true } : {}),

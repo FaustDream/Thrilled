@@ -34,7 +34,13 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(s.skinId).toBe('dark')
   })
 
-  it('透明度 12 项与毛玻璃 6 项各自独立归一化（解耦后互不牵连）', () => {
+  it('网格对齐线开关归一化（非布尔值回退出厂关；旧文档无该键亦为关）', () => {
+    expect(normalizeSettings({ gridLines: true }).gridLines).toBe(true)
+    expect(normalizeSettings({ gridLines: 'yes' }).gridLines).toBe(DEFAULT_SETTINGS.gridLines)
+    expect(normalizeSettings({}).gridLines).toBe(DEFAULT_SETTINGS.gridLines)
+  })
+
+  it('透明度 11 项与毛玻璃 6 项各自独立归一化（解耦后互不牵连）', () => {
     const s = normalizeSettings({
       glass: { glyph: 0.8, line: 2 },   // line 超上限 → 钳制 1
       blur: { card: 99, dock: 4 },      // card 超上限 → 钳制 20
@@ -206,6 +212,20 @@ describe('持久化文档解析（parseStoredDoc）', () => {
     expect(out?.pages[0]?.[0]).toMatchObject({
       id: 'a', c: 16, r: 0, w: 4, h: 2, t: 'countdown',
       config: { title: '距离元旦', date: '2027-01-01', accent: '#A855F7', mode: '倒数日' },
+    })
+  })
+
+  it('旧类型「纪念日」转接为「倒计时」纪念日模式（位置 / 起始日期 / 单位保留）', () => {
+    const d = doc()
+    d.pages = [[
+      { id: 'a', c: 8, r: 0, w: 8, h: 4, t: 'ann' as unknown as 'icon', config: { title: '在一起', date: '2020-05-20', unitLabel: '周' } },
+      { id: 'b', c: 0, r: 0, w: 2, h: 2, t: 'icon', config: {} },
+    ]]
+    const out = parseStoredDoc(d, WIDGET_KINDS)
+    expect(out?.pages[0]).toHaveLength(2)
+    expect(out?.pages[0]?.[0]).toMatchObject({
+      id: 'a', c: 8, r: 0, w: 8, h: 4, t: 'countdown',
+      config: { title: '在一起', date: '2020-05-20', unitLabel: '周', mode: '纪念日' },
     })
   })
 

@@ -10,7 +10,7 @@ import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
 import { CELL, GROUP_GAP, GROUP_PAD, INSET, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
-import { daysUntil, getGreetingByHour, normTodoItems } from '../core/utils'
+import { daysUntil, normTodoItems } from '../core/utils'
 import { normCountdownEntries, upcomingRows } from '../core/festivals'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
@@ -40,9 +40,6 @@ export const styleVarsOf = (c: Record<string, unknown>): Record<string, string> 
   if (/^#[0-9a-f]{6}$/i.test(accent)) out['--accent'] = accent
   return out
 }
-
-/** 时段问候（语料与 core/utils 共用） */
-export const greetByHour = getGreetingByHour
 
 /**
  * 统一图标容器：底色取容器令牌，品牌色只用于字形（全站唯一一种图标语言）。
@@ -107,34 +104,48 @@ const panda = () => (
 )
 
 /**
- * 倒计时卡（「下班倒计时 / 倒数日」已合并为一个组件）：
- * 主读数按计时模式切换——下班时刻 HH:MM:SS（到点停在 00:00:00）/ 目标日期天数（已过显示「天前」）；
- * 倒数列表（节日 + 用户自定义，按剩余天数升序）与吉祥物两模式共用，仅 4 格高的卡片显示列表，
+ * 倒计时卡（「下班倒计时 / 倒数日 / 纪念日」已合并为一个组件）：
+ * - 下班倒计时：到下班时刻（at）的 HH:MM:SS，到点停住
+ * - 倒数日：到目标日期（date）的天数，已过显示「天前」
+ * - 纪念日：自起始日期（date）起已过的天数（title 作标题行，unitLabel 按 天/周/月/年 换算）
+ * 倒数列表（节日 + 用户自定义）与吉祥物三模式共用，仅 4 格高的卡片显示列表，
  * 4×2 矮卡只留主读数（即原「倒数日」卡的形态，日期行由 @container 窄卡规则隐去）。
  */
 const CountdownCard = ({ item, c, now }: { item: GridItem; c: Record<string, unknown>; now: Date }) => {
-  const dayMode = str(c['mode'], '下班倒计时') === '倒数日'
+  const mode = str(c['mode'], '下班倒计时')
   const dateStr = str(c['date'], '2027-01-01')
-  const days = dayMode ? daysUntil(dateStr, now) : null
+  const left = daysUntil(dateStr, now)
   const at = str(c['at'], '18:00').split(':')
   const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
-  const left = Math.max(0, Math.floor((end.getTime() - now.getTime()) / 1000))
-  const timer = `${p2(Math.floor(left / 3600))}:${p2(Math.floor(left / 60) % 60)}:${p2(left % 60)}`
+  const secs = Math.max(0, Math.floor((end.getTime() - now.getTime()) / 1000))
+  const timer = `${p2(Math.floor(secs / 3600))}:${p2(Math.floor(secs / 60) % 60)}:${p2(secs % 60)}`
+  /* 纪念日按天数单位换算（与旧纪念日组件同一算法：周 7 天 / 月 30 天 / 年 365 天） */
+  const unit = str(c['unitLabel'], '天')
+  const past = left === null ? null : Math.abs(left)
+  const annNum = past === null ? null
+    : unit === '周' ? Math.floor(past / 7)
+    : unit === '月' ? Math.floor(past / 30)
+    : unit === '年' ? Math.floor(past / 365)
+    : past
   const rows = item.h >= 4
     ? upcomingRows(normCountdownEntries(c['entries']), bool(c['showFestivals']), now).slice(0, 4)
     : []
   /* 吉祥物三态：留空 = 内置熊猫 SVG（兼容旧配置 showMascot:false）；填「无」隐藏；填 emoji 自定义 */
   const mascot = str(c['mascotEmoji'], bool(c['showMascot']) === false ? '无' : '').trim()
   return (
-    <div className={`w-cd${dayMode ? ' day' : ''}`} style={{ position: 'absolute', inset: 0 }}>
+    <div className={`w-cd${mode === '下班倒计时' ? '' : ' day'}`} style={{ position: 'absolute', inset: 0 }}>
       <div className="cd-l">
-        <div className="cd-hint">{dayMode ? '距离目标日' : '坚持住，距下班只有'}</div>
-        <div className="cd-time">
-          {dayMode
-            ? (days === null ? '--' : <>{Math.abs(days)}<span className="cd-unit">{days < 0 ? '天前' : '天'}</span></>)
-            : timer}
+        <div className="cd-hint">
+          {mode === '纪念日' ? str(c['title'], '与MiNa相识') : mode === '倒数日' ? '距离目标日' : '坚持住，距下班只有'}
         </div>
-        {dayMode && <div className="cd-date">{dateStr}</div>}
+        <div className="cd-time">
+          {mode === '下班倒计时' ? timer : mode === '纪念日' ? (
+            <>{annNum === null ? '--' : annNum}<span className="cd-unit">{unit}</span></>
+          ) : (
+            <>{left === null ? '--' : Math.abs(left)}<span className="cd-unit">{left !== null && left < 0 ? '天前' : '天'}</span></>
+          )}
+        </div>
+        {mode !== '下班倒计时' && <div className="cd-date">{dateStr}</div>}
         {rows.length > 0 && (
           <div className="cd-grid">
             {rows.map((r, i) => (
@@ -156,73 +167,18 @@ const CountdownCard = ({ item, c, now }: { item: GridItem; c: Record<string, unk
   )
 }
 
-export const HOT: readonly (readonly [string, string])[] = [
-  ['台风“桦加沙”最新路径公布', '326.4万'], ['国庆中秋假期出行全指南', '298.1万'],
-  ['我国成功发射新一组低轨卫星', '256.7万'], ['新能源汽车下乡政策发布', '218.3万'],
-  ['多地气温创入秋以来新低', '196.5万'], ['国产大模型开源新进展', '174.2万'],
-]
-
 export interface WidgetProps {
   item: GridItem
   /** 时钟当前时间（由宿主每秒推进一次） */
   now: Date
-  /** 全局问候语素材（每日一言卡用，存在设置里而不是卡片配置里） */
-  nick: string
-  encourage: string
-  /** 音乐卡的播放态 */
-  playing: boolean
   /** 实况天气（core/weather；null 时显示占位数据） */
   weather: WeatherData | null
 }
 
 /** 小组件渲染器：kind → 卡片内部结构 */
-export const WidgetView = ({ item, now, nick, encourage, playing, weather }: WidgetProps) => {
+export const WidgetView = ({ item, now, weather }: WidgetProps) => {
   const c = cfg(item)
   switch (item.t) {
-    case 'news': {
-      const source = str(c['source'], '看点')
-      const count = Math.max(1, Math.min(6, num(c['count'], 5)))
-      return (
-        <div className="w-news" style={{ position: 'absolute', inset: 0 }}>
-          <div className="news-head">
-            {['看点', '百度', '微博', '抖音'].map((t) => (
-              <div key={t} className={`news-tab${t === source ? ' active' : ''}`} data-act="hot-tab" data-v={t}>{t}</div>
-            ))}
-            <div className="news-more" data-act="hot-refresh">»</div>
-          </div>
-          <div className="news-list">
-            {HOT.slice(0, count).map((h, i) => (
-              <div key={h[0]} className={`news-row${i === 0 ? ' top' : ''}`} data-act="hot-open" data-v={h[0]}>
-                <span className="news-idx">{i + 1}</span>
-                <span className="news-title">{h[0]}</span>
-                {bool(c['showHeat']) && <span className="news-heat">{h[1]}</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )
-    }
-    case 'music':
-      return (
-        <div className="w-music" style={{ position: 'absolute', inset: 0 }}>
-          <div className="mu-list" data-act="music-list">{Icon.list()}</div>
-          <div className="mu-disc"><i /></div>
-          <div className="mu-ctl">
-            <div className="mu-btn" data-act="music-prev">{Icon.prev()}</div>
-            <div className="mu-btn play" data-act="music-toggle">{playing ? Icon.pause() : Icon.play()}</div>
-            <div className="mu-btn" data-act="music-next">{Icon.next()}</div>
-          </div>
-        </div>
-      )
-    case 'ai':
-      return (
-        <div className="w-ai" style={{ position: 'absolute', inset: 0 }}>
-          <div className="ai-logo">AI</div>
-          <div className="ai-line" />
-          <div className="ai-name">{str(c['provider'], 'UiTab AI')}</div>
-          <div className="ai-sub">试试问问这些问题</div>
-        </div>
-      )
     case 'weather': {
       /* 专属配置：城市 / 温度单位（摄氏 · 华氏）/ 是否显示温度区间 */
       const toF = str(c['unit'], '摄氏 °C') === '华氏 °F'
@@ -313,52 +269,8 @@ export const WidgetView = ({ item, now, nick, encourage, playing, weather }: Wid
       )
     }
     case 'countdown':
-      /* 下班倒计时 + 倒数日合并（原「倒数日」独立组件已并入）：模式与读数见 CountdownCard */
+      /* 下班倒计时 / 倒数日 / 纪念日三模式（原三类组件已并入）：模式与读数见 CountdownCard */
       return <CountdownCard item={item} c={c} now={now} />
-    case 'ann': {
-      const date = str(c['date'], '2020-05-20')
-      const t0 = Date.parse(date)
-      const days = Number.isNaN(t0) ? 0 : Math.max(0, Math.floor((Date.now() - t0) / 86400000))
-      return (
-        <div className="w-ann" style={{ position: 'absolute', inset: 0 }}>
-          <div className="ann-l">
-            <div className="ann-title">{str(c['title'], '与MiNa相识')}</div>
-            <div className="ann-date">{date}</div>
-          </div>
-          <div className="ann-r"><span className="ann-num">{days}</span><span className="ann-unit">{str(c['unitLabel'], '天')}</span></div>
-        </div>
-      )
-    }
-    case 'quote':
-      return (
-        <div className="w-quote" style={{ position: 'absolute', inset: 0 }} data-act="quote-refresh">
-          {bool(c['showGreeting']) && (
-            <div className="qt-hi">{`${greetByHour(now.getHours())}，${str(c['nick']) === '' ? nick : str(c['nick'])}`}</div>
-          )}
-          <div className="qt-enc"><span className="qt-enc-t">{encourage}</span></div>
-        </div>
-      )
-    case 'woodfish':
-      return (
-        <div className="w-fish" style={{ position: 'absolute', inset: 0 }} data-act="fish-hit">
-          <span className="fish-ico">{Icon.fish()}</span>
-          <span className="fish-num">{num(c['count'], 0)}</span>
-        </div>
-      )
-    case 'calc':
-      return (
-        <div className="w-mini" style={{ position: 'absolute', inset: 0 }}>
-          {Icon.calc()}
-          <div className="mini-l"><div className="mini-t">计算器</div><div className="mini-s">{str(c['desc'], '点击开始计算')}</div></div>
-        </div>
-      )
-    case 'trans':
-      return (
-        <div className="w-mini" style={{ position: 'absolute', inset: 0 }}>
-          {bool(c['showIcon']) && Icon.trans()}
-          <div className="mini-l"><div className="mini-t">翻译</div><div className="mini-s">{str(c['pair'], '中英互译 · 划词')}</div></div>
-        </div>
-      )
     case 'group': {
       /* 图标格容器：格子边长由 shared/grid 的 groupGrid 按卡片实际尺寸算出（铺满卡片，不再挤成一串小字形）；
          名称标签已移除（用户需求），卡片高度全部留给图标格 */

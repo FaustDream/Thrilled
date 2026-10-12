@@ -85,9 +85,9 @@ describe('布局导入归一化（normPages）', () => {
   })
 
   it('多页（数组套数组）按页保留', () => {
-    const pages = normPages([[{ w: 8, h: 4, t: 'news' }], [{ w: 2, h: 2, t: 'icon' }]])
+    const pages = normPages([[{ w: 8, h: 4, t: 'countdown' }], [{ w: 2, h: 2, t: 'icon' }]])
     expect(pages.map((p) => p.length)).toEqual([1, 1])
-    expect(pages[0]?.[0]?.t).toBe('news')
+    expect(pages[0]?.[0]?.t).toBe('countdown')
   })
 
   it('坏数据被丢弃（缺类型 / 非正尺寸 / 非数组）', () => {
@@ -103,6 +103,19 @@ describe('布局导入归一化（normPages）', () => {
       c: 4, r: 2, w: 4, h: 2, t: 'countdown',
       config: { title: '距离元旦', date: '2027-01-01', accent: '#A855F7', mode: '倒数日' },
     })
+  })
+
+  it('旧类型「纪念日」转接为「倒计时」纪念日模式（标题 / 起始日期 / 单位三个键无缝衔接）', () => {
+    const pages = normPages([{ c: 8, r: 0, w: 8, h: 4, t: 'ann', config: { title: '在一起', date: '2020-05-20', unitLabel: '天' } }])
+    expect(pages[0]?.[0]).toMatchObject({
+      c: 8, r: 0, w: 8, h: 4, t: 'countdown',
+      config: { title: '在一起', date: '2020-05-20', unitLabel: '天', mode: '纪念日' },
+    })
+  })
+
+  it('被移除的组件（新闻 / 音乐 / 每日一言 / 木鱼 / 计算器 / 翻译 / AI）不再放行', () => {
+    expect(normPages([{ w: 8, h: 4, t: 'news' }, { w: 4, h: 4, t: 'music' }, { w: 8, h: 2, t: 'quote' }])).toEqual([])
+    expect(normPages([{ w: 2, h: 2, t: 'woodfish' }, { w: 4, h: 2, t: 'calc' }, { w: 4, h: 2, t: 'trans' }, { w: 4, h: 4, t: 'ai' }])).toEqual([])
   })
 })
 
@@ -131,7 +144,7 @@ describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', ()
 
   it('含非图标卡（出厂小组件）的页集不合并', () => {
     expect(mergeIconPages([[icon('A')], [{ ...icon('B'), t: 'clock' }]])).toBeNull()
-    expect(mergeIconPages([[{ ...icon('A'), t: 'news' }], [icon('B')]])).toBeNull()
+    expect(mergeIconPages([[{ ...icon('A'), t: 'group' }], [icon('B')]])).toBeNull()
   })
 
   it('单页或空页集不合并', () => {
@@ -146,14 +159,15 @@ describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', ()
 })
 
 describe('组件库数据（分组 / 三档尺寸 / 配置项上限）', () => {
-  it('每类小组件都归入唯一分组，四组都非空且覆盖全部类型', () => {
+  it('每类小组件都归入唯一分组，三组都非空且覆盖全部类型', () => {
     const kinds = Object.keys(WIDGET_DEFS)
     const groups: Record<string, string | undefined> = WIDGET_GROUPS
     expect(kinds.filter((k) => groups[k] === undefined)).toEqual([])
     for (const g of WIDGET_GROUPS_ORDER) {
       expect(WIDGET_LIST.filter((w) => WIDGET_GROUPS[w.t] === g).length, `${g} 组为空`).toBeGreaterThan(0)
     }
-    expect(WIDGET_GROUPS_ORDER).toEqual(['信息', '工具', '内容', '导航'])
+    /* 「内容」分组随其组件（新闻 / 音乐 / 每日一言 / 木鱼）整体移除 */
+    expect(WIDGET_GROUPS_ORDER).toEqual(['信息', '工具', '导航'])
   })
 
   it('尺寸三档都是合法尺寸（小 / 宽 / 大）', () => {
@@ -203,10 +217,10 @@ describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）'
   })
 
   it('自然短边取两轴较小者：竖向卡取宽、横向卡取高', () => {
-    expect(naturalMinOf('fav')).toBe(98)    /* 2×4：98 × 246 */
-    expect(naturalMinOf('news')).toBe(246)  /* 8×4：542 × 246 */
-    expect(naturalMinOf('clock')).toBe(246) /* 4×4 */
-    expect(naturalMinOf('icon')).toBe(98)   /* 2×2 */
+    expect(naturalMinOf('fav')).toBe(98)      /* 2×4：98 × 246 */
+    expect(naturalMinOf('countdown')).toBe(246) /* 8×4：542 × 246 */
+    expect(naturalMinOf('clock')).toBe(246)    /* 4×4 */
+    expect(naturalMinOf('icon')).toBe(98)      /* 2×2 */
   })
 
   /* CSS 侧的 --u 公式（prototype.css §23）在 JS 里的等价实现，用于钉住「只放大不缩小」这条规则 */
@@ -225,8 +239,8 @@ describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）'
     expect(scaleOf('clock', 8, 4)).toBe(1)
     /* 天气（自然 4×2）：放进 8×4 时受宽度限制 → 2.2 倍 */
     expect(scaleOf('weather', 8, 4)).toBeCloseTo(2.2, 2)
-    /* 新闻（自然 8×4）：4×4 是缩小方向 → 1 */
-    expect(scaleOf('news', 4, 4)).toBe(1)
+    /* 倒计时（自然 8×4）：4×4 是缩小方向 → 1 */
+    expect(scaleOf('countdown', 4, 4)).toBe(1)
   })
 
   it('每类组件的默认尺寸都在自己的能力区间内（放置即合法）', () => {
@@ -245,21 +259,19 @@ describe('尺寸自适应（自然短边 / 尺寸能力 / 容器单位基准）'
     }
   })
 
-  it('内容型组件拒绝装不下的档位（新闻 / 日历 / 音乐 / 图标格容器）', () => {
-    expect(sizeAllowed('news', 4, 2)).toBe(false)     /* 高 2 格只有 98px，列表放不下 */
-    expect(sizeAllowed('news', 4, 4)).toBe(true)
-    expect(sizeAllowed('news', 8, 4)).toBe(true)
+  it('内容型组件拒绝装不下的档位（日历 / 天气 / 图标格容器）', () => {
     expect(sizeAllowed('cal', 2, 2)).toBe(false)
     expect(sizeAllowed('cal', 4, 2)).toBe(true)
-    expect(sizeAllowed('music', 4, 2)).toBe(false)
-    expect(sizeAllowed('music', 4, 4)).toBe(true)
+    expect(sizeAllowed('fav', 2, 2)).toBe(true)
+    expect(sizeAllowed('weather', 2, 2)).toBe(false)
+    expect(sizeAllowed('weather', 4, 2)).toBe(true)
     expect(sizeAllowed('group', 4, 4)).toBe(true)
     expect(sizeAllowed('group', 2, 2)).toBe(false)
   })
 
-  it('小尺寸组件只受六档合法性约束（图标 / 木鱼可到 2×2）；时钟因 44px 时间裁切而下限 4×2', () => {
+  it('小尺寸组件只受六档合法性约束（网站图标 / 图标文件夹可到 2×2）；时钟因 44px 时间裁切而下限 4×2', () => {
     expect(sizeAllowed('icon', 2, 2)).toBe(true)
-    expect(sizeAllowed('woodfish', 2, 2)).toBe(true)
+    expect(sizeAllowed('folder', 2, 2)).toBe(true)
     expect(sizeAllowed('clock', 2, 2)).toBe(false)
     expect(sizeAllowed('clock', 4, 2)).toBe(true)
     expect(sizeAllowed('clock', 4, 4)).toBe(true)

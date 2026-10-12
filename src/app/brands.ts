@@ -111,3 +111,15 @@ export const brandOf = (name: string): { color: string; glyph: string; latin: bo
 
 /** 读取站点 URL（未知名称返回 null，调用方回退搜索） */
 export const siteUrlOf = (name: string): string | null => BRANDS[name]?.url ?? null
+
+/** 网址导航分类（添加抽屉的网址导航页签与右键菜单的「网址导航」飞子菜单共用） */
+export const NAVI: readonly { c: string; l: readonly string[] }[] = [
+  { c: '常用', l: ['百度', '哔哩哔哩', '知乎', '微博', '淘宝', '京东', 'GitHub', 'Gmail'] },
+  { c: '影音', l: ['爱奇艺', '腾讯视频', '网易云音乐', 'YouTube'] },
+  { c: '游戏', l: ['Steam', 'TapTap'] },
+  { c: '社交', l: ['微信', '知乎'] },
+  { c: '学习', l: ['学习通', '网易公开课', '语雀', 'Notion'] },
+  { c: '购物', l: ['京东', '天猫', '拼多多', '唯品会', '苏宁易购'] },
+  { c: '工具', l: ['翻译', '计算器', '截图', '二维码'] },
+  { c: 'AI', l: ['豆包', 'Kimi', '秘塔AI搜索', '通义千问'] },
+];

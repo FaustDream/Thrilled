@@ -5,9 +5,7 @@ dist.zip
 *.log
 .DS_Store
 releases/
-docs/*
-!docs/v4/
-!docs/memory/
+docs/
 .codebuddy/
 AGENTS.md
 BUG_FIXES.md

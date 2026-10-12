@@ -10,7 +10,7 @@ import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type Drawer
 import { CELL, COLS, INSET, itemBox, PAGE_W, ROWS, STAGE_W } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
-import { WidgetView, SiteIcon, cfg, str, num, styleVarsOf } from './widgets'
+import { WidgetView, SiteIcon, cfg, str, styleVarsOf } from './widgets'
 import { normTodoItems } from '../core/utils'
 import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
@@ -115,8 +115,6 @@ export const App = () => {
   const toastMsg = useApp((s) => s.toast)
   const enginePanel = useApp((s) => s.enginePanel)
   const history = useApp((s) => s.history)
-  const encourage = useApp((s) => s.encourage)
-  const playing = useApp((s) => s.playing)
   const weather = useApp((s) => s.weather)
   const [now, setNow] = useState(() => new Date())
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -133,8 +131,6 @@ export const App = () => {
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
-  /* 极简模式的鼓励语跟随「每日一言」组件是否存在（组件库管放什么：移除该组件即不再显示） */
-  const hasQuote = pages.some((pg) => pg.some((it) => it.t === 'quote'))
   /* ---------- Dock 苹果式悬停放大（指针接近度 → 余弦衰减缩放，图标原点贴底向上生长） ---------- */
   const dockMagnify = (e: ReactMouseEvent) => {
     const bar = dockBarRef.current
@@ -279,7 +275,6 @@ export const App = () => {
       if (id) useApp.setState({ itemId: id })
       const item = allItems(st.pages).find((x) => x.id === id) ?? null
       switch (name) {
-        case 'hot-tab': if (id) st.updateConfig(id, { source: v }); break
         /* 待办卡上的勾选框：直接翻转完成态（编辑仍在详情弹窗） */
         case 'todo-card': {
           if (item === null) break
@@ -290,15 +285,8 @@ export const App = () => {
           }
           break
         }
-        case 'hot-refresh': st.showToast('已换一批热点'); break
-        case 'hot-open': st.showToast(`打开链接：${v}`); break
-        case 'music-list': st.showToast(`播放列表：${item ? str(cfg(item)['station'], '熊猫Dj') : '熊猫Dj'}`); break
-        case 'music-prev': st.showToast('上一首'); break
-        case 'music-next': st.showToast('下一首'); break
-        case 'music-toggle': st.setPlaying(!st.playing); break
-        case 'quote-refresh': st.rollEncourage(); break
-        /* 每次功课的功德数可配置（默认 +1） */
-        case 'fish-hit': if (item) st.updateConfig(item.id, { count: Number(cfg(item)['count'] ?? 0) + Math.max(1, num(cfg(item)['step'], 1)) }); break
+        /* 右键「网址导航」飞子菜单：站点统一新标签页打开（新标签页不离开当前主页） */
+        case 'nav-open': st.openCtx(null); openByMode(st, v, 'link', 'tab'); break
         case 'engine-open': {
           setHistoryOpen(false)
           /* 引擎图标点击行为可在设置里改为「切换下一个引擎」（对只用一两个引擎的人更快） */
@@ -342,7 +330,7 @@ export const App = () => {
         case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', setting: 'setting' } as const)[v] ?? 'setting'); break
         case 'open-modal': st.setModal(v as 'theme'); break
         case 'ctx-tog': {
-          const k = v as 'labels' | 'mascot' | 'hideSearch'
+          const k = v as 'labels' | 'mascot' | 'hideSearch' | 'gridLines'
           st.toggle(k)
           break
         }
@@ -426,7 +414,6 @@ export const App = () => {
         case 'open-add': st.setDrawer('add'); return true
         case 'open-personal': st.setDrawer('personal'); return true
         case 'open-setting': st.setDrawer('setting'); return true
-        case 'roll-quote': st.rollEncourage(); return true
         case 'export-layout': {
           downloadJson('thrilled-layout.json', buildLayoutDoc(st.exportLayout().pages))
           st.showToast('已导出 thrilled-layout.json')
@@ -541,8 +528,10 @@ export const App = () => {
         {pages.map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
             <div className="grid" ref={i === cur ? gridRef : undefined}>
+              {/* 网格对齐线：设置开启时常显；添加 / 拖拽组件时强制显示（位置确认的视觉参照） */}
+              {(settings.gridLines || drag !== null) && <div className="grid-lines" />}
               {pg.map((it, idx) => (
-                <GridCard key={it.id} item={it} idx={idx} now={now} nick={settings.nick} encourage={encourage} playing={playing} weather={weather}
+                <GridCard key={it.id} item={it} idx={idx} now={now} weather={weather}
                   dragging={drag?.id === it.id ? drag : null}
                   onDragStart={(e) => {
                     if (e.button !== 0 || (e.target as HTMLElement).closest('.ia')) return
@@ -560,7 +549,7 @@ export const App = () => {
               {pg.length === 0 && (
                 <div className="grid-hint">
                   <div className="gh-title">这里可以放小组件和网站</div>
-                  <div className="gh-sub">点击底部 Dock 的「+」→ 小组件页签有 18 类可选（时钟 / 日历 / 待办 / 天气 / 新闻热点…），网址导航与自定义网站也在那里</div>
+                  <div className="gh-sub">点击底部 Dock 的「+」→ 小组件页签有 9 类可选（时钟 / 日历 / 待办 / 天气 / 倒计时…），网址导航与自定义网站也在那里；右键空白处可直接打开「网址导航」</div>
                 </div>
               )}
             </div>
@@ -624,14 +613,11 @@ export const App = () => {
         </div>
       )}
 
-      {/* 极简模式：大时钟（日期格式 2026年9月29日）+ 鼓励语（Dock 上方） */}
+      {/* 极简模式：大时钟（日期格式 2026年9月29日） */}
       <div className="minimal-clock">
         <div className="mc-time">{`${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`}</div>
         <div className="mc-date">{`${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`}</div>
       </div>
-      {settings.mode === 'minimal' && hasQuote && (
-        <div className="minimal-quote">{encourage}</div>
-      )}
 
       {/* 模式胶囊：默认只显图标，悬停 / 点击展开 极简 / 标准 两选项（无说明文字） */}
       {!settings.hideTop && (
@@ -685,14 +671,11 @@ export const App = () => {
 }
 
 /** 单张卡片：外框（点击开站 / 拖拽换位）+ 内容 + 名称标签 + 悬浮操作 */
-const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging, onDragStart }: {
+const GridCard = ({ item, idx, now, weather, dragging, onDragStart }: {
   item: GridItem
   /** 页内序号（入场动画渐次延迟用） */
   idx: number
   now: Date
-  nick: string
-  encourage: string
-  playing: boolean
   weather: WeatherData | null
   dragging: { x: number; y: number; moved: boolean } | null
   onDragStart: (e: ReactPointerEvent) => void
@@ -717,9 +700,9 @@ const GridCard = ({ item, idx, now, nick, encourage, playing, weather, dragging,
   return (
     <>
       <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
-        data-id={item.id} data-t={item.t} data-act={item.t === 'quote' ? undefined : 'item-open'}
+        data-id={item.id} data-t={item.t} data-act="item-open"
         onPointerDown={onDragStart}>
-        <WidgetView item={item} now={now} nick={nick} encourage={encourage} playing={playing} weather={weather} />
+        <WidgetView item={item} now={now} weather={weather} />
         {/* 名称标签已整体移除（用户需求）：卡片不再显示左下角组件名；名称仍用于网址图标命名与文件夹卡 */}
         <div className="item-acts">
           <div className="ia" data-act="item-edit" title="编辑">{Icon.edit()}</div>

@@ -15,9 +15,12 @@
      --ga-* 是元素最终不透明度系数（1 = 完全可见），--blur-* 是背景模糊半径 */
   --ga-card:.67; --ga-tile:.81; --ga-glyph:1; --ga-dock:.61; --ga-dockIcon:1;
   --ga-search:.75; --ga-panel:.64; --ga-menu:.64;
-  --ga-clock:1; --ga-quote:1; --ga-line:1; --ga-hover:1;
+  --ga-clock:1; --ga-line:1; --ga-hover:1;
   --blur-card:15.6px; --blur-tile:9.1px; --blur-dock:18.2px;
   --blur-search:11.7px; --blur-panel:16.9px; --blur-menu:16.9px;
+  /* 网格对齐线：随皮肤的次要文字色派生，浅深壁纸都有一档可读强度 */
+  --grid-line:color-mix(in srgb,var(--label-color) 16%,transparent);
+  --grid-line-strong:color-mix(in srgb,var(--label-color) 32%,transparent);
   --search-radius:25px; --search-width:880px;
 }
 *{box-sizing:border-box}
@@ -85,6 +88,14 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .page{position:absolute;top:0;width:1920px;height:100%}
 /* 网格：1776px（24 列 × 74px）居中于 1920 设计稿；顶部 97px 让搜索框（底缘 98px）与首行卡片拉开 24px 间距 */
 .grid{position:absolute;left:50%;top:97px;width:1776px;height:740px;margin-left:-888px}
+/* 网格对齐线（组件落位参照）：细线 = 单元格（74px），粗线 = 偶数格（合法尺寸边界）；卡片内缩 25px，线正好落在卡间缝隙 */
+.grid-lines{position:absolute;inset:0;z-index:0;pointer-events:none;
+  background-image:
+    linear-gradient(to right,var(--grid-line) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid-line) 1px,transparent 1px),
+    linear-gradient(to right,var(--grid-line-strong) 1px,transparent 1px),
+    linear-gradient(to bottom,var(--grid-line-strong) 1px,transparent 1px);
+  background-size:74px 74px,74px 74px,148px 148px,148px 148px}
 .item{position:absolute;border-radius:var(--radius-lg);overflow:hidden;
   background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-card) * 100%),transparent);
   backdrop-filter:blur(var(--blur-card));
@@ -113,56 +124,6 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .w-group{padding:15px}
 
 /* ============ 5. 小组件 ============ */
-/* 新闻热点 */
-.w-news{display:flex;flex-direction:column}
-.news-head{height:calc(40 * var(--u));flex:0 0 auto;display:flex;align-items:center;gap:calc(12 * var(--u));
-  padding:0 calc(10 * var(--u)) 0 calc(14 * var(--u));
-  overflow:hidden;background:linear-gradient(90deg,#ff7a45,#ff4d4f);color:#fff}
-.news-tab{font-size:calc(12 * var(--u));opacity:.82;cursor:pointer;white-space:nowrap}
-.news-tab.active{opacity:1;font-weight:700}
-.news-more{margin-left:auto;width:calc(22 * var(--u));height:calc(22 * var(--u));border-radius:calc(6 * var(--u));
-  display:flex;align-items:center;justify-content:center;font-size:calc(13 * var(--u));
-  cursor:pointer;background:rgba(255,255,255,.22)}
-.news-list{flex:1;padding:calc(4 * var(--u)) calc(10 * var(--u)) calc(6 * var(--u));
-  display:flex;flex-direction:column;justify-content:space-between}
-.news-row{display:flex;align-items:center;gap:calc(8 * var(--u));height:32px;
-  border-radius:calc(8 * var(--u));padding:0 calc(6 * var(--u))}
-.news-row.top{background:rgba(255,122,69,.12)}
-.news-idx{width:calc(12 * var(--u));flex:0 0 auto;font-size:calc(13 * var(--u));font-weight:700;
-  color:#ff7a45;font-style:italic}
-.news-title{flex:1;font-size:calc(13 * var(--u));color:var(--card-text);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.news-heat{flex:0 0 auto;font-size:calc(12 * var(--u));font-weight:700;color:#ff7a45}
-
-/* 音乐（熊猫Dj） */
-.w-music{background:var(--mascot-grad);display:flex;flex-direction:column;align-items:center;
-  justify-content:center;position:relative;color:#fff}
-.mu-list{position:absolute;right:calc(12 * var(--u));top:calc(12 * var(--u));
-  width:calc(22 * var(--u));height:calc(22 * var(--u));color:rgba(255,255,255,.9);cursor:pointer}
-.mu-disc{width:calc(110 * var(--u));height:calc(110 * var(--u));border-radius:50%;
-  display:flex;align-items:center;justify-content:center;
-  background:conic-gradient(from 210deg,#2b2140,#e05a8a,#8b5cf6,#f0a6c8,#2b2140);
-  box-shadow:0 10px 26px rgba(45,20,60,.35)}
-.mu-disc i{width:calc(32 * var(--u));height:calc(32 * var(--u));border-radius:50%;
-  background:rgba(255,255,255,.86);display:block}
-.mu-ctl{display:flex;align-items:center;gap:calc(12 * var(--u));margin-top:calc(14 * var(--u))}
-.mu-btn{width:calc(34 * var(--u));height:calc(34 * var(--u));border-radius:50%;background:rgba(255,255,255,.92);
-  color:#8b5cf6;display:flex;align-items:center;justify-content:center;cursor:pointer}
-.mu-btn.play{width:calc(40 * var(--u));height:calc(40 * var(--u));color:#7c3aed}
-.mu-btn svg{width:calc(16 * var(--u));height:calc(16 * var(--u))}
-.mu-btn.play svg{width:calc(19 * var(--u));height:calc(19 * var(--u))}
-
-/* UiTab AI 类入口 */
-.w-ai{background:linear-gradient(160deg,#0b1220,#111c31);display:flex;flex-direction:column;
-  align-items:center;justify-content:center;color:#e8eefc}
-.ai-logo{font-size:calc(54 * var(--u));font-weight:800;line-height:1;letter-spacing:2px;
-  background:linear-gradient(180deg,#a7e8ff,#3b82f6);-webkit-background-clip:text;background-clip:text;
-  color:transparent;filter:drop-shadow(0 0 14px rgba(56,189,248,.6))}
-.ai-line{width:calc(104 * var(--u));height:1px;background:rgba(255,255,255,.26);
-  margin:calc(12 * var(--u)) 0 calc(10 * var(--u))}
-.ai-name{font-size:calc(15 * var(--u));font-weight:600}
-.ai-sub{font-size:calc(11 * var(--u));color:#93a4bf;margin-top:calc(4 * var(--u))}
-
 /* 天气 */
 .w-weather{display:flex;align-items:center;padding:0 calc(14 * var(--u));color:var(--card-text)}
 .wx-temp{font-size:calc(24 * var(--u));font-weight:700;flex:0 0 auto}
@@ -246,17 +207,6 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .td-txt.done{text-decoration:line-through;color:var(--card-sub)}
 .td-more,.td-empty{font-size:calc(11 * var(--u));color:var(--card-sub)}
 
-/* 纪念日 */
-.w-ann{padding:calc(20 * var(--u)) calc(24 * var(--u));display:flex;align-items:center;
-  justify-content:space-between;color:var(--card-text)}
-.ann-l{min-width:0;display:flex;flex-direction:column;gap:calc(10 * var(--u))}
-.ann-title{font-size:calc(18 * var(--u));font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ann-date{font-size:calc(13 * var(--u));color:var(--card-sub)}
-.ann-r{flex:0 0 auto;display:flex;align-items:baseline;gap:calc(6 * var(--u))}
-.ann-num{font-size:calc(54 * var(--u));font-weight:700;line-height:1;color:var(--accent);
-  font-variant-numeric:tabular-nums}
-.ann-unit{font-size:calc(14 * var(--u));color:var(--card-sub)}
-
 /* 图标文件夹（名称在图标下方，可关） */
 .w-folder{display:flex;flex-direction:column;align-items:center;justify-content:center;
   gap:calc(4 * var(--u));color:var(--card-sub)}
@@ -312,17 +262,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .pill-btn:hover{background:rgba(255,255,255,.28)}
 .pill-btn.active{background:rgba(255,255,255,.92);color:#1f2937;font-weight:600}
 
-/* ============ 8. 极简模式：大时钟 + 鼓励语 ============ */
+/* ============ 8. 极简模式：大时钟 ============ */
 .minimal-clock{position:absolute;left:50%;top:270px;transform:translateX(-50%);text-align:center;
   color:#fff;display:none;text-shadow:0 2px 14px rgba(0,0,0,.42);z-index:2}
 .mc-time{font-size:84px;font-weight:600;letter-spacing:4px;font-variant-numeric:tabular-nums}
 .mc-date{font-size:26px;font-weight:400;opacity:.96;margin-top:8px;letter-spacing:2px}
-/* 鼓励语悬浮在 Dock 上方（图8） */
-.minimal-quote{position:absolute;left:50%;bottom:130px;transform:translateX(-50%);color:#fff;
-  font-size:15px;letter-spacing:1px;text-shadow:0 2px 10px rgba(0,0,0,.5);opacity:.95;
-  z-index:var(--z-float);pointer-events:none;max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.minimal-quote::before{content:'\201C';margin-right:6px;opacity:.85}
-.minimal-quote::after{content:'\201D';margin-left:6px;opacity:.85}
 
 /* ============ 9. 右键菜单 ============ */
 .ctx{position:absolute;width:196px;color:var(--menu-text);border-radius:10px;
@@ -347,8 +291,12 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   box-shadow:0 16px 44px rgba(6,12,24,.3);display:none}
 .ctx-item:hover>.ctx-sub{display:block}
 .ctx.flip .ctx-sub{left:auto;right:100%;margin-left:0;margin-right:2px}
-.ctx-sub-item{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;cursor:pointer}
+.ctx-sub-item{height:38px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:13px;cursor:pointer;position:relative}
 .ctx-sub-item:hover{background:var(--menu-hover)}
+/* 网址导航：分类行再悬停展开站点列（浏览器书单菜单式的两级飞出）；嵌套层同样贴边翻转 */
+.ctx-sub-item:hover>.ctx-sub{display:block}
+.ctx-sub .ctx-sub{top:-6px;z-index:2}
+.nav-cat-n{flex:1}
 .ctx-check{width:14px;height:14px;flex:0 0 auto;color:var(--accent);visibility:hidden}
 .ctx-sub-item.on .ctx-check{visibility:visible}
 
@@ -492,7 +440,6 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .dt-time{font-size:46px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
 .dt-unit{font-size:14px;font-weight:400;margin-left:6px;color:var(--panel-sub)}
 .dt-sub{font-size:12px;color:var(--panel-sub)}
-.dt-quote{font-size:16px;font-weight:600;text-align:center;max-width:90%}
 .dt-days{display:flex;gap:8px;margin-bottom:8px}
 .dt-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;
   border:0.5px solid var(--line);border-radius:10px;font-size:12px;color:var(--panel-sub)}
@@ -617,30 +564,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
   transition:opacity .2s var(--ease),transform .2s var(--ease);z-index:var(--z-toast);white-space:nowrap}
 .toast.show{opacity:1;transform:translate(-50%,0)}
 
-/* ============ 13. 补充小组件（每日一言 / 木鱼 / 倒数日 / 迷你卡） ============ */
-:root{--mascot-grad:linear-gradient(150deg,#9294DF,#F1B2D9)}
-.news-row{height:auto;flex:1;min-height:0}
-.news-list{gap:2px;overflow:hidden}
+/* ============ 13. 补充小组件 ============ */
 .w-fav{flex-direction:row;gap:calc(10 * var(--u))}
-.w-quote{display:flex;flex-direction:column;justify-content:center;gap:calc(8 * var(--u));
-  padding:0 calc(24 * var(--u));color:var(--card-text)}
-.qt-hi{font-size:calc(15 * var(--u));font-weight:600;white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis}
-.qt-enc{display:flex;align-items:center;gap:calc(10 * var(--u));min-width:0}
-.qt-enc-t{border-left:calc(3 * var(--u)) solid var(--accent);padding-left:calc(10 * var(--u));
-  font-size:calc(13 * var(--u));line-height:1.45;
-  color:var(--card-sub);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.w-quote.reloading .qt-enc-t{animation:qtpulse .4s var(--ease)}
-@keyframes qtpulse{0%{opacity:.2;transform:translateX(-6px)}100%{opacity:1;transform:none}}
-.w-fish{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(2 * var(--u));
-  cursor:pointer;color:var(--card-text)}
-.fish-ico{width:calc(36 * var(--u));height:calc(36 * var(--u));color:#c98a4b;transition:transform .1s}
-.w-fish.hit .fish-ico{transform:scale(.88)}
-.fish-num{font-size:calc(13 * var(--u));font-weight:600}
-.w-mini{display:flex;align-items:center;gap:calc(12 * var(--u));padding:0 calc(18 * var(--u));color:var(--card-text)}
-.w-mini svg{width:calc(28 * var(--u));height:calc(28 * var(--u));flex:0 0 auto;color:var(--accent)}
-.mini-t{font-size:calc(14 * var(--u));font-weight:600}
-.mini-s{font-size:calc(11 * var(--u));color:var(--card-sub);margin-top:calc(3 * var(--u))}
 .w-todo2{display:flex;align-items:center;justify-content:flex-end;gap:calc(10 * var(--u));
   padding-right:calc(45 * var(--u));color:#38A29E;position:absolute;inset:0}
 .w-todo2 svg{width:calc(24 * var(--u));height:calc(24 * var(--u));flex:0 0 auto}
@@ -976,17 +901,6 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 @container (width < 420px){
   /* 倒计时：熊猫让位给计时（4×4 时左栏只剩 78px，不隐会让计时被裁） */
   .w-cd .cd-mascot{display:none}
-  /* 纪念日：窄卡先隐日期行，标题本身带省略号 */
-  .w-ann .ann-date{display:none}
-}
-@container (width < 300px){
-  /* 新闻：窄卡隐去热度值，条目仍按配置条数显示 */
-  .w-news .news-heat{display:none}
-}
-@container (width < 140px){
-  /* 2×2：只留主体——AI 入口只留徽标、每日一言只留语录行（问候语会被压成一串省略号） */
-  .w-ai .ai-line,.w-ai .ai-name,.w-ai .ai-sub{display:none}
-  .w-quote .qt-hi{display:none}
 }
 /* 宽卡扩展信息行（明日预报 / 倒数日目标日期）：与上面的 compact 分界同一阈值，装得下才显示 */
 .wx-next{font-size:calc(11 * var(--u));color:var(--card-sub);margin-top:1px}
@@ -1040,11 +954,6 @@ img.v-icon,img.gi,img.gtile,img.nv-ico{opacity:var(--ga-glyph)}
 .ck-time{color:color-mix(in srgb,var(--clock-color) calc(var(--ga-clock) * 100%),transparent)}
 .ck-date{color:color-mix(in srgb,var(--card-sub) calc(var(--ga-clock) * 100%),transparent)}
 .minimal-clock{color:color-mix(in srgb,#fff calc(var(--ga-clock) * 100%),transparent)}
-/* 每日一言：问候语与鼓励语文字，含左侧强调条 */
-.qt-hi{color:color-mix(in srgb,var(--card-text) calc(var(--ga-quote) * 100%),transparent)}
-.qt-enc-t{color:color-mix(in srgb,var(--card-sub) calc(var(--ga-quote) * 100%),transparent);
-  border-left-color:color-mix(in srgb,var(--accent) calc(var(--ga-quote) * 100%),transparent)}
-.minimal-quote{color:color-mix(in srgb,#fff calc(var(--ga-quote) * 100%),transparent)}
 /* 悬停 / 激活态：胶囊内白色浮层与选中项描边（菜单与列表的 hover 底色由 --menu-hover 在 JS 层派生） */
 .pill-btn:hover{background:color-mix(in srgb,#fff calc(var(--ga-hover) * 28%),transparent)}
 .theme-btn.sel .theme-thumb{border-color:color-mix(in srgb,var(--accent) calc(var(--ga-hover) * 100%),transparent);

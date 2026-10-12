@@ -12,20 +12,12 @@
 
 /** 小组件类型（= WIDGET_DEFS 的键） */
 export type WidgetKind =
-  | 'news'
   | 'clock'
   | 'cal'
   | 'weather'
   | 'todo'
-  | 'ann'
   | 'countdown'
   | 'fav'
-  | 'quote'
-  | 'music'
-  | 'trans'
-  | 'calc'
-  | 'woodfish'
-  | 'ai'
   | 'icon'
   | 'folder'
   | 'group';
@@ -175,7 +167,7 @@ export interface SkinPack {
  */
 export type GlassKey =
   | 'card' | 'tile' | 'glyph' | 'dock' | 'dockIcon' | 'search'
-  | 'panel' | 'menu' | 'clock' | 'quote' | 'line' | 'hover';
+  | 'panel' | 'menu' | 'clock' | 'line' | 'hover';
 export type GlassSettings = Record<GlassKey, number>;
 
 /** 毛玻璃模糊半径（px，0–20），与有玻璃底色的六个透明度项一一配对（对应 --blur-*） */
@@ -209,6 +201,8 @@ export interface AppSettings {
   hideTop: boolean;
   hideSearch: boolean;
   mascot: boolean;
+  /** 页面网格对齐线（添加 / 拖拽组件时辅助确认位置；拖拽中会强制显示） */
+  gridLines: boolean;
   engineId: string;
   openMode: OpenMode;
   autoFocus: boolean;
@@ -235,7 +229,6 @@ export interface AppSettings {
   blurAfterSearch: boolean;
   /** 历史面板显示单条删除按钮 */
   historyItemDel: boolean;
-  nick: string;
   searchWidth: number;
   searchRadius: number;
   dockCount: number;

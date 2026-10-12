@@ -11,7 +11,6 @@ import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
-import { ENCOURAGE_QUOTES } from '../core/quotes'
 import { getWeather, type WeatherData } from '../core/weather'
 import { pushHistory } from '../core/utils'
 import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
@@ -70,8 +69,6 @@ interface AppState {
   engines: EngineDef[]
   skins: SkinPack[]
   history: string[]
-  encourage: string
-  playing: boolean
   weather: WeatherData | null
   /** 上次备份时间 */
   backupTime: string | null
@@ -88,7 +85,7 @@ interface AppState {
   enginePanel: boolean
   page: () => GridItem[]
   setSetting: <K extends keyof AppSettings>(k: K, v: AppSettings[K]) => void
-  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'hideEngineIco' | 'historyItemDel' | 'blurAfterSearch' | 'immersive' | 'simpleSearch') => void
+  toggle: (k: 'labels' | 'hideTop' | 'hideSearch' | 'mascot' | 'gridLines' | 'autoFocus' | 'searchKeep' | 'hideBtn' | 'searchHistory' | 'hideEngineIco' | 'historyItemDel' | 'blurAfterSearch' | 'immersive' | 'simpleSearch') => void
   /** 组件库：按给定顺序重排当前页组件（只改数组顺序，不动各自坐标） */
   reorderItems: (ids: string[]) => void
   /** 设置某个动作的组合键（空串 = 清除该快捷键） */
@@ -153,8 +150,6 @@ interface AppState {
   setModal: (k: ModalKey | null) => void
   openCtx: (ctx: CtxState | null) => void
   setEnginePanel: (open: boolean) => void
-  setPlaying: (v: boolean) => void
-  rollEncourage: () => void
 }
 
 /** 当前页 */
@@ -297,8 +292,6 @@ export const useApp = create<AppState>()((set, get) => ({
   engines: BUILTIN_ENGINES.map((e) => ({ ...e })),
   skins: cloneSkins(BUILTIN_SKINS),
   history: [],
-  encourage: ENCOURAGE_QUOTES[0] ?? '',
-  playing: true,
   weather: null,
   backupTime: null,
   itemId: null,
@@ -657,11 +650,6 @@ export const useApp = create<AppState>()((set, get) => ({
   setModal: (k) => set({ modal: k, ctx: null, enginePanel: false, drawer: k !== null ? null : get().drawer }),
   openCtx: (ctx) => set({ ctx, enginePanel: false }),
   setEnginePanel: (open) => set({ enginePanel: open }),
-  setPlaying: (v) => set({ playing: v }),
-  rollEncourage: () => set((s) => {
-    const next = ENCOURAGE_QUOTES.filter((x) => x !== s.encourage)
-    return { encourage: next[Math.floor(Math.random() * next.length)] ?? s.encourage, toast: '鼓励语已刷新' }
-  }),
 }))
 
 /* ---------- 壁纸豁免订阅：当前使用中的引用同步给存储层，淘汰历史时永不删它 ---------- */

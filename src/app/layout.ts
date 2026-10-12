@@ -20,6 +20,10 @@ export const G = (c: number, r: number, w: number, h: number, t: WidgetKind, con
 const AI_APPS = ['豆包', 'Kimi', '秘塔AI搜索', '通义千问']
 const AI_EXTRA = ['智谱清言', '讯飞星火', 'DeepSeek', '文心一言', '即梦AI', '可灵AI', 'ChatGPT', 'Claude']
 const TOOL_APPS = ['翻译', '计算器', '截图', '二维码']
+const TOOL_ALL = [...TOOL_APPS, '便签', '快递', '记账', '汇率']
+const NEWS_APPS = ['微博', '知乎', '今日头条', '虎扑', '豆瓣', 'V2EX', '少数派', '掘金']
+const ENT_APPS = ['哔哩哔哩', '优酷', '爱奇艺', '腾讯视频', '网易云音乐', 'QQ音乐', '酷狗音乐', 'YouTube']
+const MUSIC_APPS = ['网易云音乐', 'QQ音乐', '酷狗音乐', 'Spotify']
 const STUDY_APPS = ['学习通', '网易公开课', '语雀', 'Notion']
 const MEDIA_APPS = ['爱奇艺', '腾讯视频', '网易云音乐', 'YouTube']
 const SHOP_APPS = ['京东', '天猫', '拼多多', '唯品会', '苏宁易购']
@@ -41,11 +45,15 @@ const PRIVACY_SEED: ModePages = [
     G(0, 0, 4, 2, 'clock', { label: '时钟' }), G(4, 0, 4, 2, 'weather', { label: '天气' }),
     G(8, 0, 4, 2, 'todo', { label: '待办清单' }), G(12, 0, 4, 2, 'fav', { label: '收藏夹' }),
     G(16, 0, 4, 2, 'countdown', { label: '倒数日', mode: '倒数日' }), G(20, 0, 4, 2, 'cal', { label: '日历' }),
-    G(0, 2, 4, 4, 'news'), G(4, 2, 4, 4, 'music'), G(8, 2, 8, 4, 'countdown', { label: '下班倒计时' }),
-    G(16, 2, 4, 4, 'ai'), G(20, 2, 4, 4, 'group', { apps: ['微信', 'QQ', '钉钉', '飞书', 'Gmail', 'Discord', 'Telegram', '语雀', 'Notion', 'DeepSeek', 'Claude', 'ChatGPT'] }),
+    G(0, 2, 4, 4, 'group', { apps: AI_APPS, cols: 2, label: 'AI 工具' }),
+    G(4, 2, 4, 4, 'group', { apps: TOOL_APPS, cols: 2, label: '效率工具' }),
+    G(8, 2, 8, 4, 'countdown', { label: '下班倒计时' }),
+    G(16, 2, 4, 4, 'group', { apps: SHOP_APPS, cols: 2, label: '购物' }),
+    G(20, 2, 4, 4, 'group', { apps: ['微信', 'QQ', '钉钉', '飞书', 'Gmail', 'Discord', 'Telegram', '语雀', 'Notion', 'DeepSeek', 'Claude', 'ChatGPT'] }),
     G(0, 6, 8, 4, 'group', { apps: ['淘宝', '京东', '小红书', '豆瓣', '知乎', '微博', '哔哩哔哩', '快手', 'Spotify', 'YouTube', 'GitHub', 'Figma', 'Medium', 'Reddit', 'V2EX', 'Notion', '语雀', '掘金', 'CSDN', '少数派', 'Product Hunt', 'Dribbble', 'Stack Overflow', 'Netflix'] }),
-    G(8, 6, 8, 2, 'quote', { label: '' }), G(8, 8, 8, 2, 'woodfish', { label: '木鱼' }),
-    G(16, 6, 4, 2, 'calc', { label: '计算器' }), G(20, 6, 4, 2, 'trans', { label: '翻译' }),
+    G(8, 6, 8, 2, 'group', { apps: NEWS_APPS, cols: 8, label: '新闻资讯' }),
+    G(8, 8, 8, 2, 'group', { apps: ENT_APPS, cols: 8, label: '影音娱乐' }),
+    G(16, 6, 8, 2, 'group', { apps: TOOL_ALL, cols: 8, label: '常用工具' }),
     G(16, 8, 8, 2, 'group', { apps: ['百度', '必应', '知乎', '豆瓣', 'V2EX', 'Medium', 'Dribbble', 'Spotify'], cols: 8 }),
   ],
 ]
@@ -53,29 +61,29 @@ const PRIVACY_SEED: ModePages = [
 /** 出厂标准两页（资讯与日程 / 时间与纪念+开发与效率），并入出厂页集 */
 const STANDARD_SEED: ModePages = [
   [
-    G(0, 0, 8, 4, 'news'), G(8, 0, 4, 2, 'weather', { label: '天气' }),
+    G(0, 0, 8, 4, 'group', { apps: NEWS_APPS, cols: 8, label: '新闻资讯' }), G(8, 0, 4, 2, 'weather', { label: '天气' }),
     G(8, 2, 4, 2, 'todo', { label: '待办' }), G(12, 0, 4, 2, 'cal', { label: '日历' }),
     G(12, 2, 4, 2, 'countdown', { label: '倒数日', mode: '倒数日' }), G(16, 0, 4, 4, 'clock', { label: '时钟' }),
     G(20, 0, 2, 4, 'fav', { label: '收藏夹' }),
     G(22, 0, 2, 2, 'icon', { label: 'Gmail', url: 'https://mail.google.com' }),
     G(22, 2, 2, 2, 'icon', { label: 'GitHub', url: 'https://github.com' }),
-    G(0, 4, 4, 4, 'ai', { label: 'AI 助手' }),
+    G(0, 4, 4, 4, 'group', { apps: EFFI_APPS, cols: 2, label: '生活工具' }),
     G(4, 4, 4, 4, 'group', { apps: AI_APPS, cols: 2, label: 'AI 工具' }),
     G(8, 4, 4, 4, 'group', { apps: TOOL_APPS, cols: 2, label: '效率工具' }),
     G(12, 4, 4, 4, 'group', { apps: STUDY_APPS, cols: 2, label: '学习文档' }),
     G(16, 4, 4, 4, 'group', { apps: MEDIA_APPS, cols: 2, label: '影音' }),
-    G(20, 4, 4, 4, 'music', { label: '音乐' }),
+    G(20, 4, 4, 4, 'group', { apps: MUSIC_APPS, cols: 2, label: '音乐' }),
     G(0, 8, 8, 2, 'group', { apps: SHOP_APPS, cols: 5, label: '购物' }),
     G(8, 8, 4, 2, 'group', { apps: GAME_APPS, cols: 2, label: '游戏' }),
     G(12, 8, 4, 2, 'group', { apps: SOC_APPS, cols: 2, label: '社交' }),
     G(16, 8, 4, 2, 'group', { apps: COMM_APPS, cols: 2, label: '社区' }),
     G(20, 8, 2, 2, 'icon', { label: '豆瓣', url: 'https://www.douban.com' }),
-    G(22, 8, 2, 2, 'woodfish', { label: '木鱼' }),
+    G(22, 8, 2, 2, 'icon', { label: '哔哩哔哩', url: 'https://www.bilibili.com' }),
   ],
   [
-    G(0, 0, 8, 4, 'countdown', { label: '下班倒计时' }), G(8, 0, 8, 4, 'ann', { label: '纪念日' }),
-    G(16, 0, 8, 2, 'quote', { label: '每日一言' }),
-    G(16, 2, 4, 2, 'calc', { label: '计算器' }), G(20, 2, 4, 2, 'trans', { label: '翻译' }),
+    G(0, 0, 8, 4, 'countdown', { label: '纪念日', mode: '纪念日', date: '2020-05-20', title: '与MiNa相识' }),
+    G(8, 0, 8, 4, 'countdown', { label: '下班倒计时' }),
+    G(16, 0, 8, 4, 'group', { apps: TOOL_ALL, cols: 8, label: '常用工具' }),
     G(0, 4, 8, 4, 'group', { apps: DEV_APPS, cols: 5, label: '开发' }),
     G(8, 4, 4, 4, 'group', { apps: COOP_APPS, cols: 2, label: '协作' }),
     G(12, 4, 4, 4, 'group', { apps: CLOUD_APPS, cols: 2, label: '网盘笔记' }),

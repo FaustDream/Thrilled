@@ -28,7 +28,6 @@ export const SHORTCUT_DEFS: readonly ShortcutDef[] = [
   { id: 'open-add', label: '打开「添加」面板', def: 'Alt+A' },
   { id: 'open-personal', label: '打开「个性化」面板', def: 'Alt+P' },
   { id: 'open-setting', label: '打开「设置」面板', def: 'Alt+S' },
-  { id: 'roll-quote', label: '换一条鼓励语', def: 'Alt+Q' },
   { id: 'export-layout', label: '导出布局 JSON', def: 'Ctrl+Shift+E' },
   { id: 'reset-all', label: '一键重置（需确认）', def: 'Ctrl+Shift+R' },
   { id: 'close-overlay', label: '关闭浮层 / 菜单 / 弹窗', def: 'Escape', typing: true },

@@ -9,17 +9,6 @@ import type { WidgetDefinition, WidgetKind } from './types';
 import { CELL, INSET, groupFits } from './grid';
 
 export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
-  news: {
-    t: 'news', n: '新闻热点', g: '闻', c: '#FF4D4F', s: '看点 / 百度 / 微博 / 抖音热榜', units: { w: 8, h: 4 },
-    /* 横向来源页签 + 五条列表：任一轴小于 4 格都会把正文压到读不清，下限 4×4 */
-    min: { w: 4, h: 4 },
-    fields: [
-      { k: 'source', l: '热榜来源', t: 'sel', o: ['看点', '百度', '微博', '抖音'] },
-      { k: 'count', l: '显示条数', t: 'range', min: 1, max: 6, step: 1, unit: ' 条' },
-      { k: 'showHeat', l: '显示热度值', t: 'bool' },
-    ],
-    def: { source: '看点', count: 5, showHeat: true },
-  },
   clock: {
     t: 'clock', n: '时钟', g: '钟', c: '#3B82F6', s: '大号数字时间，可切换 12/24 小时', units: { w: 4, h: 4 },
     /* 44px 的「13:07」约 105px 宽：宽 2 格（98px）会把时间裁掉，故宽度下限 4 格 */
@@ -54,77 +43,28 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     fields: [{ k: 'title', l: '清单名称', t: 'text', ph: '待办' }, { k: 'showCheck', l: '显示勾选图标', t: 'bool' }],
     def: { title: '待办', showCheck: true },
   },
-  ann: {
-    t: 'ann', n: '纪念日', g: '纪', c: '#F472B6', s: '在一起 · 生日 · 倒数', units: { w: 8, h: 4 },
-    /* 左右分栏（标题 + 大号天数）：短边小于 4 格时字号会掉到个位数 */
-    min: { w: 4, h: 4 },
-    fields: [
-      { k: 'title', l: '标题', t: 'text', ph: '与 MiNa 相识' },
-      { k: 'date', l: '起始日期', t: 'text', ph: '2020-05-20' },
-      { k: 'unitLabel', l: '天数单位', t: 'text', ph: '天' },
-    ],
-    def: { title: '与MiNa相识', date: '2020-05-20', unitLabel: '天' },
-  },
   countdown: {
-    t: 'countdown', n: '倒计时', g: '倒', c: '#FB923C', s: '下班倒计时 + 倒数日', units: { w: 8, h: 4 },
-    /* 两种计时模式共用一套卡片：主读数（下班时刻 HH:MM:SS / 目标日期天数）+ 倒数列表 + 吉祥物。
-       倒数列表与吉祥物需要 4 格高才装得下；4×2 矮卡只留主读数（即原「倒数日」的形态），故下限 4×2 */
+    t: 'countdown', n: '倒计时', g: '倒', c: '#FB923C', s: '下班倒计时 + 倒数日 + 纪念日', units: { w: 8, h: 4 },
+    /* 三种计时模式共用一套卡片：主读数（下班时刻 HH:MM:SS / 目标日期天数 / 起始日期已过天数）+ 倒数列表 + 吉祥物。
+       倒数列表与吉祥物需要 4 格高才装得下；4×2 矮卡只留主读数（即原「倒数日」卡的形态），故下限 4×2 */
     min: { w: 4, h: 2 },
     fields: [
-      { k: 'mode', l: '计时模式', t: 'sel', o: ['下班倒计时', '倒数日'] },
+      { k: 'mode', l: '计时模式', t: 'sel', o: ['下班倒计时', '倒数日', '纪念日'] },
       { k: 'at', l: '下班时刻', t: 'text', ph: '18:00' },
       { k: 'date', l: '目标日期', t: 'text', ph: '2027-01-01' },
     ],
-    /* showFestivals / mascotEmoji 不占字段配额（录入在详情弹窗），但默认值仍归定义表：
+    /* showFestivals / mascotEmoji / title / unitLabel 不占字段配额（录入在详情弹窗），但默认值仍归定义表：
        渲染侧按「定义默认值 ⊕ 实例覆盖值」合成，旧配置（含 showMascot 兼容）也走这里 */
-    def: { mode: '下班倒计时', at: '18:00', date: '2027-01-01', showFestivals: true, mascotEmoji: '' },
+    def: {
+      mode: '下班倒计时', at: '18:00', date: '2027-01-01',
+      title: '与MiNa相识', unitLabel: '天',
+      showFestivals: true, mascotEmoji: '',
+    },
   },
   fav: {
     t: 'fav', n: '收藏夹', g: '藏', c: '#F59E0B', s: '管理浏览器书签收藏夹', units: { w: 2, h: 4 },
     fields: [{ k: 'folder', l: '收藏夹', t: 'text', ph: '收藏夹' }, { k: 'showIcon', l: '显示图标', t: 'bool' }],
     def: { folder: '收藏夹', showIcon: true },
-  },
-  quote: {
-    t: 'quote', n: '每日一言', g: '言', c: '#6366F1', s: '时段问候 + 昵称 + 鼓励语', units: { w: 8, h: 2 },
-    fields: [
-      { k: 'showGreeting', l: '显示问候行', t: 'bool' },
-      { k: 'nick', l: '昵称', t: 'text', ph: '留空跟随设置' },
-    ],
-    def: { showGreeting: true, nick: '' },
-  },
-  music: {
-    t: 'music', n: '音乐', g: '乐', c: '#EC4899', s: '熊猫Dj · 在线电台', units: { w: 4, h: 4 },
-    /* 唱片盘 + 三颗播放键需要足够的方块：矮于 4 格时按短边缩到按钮不可点，故下限 4×4 */
-    min: { w: 4, h: 4 },
-    fields: [{ k: 'station', l: '电台', t: 'text', ph: '熊猫Dj' }, { k: 'showDisc', l: '显示唱片盘', t: 'bool' }],
-    def: { station: '熊猫Dj', showDisc: true },
-  },
-  trans: {
-    t: 'trans', n: '翻译', g: '译', c: '#3B82F6', s: '多语种即时翻译', units: { w: 4, h: 2 },
-    min: { w: 4, h: 2 },
-    fields: [{ k: 'pair', l: '语言对', t: 'text', ph: '中 ⇄ 英' }, { k: 'showIcon', l: '显示图标', t: 'bool' }],
-    def: { pair: '中英互译 · 划词', showIcon: true },
-  },
-  calc: {
-    t: 'calc', n: '计算器', g: '算', c: '#8B5CF6', s: '科学计算 / 单位换算', units: { w: 4, h: 2 }, min: { w: 4, h: 2 },
-    fields: [{ k: 'desc', l: '副标题', t: 'text', ph: '点击开始计算' }],
-    def: { desc: '点击开始计算' },
-  },
-  woodfish: {
-    t: 'woodfish', n: '木鱼', g: '鱼', c: '#C98A4B', s: '功德 +1 · 可关后台敲击', units: { w: 2, h: 2 },
-    fields: [
-      { k: 'count', l: '起始功德', t: 'num', ph: '128' },
-      { k: 'step', l: '每次功课', t: 'num', ph: '1' },
-    ],
-    def: { count: 128, step: 1 },
-  },
-  ai: {
-    t: 'ai', n: 'AI 对话', g: 'AI', c: '#111827', s: '智能问答入口', units: { w: 4, h: 4 },
-    fields: [
-      { k: 'provider', l: '提供方', t: 'text', ph: 'UiTab AI' },
-      { k: 'sub', l: '副标题', t: 'text', ph: '试试问问这些问题' },
-    ],
-    def: { provider: 'UiTab AI', sub: '试试问问这些问题' },
   },
   icon: {
     t: 'icon', n: '网站图标', g: '网', c: '#64748B', s: '添加单个网站到桌面', units: { w: 2, h: 2 },
@@ -150,36 +90,37 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
 export const WIDGET_KINDS: ReadonlySet<string> = new Set(Object.keys(WIDGET_DEFS));
 
 /**
- * 旧类型转接：「倒数日」已并入「倒计时」（倒数日模式）——
- * 存量文档与旧备份导入时放行并转换，位置 / 尺寸 / 目标日期 / 强调色原样保留；
- * 无旧类型返回 null（调用方按未知类型丢弃）。
+ * 旧类型转接（存量文档与旧备份导入时放行并转换，位置 / 尺寸 / 配置原样保留）：
+ * - 「倒数日」→「倒计时」倒数日模式
+ * - 「纪念日」→「倒计时」纪念日模式（标题 / 起始日期 / 天数单位三个键与倒计时定义表同名，无缝衔接）
+ * 无旧类型返回 null（调用方按未知类型丢弃——被移除的组件：新闻 / 音乐 / AI / 每日一言 / 木鱼 / 计算器 / 翻译）。
  */
-export const fromLegacyKind = (t: string, config: Record<string, unknown>): { t: WidgetKind; config: Record<string, unknown> } | null =>
-  t === 'countday' ? { t: 'countdown', config: { ...config, mode: '倒数日' } } : null;
+export const fromLegacyKind = (t: string, config: Record<string, unknown>): { t: WidgetKind; config: Record<string, unknown> } | null => {
+  if (t === 'countday') return { t: 'countdown', config: { ...config, mode: '倒数日' } };
+  if (t === 'ann') return { t: 'countdown', config: { ...config, mode: '纪念日' } };
+  return null;
+};
 
-/* ---------- 组件库分组（个性化 → 组件库：信息 / 工具 / 内容 / 导航） ---------- */
+/* ---------- 组件库分组（个性化 → 组件库：信息 / 工具 / 导航） ---------- */
 
 /** 组件库分组名 */
-export type WidgetGroup = '信息' | '工具' | '内容' | '导航';
+export type WidgetGroup = '信息' | '工具' | '导航';
 
 /** 分组展示顺序 */
-export const WIDGET_GROUPS_ORDER: readonly WidgetGroup[] = ['信息', '工具', '内容', '导航'];
+export const WIDGET_GROUPS_ORDER: readonly WidgetGroup[] = ['信息', '工具', '导航'];
 
 /** 每类小组件归属的分组（组件库按此分组浏览；每类只属一组） */
 export const WIDGET_GROUPS: Readonly<Record<WidgetKind, WidgetGroup>> = {
-  clock: '信息', cal: '信息', weather: '信息', countdown: '信息', ann: '信息',
-  todo: '工具', calc: '工具', trans: '工具', ai: '工具', fav: '工具',
-  news: '内容', quote: '内容', music: '内容', woodfish: '内容',
+  clock: '信息', cal: '信息', weather: '信息', countdown: '信息',
+  todo: '工具', fav: '工具',
   icon: '导航', folder: '导航', group: '导航',
 };
 
-/** 组件库清单（定义表生成 + 同类型别名入口「经典语录」） */
-export const WIDGET_LIST: readonly WidgetDefinition[] = [
-  ...Object.keys(WIDGET_DEFS).map((k) => WIDGET_DEFS[k as WidgetKind]),
-  { ...WIDGET_DEFS.quote, n: '经典语录', g: '语', c: '#8B5CF6', s: '随机经典语录' },
-];
+/** 组件库清单（定义表生成；原「经典语录」别名入口随每日一言一并移除） */
+export const WIDGET_LIST: readonly WidgetDefinition[] = Object.keys(WIDGET_DEFS).map((k) => WIDGET_DEFS[k as WidgetKind]);
 
 /* ---------- 配置读取（定义默认值 ⊕ 实例覆盖值） ---------- */
+
 export const cfgOf = (it: { t: WidgetKind; config?: Record<string, unknown> | undefined }): Record<string, unknown> =>
   ({ ...WIDGET_DEFS[it.t].def, ...it.config });
 
