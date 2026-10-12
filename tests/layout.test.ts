@@ -3,7 +3,7 @@
  * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, isIconOnlyPage, mergeIconPages, normPages, placedKindsOf, prunePages, uid } from '../src/app/layout'
+import { DEFAULT_PAGES, REPEATABLE_KINDS, isIconOnlyPage, mergeIconPages, normPages, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, INSET, ROWS, SIZES, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, isLegalSize, overlaps } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
@@ -398,9 +398,15 @@ describe('图标格容器自适应（groupGrid）', () => {
 describe('已添加判定（placedKindsOf：组件库与右键「添加组件」共用）', () => {
   const card = (t: GridItem['t']): GridItem => ({ id: uid(), c: 0, r: 0, w: 4, h: 2, t, config: {} })
 
-  it('跨页收集类型，同类型多实例只算一个', () => {
-    const pages = [[card('icon'), card('icon')], [card('clock')]]
-    expect([...placedKindsOf(pages)].sort()).toEqual(['clock', 'icon'])
+  it('跨页收集单例型组件，同类型多实例只算一个', () => {
+    const pages = [[card('clock'), card('clock')], [card('weather')]]
+    expect([...placedKindsOf(pages)].sort()).toEqual(['clock', 'weather'])
+  })
+
+  it('可重复放置的类型（网站图标 / 图标文件夹 / 图标格容器）不参与判定', () => {
+    expect([...REPEATABLE_KINDS].sort()).toEqual(['folder', 'group', 'icon'])
+    const pages = [[card('icon'), card('folder')], [card('group')]]
+    expect(placedKindsOf(pages).size).toBe(0)
   })
 
   it('空布局返回空集合', () => {

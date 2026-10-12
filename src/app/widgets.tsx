@@ -275,6 +275,14 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
       /* 图标格容器：格子边长由 shared/grid 的 groupGrid 按卡片实际尺寸算出（铺满卡片，不再挤成一串小字形）；
          名称标签已移除（用户需求），卡片高度全部留给图标格 */
       const apps = list(c['apps'])
+      /* 空容器：容器卡已去卡片化（透明无边框），没有格子就什么都看不见——给虚线占位与去向上的提示 */
+      if (apps.length === 0) {
+        return (
+          <div className="w-group empty" style={{ position: 'absolute', inset: 0, paddingBottom: GROUP_PAD }}>
+            <div className="gcell-empty">空容器 · 卡片右键「编辑信息」加图标</div>
+          </div>
+        )
+      }
       const W = item.w * CELL - 2 * INSET - GROUP_PAD * 2
       const H = item.h * CELL - 2 * INSET - GROUP_PAD * 2
       const { cols, rows, cell } = groupGrid(apps.length, W, H, GROUP_GAP)

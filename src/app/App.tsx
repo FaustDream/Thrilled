@@ -113,6 +113,7 @@ export const App = () => {
   const skins = useApp((s) => s.skins)
   const setWallFocus = useApp((s) => s.setWallFocus)
   const toastMsg = useApp((s) => s.toast)
+  const flashId = useApp((s) => s.flashId)
   const enginePanel = useApp((s) => s.enginePanel)
   const history = useApp((s) => s.history)
   const weather = useApp((s) => s.weather)
@@ -247,6 +248,12 @@ export const App = () => {
     const t = setTimeout(() => useApp.setState({ toast: '' }), 1800)
     return () => clearTimeout(t)
   }, [toastMsg])
+  /* 落位提示：新卡片的高亮动画播完即清标记，避免之后的重渲染再播一次 */
+  useEffect(() => {
+    if (flashId === null) return
+    const t = setTimeout(() => useApp.setState({ flashId: null }), 1700)
+    return () => clearTimeout(t)
+  }, [flashId])
   useEffect(() => {
     if (settings.autoFocus) inputRef.current?.focus()
   }, [settings.autoFocus])
@@ -524,15 +531,18 @@ export const App = () => {
         data-hidetop={settings.hideTop ? '1' : '0'} data-hidesearch={settings.hideSearch ? '1' : '0'}
         style={{ ['--search-top' as string]: `${settings.searchTop}px`, ['--search-font' as string]: `${settings.searchFontSize}px` }}>
 
+      {/* 网格对齐线：铺满整个舞台（图案与卡片网格对齐，见 .grid-lines 的背景偏移），
+          在壁纸之上、卡片与控件之下，且不拦截指针；设置开启时常显，添加 / 拖拽组件时强制显示 */}
+      {(settings.gridLines || drag !== null) && <div className="grid-lines" />}
+
       {/* 翻页画布 */}
       <div id="pager" style={{ transform: `translateX(-${cur * PAGE_W}px)` }}>
         {pages.map((pg, i) => (
           <div className="page" key={i} style={{ left: i * PAGE_W }}>
             <div className="grid" ref={i === cur ? gridRef : undefined}>
-              {/* 网格对齐线：设置开启时常显；添加 / 拖拽组件时强制显示（位置确认的视觉参照） */}
-              {(settings.gridLines || drag !== null) && <div className="grid-lines" />}
               {pg.map((it, idx) => (
                 <GridCard key={it.id} item={it} idx={idx} now={now} weather={weather}
+                  flash={it.id === flashId}
                   dragging={drag?.id === it.id ? drag : null}
                   onDragStart={(e) => {
                     if (e.button !== 0 || (e.target as HTMLElement).closest('.ia')) return
@@ -672,12 +682,14 @@ export const App = () => {
 }
 
 /** 单张卡片：外框（点击开站 / 拖拽换位）+ 内容 + 名称标签 + 悬浮操作 */
-const GridCard = ({ item, idx, now, weather, dragging, onDragStart }: {
+const GridCard = ({ item, idx, now, weather, flash, dragging, onDragStart }: {
   item: GridItem
   /** 页内序号（入场动画渐次延迟用） */
   idx: number
   now: Date
   weather: WeatherData | null
+  /** 刚落位：播一次高亮提示，让用户看清新图标落在哪 */
+  flash: boolean
   dragging: { x: number; y: number; moved: boolean } | null
   onDragStart: (e: ReactPointerEvent) => void
 }) => {
@@ -700,7 +712,7 @@ const GridCard = ({ item, idx, now, weather, dragging, onDragStart }: {
     : { animationDelay: `${Math.min(idx * 22, 440)}ms` }
   return (
     <>
-      <div className={`item${draggingStyle ? ' dragging' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
+      <div className={`item${draggingStyle ? ' dragging' : ''}${flash && !draggingStyle ? ' just-placed' : ''}`} style={{ ...parseBox(itemBox(item)), ...cardVars, ...sizeVars, ...style }}
         data-id={item.id} data-t={item.t} data-act="item-open"
         onPointerDown={onDragStart}>
         <WidgetView item={item} now={now} weather={weather} />

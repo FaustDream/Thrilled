@@ -195,9 +195,15 @@ export const prunePages = (
 /* ---------- 已放置组件类型（组件库与右键「添加组件」的共用判定） ---------- */
 
 /**
- * 布局中已存在的组件类型集合：**跨页判定**，任一页存在该类型即视为「已添加」。
+ * 可重复放置的类型：图标 / 图标文件夹 / 图标格容器——每个网站一个图标，文件夹与容器也常要多个，
+ * 天然是多实例，不参与「已添加」判定（否则页面上一旦有图标，「添加网站图标」就再也点不动）。
+ */
+export const REPEATABLE_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['icon', 'folder', 'group'])
+
+/**
+ * 布局中已放置的「单例型」组件类型集合：**跨页判定**，任一页存在该类型即视为「已添加」。
  * 组件库的按钮态与空白处右键「添加组件」二级菜单共用同一口径——一处已放、另一处再点添加
- * 会造成「同一类型多个实例」的状态冲突（用户需求）。
+ * 会造成「同一类型多个实例」的状态冲突（用户需求）；可重复放置的类型见 REPEATABLE_KINDS。
  */
 export const placedKindsOf = (pages: readonly GridItem[][]): Set<WidgetKind> =>
-  new Set(pages.flat().map((it) => it.t))
+  new Set(pages.flat().map((it) => it.t).filter((t) => !REPEATABLE_KINDS.has(t)))

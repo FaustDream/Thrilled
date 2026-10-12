@@ -92,6 +92,8 @@ interface AppState {
   ctx: CtxState | null
   /** 新建站点弹窗的预置（空白处右键「新建网址图标 / 添加到 Dock」写入） */
   newSite: NewSiteDraft | null
+  /** 刚放置的实例 id：该卡片播一次落位提示（App 在动画结束后清除），让用户看清新图标落在哪 */
+  flashId: string | null
   toast: string
   /** 设置抽屉当前分区下标（供右键菜单等外部入口先切分区再打开抽屉） */
   settingsTab: number
@@ -319,6 +321,7 @@ export const useApp = create<AppState>()((set, get) => ({
   modal: null,
   ctx: null,
   newSite: null,
+  flashId: null,
   toast: '',
   settingsTab: 0,
   addTab: 0,
@@ -497,12 +500,12 @@ export const useApp = create<AppState>()((set, get) => ({
         page.push(item)
         list[curIdx] = page
         ok = true
-        return { pages: list, toast: '已添加到页面' }
+        return { pages: list, flashId: item.id, toast: '已添加到页面' }
       }
       if (list.length < MAX_PAGES) {
         list.push([item])
         ok = true
-        return { pages: list, cur: list.length - 1, toast: `当前页已满，已新建第 ${list.length} 页放入${def.n}` }
+        return { pages: list, cur: list.length - 1, flashId: item.id, toast: `当前页已满，已新建第 ${list.length} 页放入${def.n}` }
       }
       return { toast: '最多 5 页，已没有位置可放' }
     })

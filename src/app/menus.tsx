@@ -1,7 +1,9 @@
 /**
- * 右键菜单（空白处 6 项 + 卡片 6 项 + Dock 图标 5 项）
+ * 右键菜单（空白处 7 项 + 卡片 6 项 + Dock 图标 5 项）
  *
- * 空白处：新建网址图标 / 添加到 Dock 快捷方式 / 添加组件（二级 9 类）/ 打开添加面板 / 个性化 / 设置。
+ * 空白处：添加网站图标 / 添加网站容器 / 添加到 Dock 快捷方式 / 添加组件（二级 9 类）
+ *  / 打开添加面板 / 个性化 / 设置；前三项为「新建」，后三项为「打开」。
+ *  前两项直接落位（不弹表单）——生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」。
  * 卡片与 Dock 图标各有自己的菜单；输入框、抽屉、弹窗、引擎面板里的右键仍交给浏览器原生菜单
  * （见 App 的 contextmenu 处理）。二级菜单按 UiTab 实测复刻。
  */
@@ -90,8 +92,12 @@ const BlankMenu = () => {
   const dockTip = `Dock 最多 ${dockCount} 个快捷方式，请先移除一些`
   return (
     <>
-      <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'newsite'} data-v={noRoom ? roomTip : 'page'}>
-        <span>新建网址图标</span>
+      {/* 前两项都直接落位、不弹任何表单：生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」 */}
+      <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'icon'}>
+        <span>添加网站图标</span>
+      </div>
+      <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'group'}>
+        <span>添加网站容器</span>
       </div>
       <div className={`ctx-item${dockFull ? ' dis' : ''}`} data-act={dockFull ? 'ctx-blocked' : 'newsite'} data-v={dockFull ? dockTip : 'dock'}>
         <span>添加到 Dock 快捷方式</span>
