@@ -207,3 +207,51 @@ export const REPEATABLE_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['i
  */
 export const placedKindsOf = (pages: readonly GridItem[][]): Set<WidgetKind> =>
   new Set(pages.flat().map((it) => it.t).filter((t) => !REPEATABLE_KINDS.has(t)))
+
+/* ---------- 页面整理（删除图标后把后面的图标依次前移补位） ---------- */
+
+/**
+ * 「整理」时参与补位的类型（图标类）：网站图标 / 图标文件夹 / 图标格容器。
+ * 其余组件（时钟 / 天气 / 待办 / 日历 / 收藏夹 / 倒计时）在整理中**钉住不动**——用户摆好的组件位置不该被图标挤动。
+ * 今天与 REPEATABLE_KINDS 恰好同集合，但两者语义不同（那个回答「能否重复放置」，这个回答「删除后能不能被挪动」），
+ * 故意分开声明，免得将来改一个连带改另一个。
+ */
+export const ARRANGE_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['icon', 'folder', 'group']);
+
+/**
+ * 整理一页（纯函数，可单测）：把可移动卡片（ARRANGE_KINDS）按当前位置自上而下、自左而右排序，
+ * 依次补到它前面被腾出来的空位上——删掉一张后即「链式补位」：后面的图标一张接一张前移，
+ * 直到没有空洞可补；尺寸对不上时链条自然停止（大卡片填不了小空洞，就留在原位）。相对顺序不变。
+ *
+ * 关键：判定空位时，「其它所有卡片」都算障碍——**已处理的用新位置、未处理的用原位**。
+ * 因此每张卡片只会往前补空，绝不会越过还没处理的卡片乱跳；自身原位必然仍空着
+ * （前面的卡片只往空位走，不会占别人的原位），所以一定找得到落点。
+ *
+ * 返回 { items, moved }：moved = 0 表示本来就紧凑（无需整理）；null 是防御性兜底（理论上不可达）。
+ */
+export const arrangePage = (page: readonly GridItem[]): { items: GridItem[]; moved: number } | null => {
+  const order = page.filter((it) => ARRANGE_KINDS.has(it.t)).sort((a, b) => a.r - b.r || a.c - b.c);
+  if (order.length === 0) return { items: [...page], moved: 0 };
+  const at = new Map<string, { c: number; r: number }>(page.map((it) => [it.id, { c: it.c, r: it.r }]));
+  let moved = 0;
+  for (const it of order) {
+    const others = page
+      .filter((x) => x.id !== it.id)
+      .map((x) => {
+        const p = at.get(x.id) ?? { c: x.c, r: x.r };
+        return { c: p.c, r: p.r, w: x.w, h: x.h };
+      });
+    const slot = findSlot(others, it.w, it.h);
+    if (slot === null) return null;
+    const cur = at.get(it.id) ?? { c: it.c, r: it.r };
+    if (slot.c !== cur.c || slot.r !== cur.r) {
+      at.set(it.id, slot);
+      moved++;
+    }
+  }
+  const items = page.map((it) => {
+    const p = at.get(it.id) ?? { c: it.c, r: it.r };
+    return p.c === it.c && p.r === it.r ? it : { ...it, c: p.c, r: p.r };
+  });
+  return { items, moved };
+};

@@ -199,6 +199,8 @@ export interface AppSettings {
   mode: ViewMode;
   /** 图标卡在字形下方常显网站名称（悬停气泡不受此开关影响，始终可用） */
   iconNames: boolean;
+  /** 删除图标类卡片后自动整理当前页：把后面的图标依次前移到空出来的位置（组件位置不受影响） */
+  autoArrange: boolean;
   hideTop: boolean;
   hideSearch: boolean;
   mascot: boolean;

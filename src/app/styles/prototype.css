@@ -781,8 +781,12 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .search-box.immersive{background:transparent;box-shadow:none}
 .search-box.line{border-radius:14px;background:transparent;border-color:transparent;box-shadow:none}
 
-/* —— 小组件内容卡：单一轻投影 + 统一 16px 圆角（无描边、无内高光） —— */
-.item{border-radius:16px;box-shadow:0 8px 24px -12px rgba(15,23,42,.22);outline:none;transition:transform .2s var(--ease-spring),box-shadow .2s var(--ease)}
+/* —— 小组件内容卡：单一轻投影 + 统一 16px 圆角（无描边、无内高光） ——
+   位置变化（删除后自动整理 / 手动「整理图标」/ 拖拽被占回退）用 left/top 过渡让卡片平滑滑过去
+   而不是瞬移；这条是全文件对 .item 过渡的最后一次覆盖（16 节那条被它盖掉），拖拽中由行内
+   transition:none 覆盖，吸附与实时落位不受影响 */
+.item{border-radius:16px;box-shadow:0 8px 24px -12px rgba(15,23,42,.22);outline:none;
+  transition:transform .2s var(--ease-spring),box-shadow .2s var(--ease),left .26s var(--ease),top .26s var(--ease)}
 .item:hover{transform:translateY(-2px);box-shadow:0 14px 30px -12px rgba(15,23,42,.26)}
 
 /* —— Dock：玻璃磨砂悬浮栏（苹果式尺寸），快捷方式显 favicon、功能键显线性图标 —— */

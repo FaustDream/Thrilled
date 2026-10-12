@@ -343,6 +343,8 @@ export const App = () => {
         }
         case 'drawer-open': st.setDrawer(v as DrawerKey); break
         case 'ctx-blocked': st.showToast(v); st.openCtx(null); break
+        /* 空白处右键「整理图标」：把当前页的图标类卡片依次前移补位（组件钉住不动） */
+        case 'arrange': st.arrange(); st.openCtx(null); break
         case 'dock-app': {
           st.openCtx(null)
           if (v !== '') openByMode(st, v, 'link')

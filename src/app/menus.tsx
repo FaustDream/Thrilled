@@ -1,8 +1,8 @@
 /**
- * 右键菜单（空白处 7 项 + 卡片 6 项 + Dock 图标 5 项）
+ * 右键菜单（空白处 8 项 + 卡片 6 项 + Dock 图标 5 项）
  *
- * 空白处：添加网站图标 / 添加网站容器 / 添加到 Dock 快捷方式 / 添加组件（二级 9 类）
- *  / 打开添加面板 / 个性化 / 设置；前三项为「新建」，后三项为「打开」。
+ * 空白处分三组：添加网站图标 / 添加网站容器 / 添加到 Dock 快捷方式 / 添加组件（二级 9 类）为「新建」，
+ *  打开添加面板 / 个性化 / 设置为「打开」，末尾单独一组是「整理图标」。
  *  前两项直接落位（不弹表单）——生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」。
  * 卡片与 Dock 图标各有自己的菜单；输入框、抽屉、弹窗、引擎面板里的右键仍交给浏览器原生菜单
  * （见 App 的 contextmenu 处理）。二级菜单按 UiTab 实测复刻。
@@ -122,6 +122,9 @@ const BlankMenu = () => {
       <div className="ctx-item" data-act="drawer-open" data-v="add"><span>打开添加面板</span></div>
       <div className="ctx-item" data-act="drawer-open" data-v="personal"><span>打开个性化</span></div>
       <div className="ctx-item" data-act="drawer-open" data-v="setting"><span>打开设置</span></div>
+      {/* 工具组：手动整理（自动整理只发生在删除后，存量页面里已有的空洞靠这里补） */}
+      <div className="ctx-sep" />
+      <div className="ctx-item" data-act="arrange"><span>整理图标</span></div>
     </>
   )
 }

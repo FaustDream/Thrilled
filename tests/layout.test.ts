@@ -3,13 +3,13 @@
  * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, REPEATABLE_KINDS, isIconOnlyPage, mergeIconPages, normPages, placedKindsOf, prunePages, uid } from '../src/app/layout'
+import { DEFAULT_PAGES, REPEATABLE_KINDS, arrangePage, isIconOnlyPage, mergeIconPages, normPages, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, isLegalSize, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
   boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup,
 } from '../src/shared/widget-defs'
-import type { GridItem } from '../src/shared/types'
+import type { GridItem, WidgetKind } from '../src/shared/types'
 
 const PAGES = DEFAULT_PAGES.map((items, i) => ({ name: `出厂第 ${i + 1} 页`, items }))
 
@@ -498,5 +498,80 @@ describe('prunePages：删除卡片后的空页修剪', () => {
     expect(r2.pages).toEqual(last)
     expect(r2.cur).toBe(1)
     expect(r2.removed).toBe(0)
+  })
+})
+
+describe('arrangePage：删除图标后的自动整理（链式补位）', () => {
+  const card = (c: number, r: number, w = 2, h = 2, t: WidgetKind = 'icon'): GridItem =>
+    ({ id: uid(), c, r, w, h, t, config: {} })
+  const pos = (x: GridItem): [number, number] => [x.c, x.r]
+  /** 断言非 null 并收窄类型（本文件禁用 `!` 断言） */
+  const arrange = (page: readonly GridItem[]): { items: GridItem[]; moved: number } => {
+    const r = arrangePage(page)
+    if (r === null) throw new Error('arrangePage 意外返回 null')
+    return r
+  }
+  const byId = (items: readonly GridItem[], id: string): GridItem => {
+    const x = items.find((v) => v.id === id)
+    if (x === undefined) throw new Error(`缺少卡片 ${id}`)
+    return x
+  }
+  const at = (items: readonly GridItem[], i: number): GridItem => {
+    const x = items[i]
+    if (x === undefined) throw new Error(`缺少下标 ${i}`)
+    return x
+  }
+
+  it('删掉第一张后，后面的图标一张接一张前移（链式补位）', () => {
+    const b = card(2, 0)
+    const c = card(4, 0)
+    const r = arrange([b, c]) /* 第一张 (0,0) 已被删除 */
+    expect(r.moved).toBe(2)
+    /* 相对顺序不变：b 仍在 c 前面，各自前移一格 */
+    expect(r.items.map((x) => x.id)).toEqual([b.id, c.id])
+    expect(pos(at(r.items, 0))).toEqual([0, 0])
+    expect(pos(at(r.items, 1))).toEqual([2, 0])
+  })
+
+  it('组件钉住不动，图标补到组件旁边的空位', () => {
+    const clock = card(0, 0, 4, 2, 'clock')
+    const f = card(6, 0) /* 时钟右侧留了个 2×2 的洞 */
+    const r = arrange([clock, f])
+    expect(r.moved).toBe(1)
+    expect(pos(byId(r.items, f.id))).toEqual([4, 0])
+    expect(pos(byId(r.items, clock.id))).toEqual([0, 0])
+  })
+
+  it('本就紧凑时 moved=0，未移动的卡片返回原对象（避免无谓重渲染）', () => {
+    const a = card(0, 0)
+    const b = card(2, 0)
+    const r = arrange([a, b])
+    expect(r.moved).toBe(0)
+    expect(at(r.items, 0)).toBe(a)
+    expect(at(r.items, 1)).toBe(b)
+  })
+
+  it('尺寸对不上时链条停止：2×2 的洞装不下 4×4 容器，容器留在原位', () => {
+    /* 组件块占满 (0..4, 2..6)，左上角留了个 2×2 的洞；唯一可移动的是 4×4 容器 */
+    const page = [card(0, 2, 2, 2, 'clock'), card(2, 2, 2, 2, 'weather'), card(0, 4, 2, 2, 'todo'), card(2, 4, 2, 2, 'cal'), card(4, 0, 4, 4, 'group')]
+    const r = arrange(page)
+    expect(r.moved).toBe(0)
+    expect(pos(at(r.items, 4))).toEqual([4, 0])
+  })
+
+  it('没有可移动卡片（空页 / 只剩组件）时无需整理', () => {
+    expect(arrangePage([])).toEqual({ items: [], moved: 0 })
+    const clock = card(0, 0, 4, 2, 'clock')
+    expect(arrange([clock]).moved).toBe(0)
+  })
+
+  it('整理结果不产生任何重叠', () => {
+    const page = [card(0, 0, 4, 2, 'clock'), card(6, 0), card(0, 4, 4, 4, 'group'), card(8, 0), card(4, 0)]
+    const items = arrange(page).items
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        expect(overlaps(at(items, i), at(items, j))).toBe(false)
+      }
+    }
   })
 })

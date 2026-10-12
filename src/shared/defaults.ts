@@ -14,6 +14,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mode: 'standard',
   /* 图标名称出厂不常显：保持纯字形，需要辨认时悬停看提示 */
   iconNames: false,
+  /* 删除后自动整理出厂开（用户需求）：删掉图标后不留空洞，后面的图标依次前移补位 */
+  autoArrange: true,
   hideTop: false,
   hideSearch: false,
   mascot: true,
