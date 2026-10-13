@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react'
 import { CheckIcon, Icon } from './icons'
 import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
-import { CELL, GROUP_GAP, GROUP_PAD, INSET, groupGrid, groupOverflows } from '../shared/grid'
+import { GROUP_GAP, GROUP_PAD, groupBoxOf, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
 import { daysUntil, normTodoItems } from '../core/utils'
 import { normCountdownEntries, upcomingRows } from '../core/festivals'
@@ -288,8 +288,8 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
           </div>
         )
       }
-      const W = item.w * CELL - 2 * INSET - GROUP_PAD * 2
-      const H = item.h * CELL - 2 * INSET - GROUP_PAD * 2
+      /* 可用框与尺寸能力判定共用 shared/grid 的 groupBoxOf（图标类贴边后两处一起变，不各算一套） */
+      const { w: W, h: H } = groupBoxOf(item.w, item.h)
       const { cols, rows, cell } = groupGrid(apps.length, W, H, GROUP_GAP)
       /* 太少格数会撑成巨块、太多格数在窄卡里会溢出：溢出时容器改为可滚动，格子保持 16px 下限 */
       const over = groupOverflows(apps.length, W, H, GROUP_GAP)

@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey, type NewSiteTarget } from './store'
-import { CELL, COLS, GRID_LEFT, GRID_TOP, INSET, PAGE_W, ROWS, SNAP_ALIGN_PX, STAGE_W, itemBox, nearOnAxis, snapAxis } from '../shared/grid'
+import { CELL, COLS, GRID_LEFT, GRID_TOP, PAGE_W, ROWS, SNAP_ALIGN_PX, STAGE_W, insetOf, itemBox, nearOnAxis, snapAxis } from '../shared/grid'
 import type { AxisSnap } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
@@ -420,15 +420,16 @@ export const App = () => {
       e.preventDefault()
       const r = el.getBoundingClientRect()
       const s = r.width / stage.w
-      /* 空白处：把右键位置换算成网格格（新建图标的落位参考）；卡片与 Dock 菜单不需要 */
+      /* 空白处：把右键位置换算成网格格（新建图标的落位参考，故按图标类卡片的框口径）；卡片与 Dock 菜单不需要 */
       let cell: { c: number; r: number } | null = null
       const g = gridRef.current
       if (id === null && dockIdx === null && g !== null) {
         const gr = g.getBoundingClientRect()
         const gs = gr.width / (COLS * CELL)
+        const edge = insetOf('icon')
         cell = {
-          c: Math.round(((e.clientX - gr.left) / gs - INSET) / CELL),
-          r: Math.round(((e.clientY - gr.top) / gs - INSET) / CELL),
+          c: Math.round(((e.clientX - gr.left) / gs - edge) / CELL),
+          r: Math.round(((e.clientY - gr.top) / gs - edge) / CELL),
         }
       }
       const next: CtxState = {
@@ -524,15 +525,17 @@ export const App = () => {
         const it = allItems(st.pages).find((v) => v.id === d.id)
         if (!it) return d
         /* 自由位置（去掉抓取偏移）→ 每轴独立选格：网格给基准，阈值内可被组件对齐覆盖。
-           某轴只参考「另一轴邻近」的卡片，避免整页同列 / 同行的卡片都被当成对齐目标 */
-        const freeC = (x - d.offX - INSET) / CELL
-        const freeR = (y - d.offY - INSET) / CELL
+           某轴只参考「另一轴邻近」的卡片，避免整页同列 / 同行的卡片都被当成对齐目标。
+           内缩按卡片类型取（图标类贴边），与 itemBox 同一处 insetOf，抓取偏移与落格才一致 */
+        const inset = insetOf(it.t)
+        const freeC = (x - d.offX - inset) / CELL
+        const freeR = (y - d.offY - inset) / CELL
         const others = (st.pages[st.cur] ?? []).filter((v) => v.id !== d.id)
         const nearX = others.filter((v) => nearOnAxis(freeR, freeR + it.h, v.r, v.r + v.h))
         const nearY = others.filter((v) => nearOnAxis(freeC, freeC + it.w, v.c, v.c + v.w))
         const threshold = st.settings.snapItems ? SNAP_ALIGN_PX : 0
-        const sx = snapAxis(freeC, it.w, COLS, nearX, 'x', threshold)
-        const sy = snapAxis(freeR, it.h, ROWS, nearY, 'y', threshold)
+        const sx = snapAxis(freeC, it.w, COLS, nearX, 'x', threshold, inset)
+        const sy = snapAxis(freeR, it.h, ROWS, nearY, 'y', threshold, inset)
         return { ...d, x, y, c: sx.index, r: sy.index, gx: sx.guide, gy: sy.guide, moved: true }
       })
     }
@@ -541,8 +544,8 @@ export const App = () => {
          变成「渲染期间更新其它组件」（React 18 会直接报 Maximum update depth exceeded） */
       if (drag !== null && drag.moved) {
         suppressItemClick = true
-        const ok = useApp.getState().move(drag.id, drag.c, drag.r)
-        if (!ok) useApp.getState().showToast('该位置已被占用')
+        /* 落位不再「被占就整体回退」（满页时怎么拖都没反应）：空位直接落、同尺寸互换、否则就近落位，提示在 store 里给 */
+        useApp.getState().drop(drag.id, drag.c, drag.r)
         setTimeout(() => { suppressItemClick = false }, 80)
       }
       setDrag(null)
@@ -611,7 +614,7 @@ export const App = () => {
                     setDrag({
                       id: it.id, moved: false,
                       x: px, y: py, scx: e.clientX, scy: e.clientY,
-                      offX: px - (it.c * CELL + INSET), offY: py - (it.r * CELL + INSET),
+                      offX: px - (it.c * CELL + insetOf(it.t)), offY: py - (it.r * CELL + insetOf(it.t)),
                       c: it.c, r: it.r, gx: null, gy: null,
                     })
                   }} />
@@ -781,7 +784,7 @@ const GridCard = ({ item, idx, now, weather, flash, dragging, alignHit, onDragSt
   const draggingStyle = dragging !== null && dragging.moved
   /* 拖拽中直接渲染在候选格上（实时吸附显示），而不是跟随指针 —— 所见即所得 */
   const style = dragging !== null && dragging.moved
-    ? { left: dragging.c * CELL + INSET, top: dragging.r * CELL + INSET, zIndex: 20, transition: 'none' }
+    ? { left: dragging.c * CELL + insetOf(item.t), top: dragging.r * CELL + insetOf(item.t), zIndex: 20, transition: 'none' }
     : { animationDelay: `${Math.min(idx * 22, 440)}ms` }
   return (
     <>

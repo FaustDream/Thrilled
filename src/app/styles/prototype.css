@@ -92,7 +92,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .grid{position:absolute;left:50%;top:97px;width:1776px;height:740px;margin-left:-888px}
 /* 网格对齐线（组件落位参照）：铺满整个舞台（不再只覆盖网格区，消除「被裁切 / 分块」的观感），
    图案用 background-position 对齐到卡片网格原点（.grid 在舞台内 left:72px / top:97px）；
-   细线 = 单元格（74px），粗线 = 偶数格（合法尺寸边界，两层叠加故更深）；卡片内缩 25px，线落在卡间缝隙。
+   细线 = 单元格（74px），粗线 = 偶数格（合法尺寸边界，两层叠加故更深）；卡片内缩按类型取（图标类 14px、
+   组件 25px），线落在卡间缝隙（图标类间距 28px，线正好居中）。
    每根线再叠一层右下偏移 1px 的白色高光 → 亮壁纸看线芯、暗壁纸看边缘；
    层级在壁纸之上、#pager（z-index:2）之下，且不拦截指针。 */
 .grid-lines{position:absolute;inset:0;z-index:1;pointer-events:none;
@@ -762,7 +763,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .v-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;font-size:31px;border-radius:12px;transition:transform .2s var(--ease-spring)}
 .v-icon.lat{font-size:23px}
 .item[data-t='icon']:hover .v-icon{transform:scale(1.1)}
-.v-cell img.v-icon{border-radius:12px}
+.v-cell img.v-icon{border-radius:calc(18 * var(--u))}
 /* 图标格容器内的格子：保留标准图标容器语言（白底 + 品牌色字形），边长由 shared/grid 的 groupGrid 给出；
    原先的「透明去卡片化」会让图标格只剩一串散字（见 v4.4 补丁 7） */
 .gtile{border-radius:12px}
@@ -971,10 +972,12 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .item{container-type:size;
   --u:calc(max(1px, min(100cqw / var(--nw,98), 100cqh / var(--nh,98))) * var(--w-fs,1));
   border-radius:calc(var(--w-radius,16) * 1px)}
-/* 卡内图标：随卡片短边等比（名称标签已移除，不再有条带规则） */
-.item .v-icon{width:calc(60 * var(--u) * var(--w-ico,1));height:calc(60 * var(--u) * var(--w-ico,1));
-  font-size:calc(31 * var(--u) * var(--w-ico,1));border-radius:calc(14 * var(--u))}
-.item .v-icon.lat{font-size:calc(17 * var(--u) * var(--w-ico,1))}
+/* 卡内图标：随卡片短边等比（名称标签已移除，不再有条带规则）。
+   基准 84 对应「2×2 图标卡 120px」（图标类贴边后，见 shared/grid 的 ICON_INSET）：字形占卡面 70%
+   （原 60/98 = 61%），卡片更满、加上更窄的卡间距，信息密度更高 */
+.item .v-icon{width:calc(84 * var(--u) * var(--w-ico,1));height:calc(84 * var(--u) * var(--w-ico,1));
+  font-size:calc(43 * var(--u) * var(--w-ico,1));border-radius:calc(18 * var(--u))}
+.item .v-icon.lat{font-size:calc(24 * var(--u) * var(--w-ico,1))}
 /* 图标常显名称（设置 → 通用 →「图标显示名称」）：名字落在卡片下沿之外（相邻卡片间距 50px，
    放得下这一行），字形保持居中不动。不放卡内是因为图标卡只有 98px 宽，卡内的底部一行要么给
    名字要么给悬浮按钮（✎ / 🗑，两者合计 48px）——实测会重叠掉一半名字。

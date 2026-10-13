@@ -6,7 +6,7 @@
  * 纯数据无 React 依赖 → app（渲染 / 编辑弹窗）与 core（导入校验 / 迁移）共用。
  */
 import type { WidgetDefinition, WidgetKind, WidgetSize } from './types';
-import { CELL, INSET, groupFits } from './grid';
+import { CELL, INSET, groupFits, insetOf } from './grid';
 
 export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
   clock: {
@@ -143,11 +143,14 @@ export const listOf = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x)
 
 /* ---------- 尺寸自适应（容器查询单位 cqmin 的基准） ---------- */
 
-/** 单位尺寸 → 卡片实际像素（与 shared/grid 的 itemBox 同一算法：单位数 × CELL − 两侧内缩） */
-export const boxOfUnits = (w: number, h: number): { w: number; h: number } => ({
-  w: w * CELL - 2 * INSET,
-  h: h * CELL - 2 * INSET,
-});
+/**
+ * 单位尺寸 → 卡片实际像素（与 shared/grid 的 itemBox 同一算法：单位数 × CELL − 两侧内缩）。
+ * 内缩按类型取：图标类贴边（ICON_INSET）、其余组件用 INSET；不给类型时按组件口径（调用方通常在算组件）。
+ */
+export const boxOfUnits = (w: number, h: number, t?: WidgetKind): { w: number; h: number } => {
+  const inset = t === undefined ? INSET : insetOf(t);
+  return { w: w * CELL - 2 * inset, h: h * CELL - 2 * inset };
+};
 
 /**
  * 组件「自然尺寸」（px）：定义表 units 对应的实际卡片框。
@@ -155,7 +158,7 @@ export const boxOfUnits = (w: number, h: number): { w: number; h: number } => ({
  * 自然尺寸下渲染与设计稿逐像素一致，更大的卡片按 min(宽比, 高比) 等比放大，更小的卡片不缩小。
  */
 export const naturalBoxOf = (t: WidgetKind): { w: number; h: number } =>
-  boxOfUnits(WIDGET_DEFS[t].units.w, WIDGET_DEFS[t].units.h);
+  boxOfUnits(WIDGET_DEFS[t].units.w, WIDGET_DEFS[t].units.h, t);
 
 /** 组件「自然短边」（px）——@container 密度降级阈值与调试用 */
 export const naturalMinOf = (t: WidgetKind): number => {

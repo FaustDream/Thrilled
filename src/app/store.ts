@@ -6,7 +6,7 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { ARRANGE_KINDS, DEFAULT_PAGES, arrangePage, clonePages, mergeIconPages, prunePages, readLayoutDoc } from './layout'
+import { ARRANGE_KINDS, DEFAULT_PAGES, arrangePages, clonePages, dropPlan, mergeIconPages, prunePages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
@@ -147,9 +147,13 @@ interface AppState {
   setSizeDefaults: (next: Record<string, WidgetSize>) => void
   updateConfig: (id: string, patch: Record<string, unknown>) => void
   resize: (id: string, w: number, h: number) => void
-  move: (id: string, c: number, r: number) => boolean
+  /**
+   * 拖拽落位：空位直接落、与同尺寸卡片互换、否则就近落位（见 layout.dropPlan）。
+   * 不再「目标被占就整体回退」——那样满页时怎么拖都没反应。
+   */
+  drop: (id: string, c: number, r: number) => void
   remove: (id: string) => void
-  /** 手动整理当前页（空白处右键「整理图标」）：把图标类卡片依次前移到空出来的位置 */
+  /** 手动整理（空白处右键「整理图标」）：把所有页的图标类卡片依次前移到最靠前的空位（跨页） */
   arrange: () => void
   swapKind: (id: string, kind: WidgetKind) => void
   /** 批量落位网址图标（收藏夹导入 / 批量添加共用） */
@@ -569,29 +573,32 @@ export const useApp = create<AppState>()((set, get) => ({
     return { pages: list, toast: `尺寸已更新为 ${w}×${h}` }
   }),
 
-  move: (id, c, r) => {
-    const s = get()
-    const page = curPageOf(s)
-    const it = page.find((x) => x.id === id)
-    if (!it) return false
-    const target = { ...it, c, r }
-    if (page.some((x) => x.id !== id && overlaps(target, x))) return false
-    set((st) => {
-      const list = st.pages.map((pg) => pg.map((x) => (x.id === id ? target : x)))
-      return { pages: list }
+  drop: (id, c, r) => set((s) => {
+    const page = s.pages[s.cur] ?? []
+    const plan = dropPlan(page, id, c, r)
+    if (plan.kind === 'fail') return { toast: '这里放不下，换个位置试试' }
+    const next = page.map((x) => {
+      if (x.id === id) return { ...x, c: plan.c, r: plan.r }
+      if (plan.swapId === x.id && plan.swapTo !== undefined) return { ...x, c: plan.swapTo.c, r: plan.swapTo.r }
+      return x
     })
-    return true
-  },
+    return {
+      pages: s.pages.map((pg, i) => (i === s.cur ? next : pg)),
+      /* 互换与就近都看得出来，只有「就近」需要一句说明（否则会以为放到了指针下） */
+      toast: plan.kind === 'near' ? '目标位置被占用，已就近放置' : '',
+    }
+  }),
 
   remove: (id) => set((s) => {
     /* 被删卡片所在页与它自身的类型：自动整理只对「图标类」生效（组件钉住，删组件不触发） */
     const pgIdx = s.pages.findIndex((pg) => pg.some((x) => x.id === id))
     const hit = pgIdx >= 0 ? s.pages[pgIdx]?.find((x) => x.id === id) : undefined
     let list = s.pages.map((pg) => pg.filter((x) => x.id !== id))
-    /* 删除后自动整理（设置默认开）：被删的是图标类时把该页后面的图标依次前移补位；无解或无需整理就保持原样 */
+    /* 删除后自动整理（设置默认开、跨页）：被删的是图标类时，把空洞用后面页的图标补上——
+       空洞被推到最后一页末尾，分页整体保持紧凑；组件钉住不动；无解或无需整理就保持原样 */
     if (hit !== undefined && s.settings.autoArrange && pgIdx >= 0 && ARRANGE_KINDS.has(hit.t)) {
-      const done = arrangePage(list[pgIdx] ?? [])
-      if (done !== null && done.moved > 0) list = list.map((pg, i) => (i === pgIdx ? done.items : pg))
+      const done = arrangePages(list)
+      if (done !== null && done.moved > 0) list = done.pages
     }
     /* 空页自动移除：页面删空后不再保留空页点（至少保留一页），当前页序号落到邻近保留页 */
     const pruned = prunePages(list, s.cur)
@@ -604,14 +611,18 @@ export const useApp = create<AppState>()((set, get) => ({
     }
   }),
 
-  /* 手动整理当前页（空白处右键「整理图标」）：自动只管删除后这一下，存量页面里已有的空洞靠这里补 */
+  /* 手动整理（空白处右键「整理图标」）：自动只管删除后那一下，存量页面里已有的空洞靠这里一次理顺（跨页） */
   arrange: () => set((s) => {
-    const done = arrangePage(s.pages[s.cur] ?? [])
-    if (done === null) return { toast: '页内没有足够的连续空位，未做整理' }
-    if (done.moved === 0) return { toast: '已是最紧凑的排列' }
+    const done = arrangePages(s.pages)
+    if (done === null) return { toast: '没有连续的空位可用，未做整理' }
+    if (done.moved === 0) return { toast: '没有需要移动的图标' }
+    const pruned = prunePages(done.pages, s.cur)
     return {
-      pages: s.pages.map((pg, i) => (i === s.cur ? done.items : pg)),
-      toast: `已整理 ${done.moved} 个图标`,
+      pages: pruned.pages,
+      cur: pruned.cur,
+      toast: pruned.removed > 0
+        ? `已整理 ${done.moved} 个图标，并移除 ${pruned.removed} 个空页面`
+        : `已整理 ${done.moved} 个图标`,
     }
   }),
 

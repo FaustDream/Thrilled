@@ -6,8 +6,20 @@
 
 /** 单元格边长（px）：放大以填满搜索行与 Dock 之间的可用带（72px 头部区 + 740px 网格 ≈ 无首尾留白） */
 export const CELL = 74;
-/** 卡片四边内缩（px） */
+/** 卡片四边内缩（px）：小组件用（内容要留白） */
 export const INSET = 25;
+/**
+ * 图标类卡片的四边内缩（px）：比小组件更贴边，图标之间更紧凑（信息密度更高）。
+ * 图标类 = 网站图标 / 图标文件夹 / 图标格容器——网格上就看字形，不需要组件那样的内容留白；
+ * 2×2 的图标卡因此是 120×120（原 98×98），相邻卡间距 28px（原 50px）。
+ */
+export const ICON_INSET = 14;
+
+/** 图标类类型名（与「整理」的可移动集合、可重复放置集合同集合；这里只回答「卡片贴不贴边」） */
+const TIGHT_KINDS: ReadonlySet<string> = new Set(['icon', 'folder', 'group']);
+
+/** 按类型取卡片四边内缩：图标类贴边、其余组件保持 INSET */
+export const insetOf = (t: string): number => (TIGHT_KINDS.has(t) ? ICON_INSET : INSET);
 /** 网格列数 */
 export const COLS = 24;
 /** 网格行数 */
@@ -109,6 +121,7 @@ export interface AxisSnap {
  *
  * free 是自由位置（格单位，可含小数）；size 是本卡该轴的格数；max 是该轴格数上限（COLS / ROWS）；
  * thresholdPx ≤ 0 表示不做组件对齐（只用网格基准）。宽高都是偶数，三类候选都落在整数格上，不会出现半格。
+ * edge 是参考线的内缩（默认 INSET）：拖动图标类卡片时传 insetOf(t)，参考线才落在卡片真实边缘上。
  */
 export const snapAxis = (
   free: number,
@@ -117,6 +130,7 @@ export const snapAxis = (
   others: readonly AlignBox[],
   axis: 'x' | 'y',
   thresholdPx: number,
+  edge: number = INSET,
 ): AxisSnap => {
   const clamp = (v: number): number => Math.max(0, Math.min(max - size, v));
   const base = clamp(Math.round(free));
@@ -131,8 +145,8 @@ export const snapAxis = (
     const span = axis === 'x' ? o.w : o.h;
     /* 三类参考点：起点边对齐 / 终点边对齐 / 居中（第二个值是参考线在设计像素里的位置） */
     const cands: readonly [number, number][] = [
-      [start, start * CELL + INSET],
-      [start + span - size, (start + span) * CELL - INSET],
+      [start, start * CELL + edge],
+      [start + span - size, (start + span) * CELL - edge],
       [start + (span - size) / 2, (start + span / 2) * CELL],
     ];
     for (const [cand, pos] of cands) {
@@ -160,9 +174,14 @@ export const snapAxis = (
 export const nearOnAxis = (a0: number, a1: number, b0: number, b1: number): boolean =>
   a0 <= b1 + 1 && b0 <= a1 + 1;
 
-/** 卡片绝对定位（px）：单元格块内四边内缩 */
-export const itemBox = (it: { c: number; r: number; w: number; h: number }): string =>
-  `left:${it.c * CELL + INSET}px;top:${it.r * CELL + INSET}px;width:${it.w * CELL - 2 * INSET}px;height:${it.h * CELL - 2 * INSET}px`;
+/**
+ * 卡片绝对定位（px）：单元格块内四边内缩（按类型取——图标类贴边、组件留白）。
+ * 拖拽的抓取偏移必须用同一个 insetOf，否则图标类卡片一抓就跳（渲染与拖拽数学共用一处）。
+ */
+export const itemBox = (it: { c: number; r: number; w: number; h: number; t: string }): string => {
+  const inset = insetOf(it.t);
+  return `left:${it.c * CELL + inset}px;top:${it.r * CELL + inset}px;width:${it.w * CELL - 2 * inset}px;height:${it.h * CELL - 2 * inset}px`;
+};
 
 /** 图标格容器的格子边长上限（px）：避免少格数把图标撑成巨块 */
 const GROUP_TILE_MAX = 64;
@@ -176,8 +195,8 @@ export const GROUP_GAP = 10;
  * 与渲染侧同一算法，尺寸能力判定与渲染不会各算一套。
  */
 export const groupBoxOf = (w: number, h: number): { w: number; h: number } => ({
-  w: w * CELL - 2 * INSET - GROUP_PAD * 2,
-  h: h * CELL - 2 * INSET - GROUP_PAD * 2,
+  w: w * CELL - 2 * ICON_INSET - GROUP_PAD * 2,
+  h: h * CELL - 2 * ICON_INSET - GROUP_PAD * 2,
 });
 
 /**

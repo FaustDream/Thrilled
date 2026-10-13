@@ -7,7 +7,7 @@
  */
 import type { GridItem, LayoutDoc, ModePages, WidgetKind } from '../shared/types';
 import { WIDGET_KINDS, fromLegacyKind } from '../shared/widget-defs';
-import { COLS, MAX_PAGES, ROWS, findSlot } from '../shared/grid';
+import { COLS, MAX_PAGES, ROWS, findSlot, findSlotNear, overlaps } from '../shared/grid';
 
 let seq = 0
 export const uid = (): string => `i${Date.now().toString(36)}${(seq++).toString(36)}`
@@ -218,40 +218,105 @@ export const placedKindsOf = (pages: readonly GridItem[][]): Set<WidgetKind> =>
  */
 export const ARRANGE_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['icon', 'folder', 'group']);
 
+/** 整理过程中每张卡片的当前落点（页序 + 格）：先按原位建表，处理一张改一张 */
+type Slot = { pg: number; c: number; r: number };
+
+/** 第 k 页上的障碍：所有当前落在该页的其它卡片（已处理的用新位置、未处理的用原位） */
+const obstaclesOn = (
+  pages: readonly GridItem[][],
+  at: ReadonlyMap<string, Slot>,
+  pg: number,
+  selfId: string,
+): { c: number; r: number; w: number; h: number }[] => {
+  const out: { c: number; r: number; w: number; h: number }[] = [];
+  pages.forEach((items) => {
+    for (const x of items) {
+      if (x.id === selfId) continue;
+      const p = at.get(x.id);
+      if (p === undefined || p.pg !== pg) continue;
+      out.push({ c: p.c, r: p.r, w: x.w, h: x.h });
+    }
+  });
+  return out;
+};
+
 /**
- * 整理一页（纯函数，可单测）：把可移动卡片（ARRANGE_KINDS）按当前位置自上而下、自左而右排序，
- * 依次补到它前面被腾出来的空位上——删掉一张后即「链式补位」：后面的图标一张接一张前移，
- * 直到没有空洞可补；尺寸对不上时链条自然停止（大卡片填不了小空洞，就留在原位）。相对顺序不变。
+ * 整理**全部页**（纯函数，可单测）：把可移动卡片（ARRANGE_KINDS）按「页序 + 页内自上而下、自左而右」排序，
+ * 依次补到**全局最靠前**的空位上——删掉一张后即「链式补位」：后面的图标一张接一张前移，直到没有空洞可补
+ * （尺寸对不上时链条自然停止：大卡片填不了小空洞，留在原位）。相对顺序不变。
  *
- * 关键：判定空位时，「其它所有卡片」都算障碍——**已处理的用新位置、未处理的用原位**。
- * 因此每张卡片只会往前补空，绝不会越过还没处理的卡片乱跳；自身原位必然仍空着
- * （前面的卡片只往空位走，不会占别人的原位），所以一定找得到落点。
+ * 跨页的意义：前面的页留白时，后面页的图标会被提前填上，**空洞被推到最后一页末尾**，
+ * 分页整体保持紧凑连贯，不会出现「中间页空一块、后面还排得满满当当」。
+ * 组件（时钟 / 天气 / 待办 / 日历 / 收藏夹 / 倒计时）钉在各自页的原位不动。
  *
- * 返回 { items, moved }：moved = 0 表示本来就紧凑（无需整理）；null 是防御性兜底（理论上不可达）。
+ * 关键：判定空位时「其它所有卡片」都算障碍——**已处理的用新位置、未处理的用原位**。
+ * 因此每张卡片只会往前补它前面被腾出来的位置，绝不会越过还没处理的卡片乱跳；
+ * 自身原位必然仍空着（前面的卡片只往空位走，不会占别人的原位），所以一定找得到落点。
+ *
+ * 返回 { pages, moved }（页数不变，被搬空的页留成空数组，由调用方走 prunePages 移除并修正当前页序号）；
+ * moved = 0 表示本来就紧凑（无需整理）；null 是防御性兜底（理论上不可达）。
  */
-export const arrangePage = (page: readonly GridItem[]): { items: GridItem[]; moved: number } | null => {
-  const order = page.filter((it) => ARRANGE_KINDS.has(it.t)).sort((a, b) => a.r - b.r || a.c - b.c);
-  if (order.length === 0) return { items: [...page], moved: 0 };
-  const at = new Map<string, { c: number; r: number }>(page.map((it) => [it.id, { c: it.c, r: it.r }]));
+export const arrangePages = (pages: readonly GridItem[][]): { pages: GridItem[][]; moved: number } | null => {
+  const order: GridItem[] = [];
+  pages.forEach((items) => items.filter((x) => ARRANGE_KINDS.has(x.t)).forEach((x) => order.push(x)));
+  if (order.length === 0) return { pages: pages.map((items) => [...items]), moved: 0 };
+  const pgOf = new Map<string, number>();
+  pages.forEach((items, i) => items.forEach((x) => pgOf.set(x.id, i)));
+  order.sort((a, b) => (pgOf.get(a.id) ?? 0) - (pgOf.get(b.id) ?? 0) || a.r - b.r || a.c - b.c);
+  const at = new Map<string, Slot>();
+  pages.forEach((items, i) => items.forEach((x) => at.set(x.id, { pg: i, c: x.c, r: x.r })));
   let moved = 0;
   for (const it of order) {
-    const others = page
-      .filter((x) => x.id !== it.id)
-      .map((x) => {
-        const p = at.get(x.id) ?? { c: x.c, r: x.r };
-        return { c: p.c, r: p.r, w: x.w, h: x.h };
-      });
-    const slot = findSlot(others, it.w, it.h);
+    let slot: Slot | null = null;
+    for (let k = 0; k < pages.length && slot === null; k++) {
+      const hit = findSlot(obstaclesOn(pages, at, k, it.id), it.w, it.h);
+      if (hit !== null) slot = { pg: k, c: hit.c, r: hit.r };
+    }
+    /* 自身原位必然仍空着，所以一定找得到落点；这里只是防御性兜底 */
     if (slot === null) return null;
-    const cur = at.get(it.id) ?? { c: it.c, r: it.r };
-    if (slot.c !== cur.c || slot.r !== cur.r) {
+    const cur = at.get(it.id);
+    if (cur === undefined || slot.pg !== cur.pg || slot.c !== cur.c || slot.r !== cur.r) {
       at.set(it.id, slot);
       moved++;
     }
   }
-  const items = page.map((it) => {
-    const p = at.get(it.id) ?? { c: it.c, r: it.r };
-    return p.c === it.c && p.r === it.r ? it : { ...it, c: p.c, r: p.r };
-  });
-  return { items, moved };
+  const out: GridItem[][] = pages.map(() => []);
+  pages.forEach((items, i) => items.forEach((x) => {
+    const p = at.get(x.id) ?? { pg: i, c: x.c, r: x.r };
+    out[p.pg]?.push(p.c === x.c && p.r === x.r ? x : { ...x, c: p.c, r: p.r });
+  }));
+  return { pages: out, moved };
+};
+
+/* ---------- 拖拽落位（精确 / 互换 / 就近） ---------- */
+
+/** 拖拽落位的判定结果：落点、以及「与目标互换」时需要一起挪动的卡片 */
+export interface DropPlan {
+  kind: 'move' | 'swap' | 'near' | 'fail';
+  /** 被拖动卡片的新位置 */
+  c: number;
+  r: number;
+  /** kind = swap 时：被换走的那张，以及它要去的位置（被拖动卡片的原位） */
+  swapId?: string;
+  swapTo?: { c: number; r: number };
+}
+
+/**
+ * 拖拽落位方案（纯函数，可单测）——拖到哪儿都能放下，不再「拖了没反应」：
+ * ①目标格空着 → 直接落（move）；
+ * ②目标格被**一张同尺寸**的卡片占着 → 两张互换位置（swap，尺寸相同所以互换必然合法）；
+ * ③其它情况（压到多张、或尺寸不同装不下）→ 按距离就近找空位（near）；
+ * ④页内确实没有连续空位 → fail（调用方给提示）。
+ */
+export const dropPlan = (page: readonly GridItem[], id: string, c: number, r: number): DropPlan => {
+  const it = page.find((x) => x.id === id);
+  if (it === undefined) return { kind: 'fail', c, r };
+  const hits = page.filter((x) => x.id !== id && overlaps({ ...it, c, r }, x));
+  if (hits.length === 0) return { kind: 'move', c, r };
+  const target = hits[0];
+  if (hits.length === 1 && target !== undefined && target.w === it.w && target.h === it.h) {
+    return { kind: 'swap', c: target.c, r: target.r, swapId: target.id, swapTo: { c: it.c, r: it.r } };
+  }
+  const slot = findSlotNear(page.filter((x) => x.id !== id), it.w, it.h, { c, r });
+  return slot === null ? { kind: 'fail', c, r } : { kind: 'near', c: slot.c, r: slot.r };
 };
