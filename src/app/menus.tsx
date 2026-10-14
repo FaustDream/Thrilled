@@ -1,5 +1,5 @@
 /**
- * 右键菜单（空白处 8 项 + 卡片 6 项 + Dock 图标 5 项）
+ * 右键菜单（空白处 8 项 + 卡片 6 项 / 图标类 7 项 + Dock 图标 5 项）
  *
  * 空白处分三组：添加网站图标 / 添加网站容器 / 添加到 Dock 快捷方式 / 添加组件（二级 9 类）为「新建」，
  *  打开添加面板 / 个性化 / 设置为「打开」，末尾单独一组是「整理图标」。
@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type CtxState } from './store'
-import { placedKindsOf } from './layout'
+import { ARRANGE_KINDS, placedKindsOf } from './layout'
 import { WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
 import { MAX_PAGES, SIZES, findSlot } from '../shared/grid'
 import { stage } from './stage'
@@ -50,6 +50,21 @@ const CardMenu = ({ id }: { id: string }) => {
         </div>
       </div>
       <div className="ctx-item" data-act="item-folder"><span>添加到文件夹</span></div>
+      {/* 跨页搬动：只给图标类（组件仍钉在各自页），二级列出其它页；
+          右键的这张若在多选集合里，App 会当成「搬整组」 */}
+      {pages.length > 1 && ARRANGE_KINDS.has(item.t) && (
+        <div className="ctx-item"><span>移动到</span><span className="ctx-arrow" />
+          <div className="ctx-sub">
+            {pages.map((_, i) => (
+              <div key={i} className={`ctx-sub-item${i === cur ? ' dis' : ''}`}
+                data-act={i === cur ? 'ctx-blocked' : 'move-to-page'}
+                data-v={i === cur ? '已经在这一页' : String(i)}>
+                <span>第 {i + 1} 页</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="ctx-item" data-act="item-del"><span>删除该书签</span></div>
       <span style={{ display: 'none' }}>{String(label)}</span>
     </>

@@ -106,10 +106,14 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
     linear-gradient(to bottom,var(--grid-line) 1px,transparent 1px);
   background-size:148px 148px,148px 148px,148px 148px,148px 148px,74px 74px,74px 74px;
   background-position:73px 98px,72px 99px,72px 97px,72px 97px,72px 97px,72px 97px}
+/* touch-action:none —— 触摸设备上卡片要接住自己的手势（按住 = 准备拖动），
+   不能被浏览器当成滚动 / 缩放接管（本页固定不滚，故不牺牲任何滚动行为；
+   中断由 App.tsx 拖拽 effect 的 pointercancel 收尾） */
 .item{position:absolute;border-radius:var(--radius-lg);overflow:hidden;
   background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-card) * 100%),transparent);
   backdrop-filter:blur(var(--blur-card));
-  cursor:pointer;transition:transform .14s var(--ease)}
+  cursor:pointer;transition:transform .14s var(--ease);
+  touch-action:none}
 .item:hover{transform:translateY(-2px)}
 /* 新落位的卡片：一次性高亮（描边脉冲 + 轻微上浮），让用户一眼看到新增的图标 / 容器落在哪；
    动画期间会覆盖 .item[data-t='icon'] 的去卡片化 box-shadow:none，播完自动回到常态，故不影响既有风格 */
@@ -761,9 +765,30 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .item[data-t='group']{background:transparent;backdrop-filter:none;box-shadow:none;outline:none}
 .item[data-t='icon'] .item-acts{right:2px;bottom:-2px}
 .v-icon{background:transparent;border:none;box-shadow:none;backdrop-filter:none;font-size:31px;border-radius:12px;transition:transform .2s var(--ease-spring)}
+/* —— 自动对比（v4.4 补丁 38）：图标压在壁纸上要看得清 ——
+   --ct-ink   自动选定的墨色（浅壁纸翻深墨、深壁纸用皮肤原色）
+   --ct-anti  与墨色相反的一侧（"0,0,0" / "255,255,255"），护罩与光晕都用它
+   --ct-scrim 字形背后一圈软底衬：用径向渐变而不是实心块，边界化开、不像又变回卡片；
+              壁纸够暗时它是 0，整条背景都不出现，去卡片化的观感原样保留
+   --ct-halo  外圈光晕：压住字形边缘的高频对比（局部有云 / 文字时靠它），带一点点下沉投影
+   favicon 图片同样吃这套：品牌图标自带的底色与壁纸撞色时，靠这两层分离开 */
+#stage .item[data-t='icon'] .v-icon,
+#stage .item[data-t='folder'] .v-icon,
+#stage .item[data-t='group'] .v-icon{
+  color:var(--ct-ink,inherit);
+  background:radial-gradient(circle at 50% 50%,rgba(var(--ct-anti,0,0,0),var(--ct-scrim,0)) 0 44%,transparent 72%);
+  filter:drop-shadow(0 0 1.5px rgba(var(--ct-anti,0,0,0),var(--ct-halo,0)))
+    drop-shadow(0 1px 2px rgba(0,0,0,calc(var(--ct-halo,0) * .45)))}
+/* 卡片文字的外圈描边：白字压在亮壁纸上靠它立住。描边色取 --mask-color（浅色皮肤白、深色皮肤近黑，
+   与 .item-note 同一套约定），强度按**皮肤墨色**的对比缺口走（见 App 的 ctMap.haloT）。
+   各小组件自己的 text-shadow 选择器都比这条更具体，需要时会自动盖掉它 */
+#stage .item{text-shadow:0 1px 3px color-mix(in srgb,var(--mask-color) calc(var(--ct-halo-t,0) * 60%),transparent)}
 .v-icon.lat{font-size:23px}
 .item[data-t='icon']:hover .v-icon{transform:scale(1.1)}
 .v-cell img.v-icon{border-radius:calc(18 * var(--u))}
+/* favicon 别被浏览器当成可拖拽对象：原生图片拖拽会抢走指针并派发 pointercancel，
+   把「长按拖动卡片」变成「拖出一张图片」 */
+.item img{-webkit-user-drag:none;user-select:none}
 /* 图标格容器内的格子：保留标准图标容器语言（白底 + 品牌色字形），边长由 shared/grid 的 groupGrid 给出；
    原先的「透明去卡片化」会让图标格只剩一串散字（见 v4.4 补丁 7） */
 .gtile{border-radius:12px}
@@ -789,6 +814,41 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .item{border-radius:16px;box-shadow:0 8px 24px -12px rgba(15,23,42,.22);outline:none;
   transition:transform .2s var(--ease-spring),box-shadow .2s var(--ease),left .26s var(--ease),top .26s var(--ease)}
 .item:hover{transform:translateY(-2px);box-shadow:0 14px 30px -12px rgba(15,23,42,.26)}
+/* 长按进入拖拽的「拿起来」反馈（拖动中由行内 transition:none 覆盖过渡，故这里是瞬间抬起）。
+   两个选择器缺一不可：补丁 36 之后拖拽中的卡片渲染在舞台浮层 `.drag-layer` 下、**不在 `.page` 里**，
+   只写 `.page` 前缀会让整条失效（实测浮层卡只拿到 .item.dragging 的 opacity:.5，放大 / 光圈 / 投影全丢）。
+   必须排在这条 :hover 之后：拖拽中指针还停在卡片上，靠源码顺序盖过它的位移 / 缩放，
+   也盖过本节顶部的 .item[data-t='icon']:hover（同为 3 个类级选择器）；触觉反馈见 App.tsx 的 navigator.vibrate。
+   opacity 一并覆盖上面两条 .item.dragging（.45 / .5）：那是「按下即拖」时代的幽灵态，
+   拖拽由长按触发后它就是「已经拿起来」的正式状态——半透明会把放大与光晕一起冲淡 */
+.page .item.dragging,.drag-layer .item.dragging{transform:scale(1.06);opacity:.85;
+  box-shadow:0 18px 40px -14px rgba(15,23,42,.42),0 0 0 3px var(--accent)}
+
+/* —— 多选与跨页拖拽（v4.4 补丁 36） —— */
+/* 选中描边：用 outline 而非 box-shadow——:hover / :just-placed / :dragging 都占了 box-shadow，
+   描边不与它们互相覆盖。`.item` 在本节把 outline 清成了 none，故这条必须排在它之后 */
+.item.picked{outline:2px solid var(--accent);outline-offset:2px}
+/* 拖拽浮层：拖拽中的卡片（单张的实卡、多选的主卡）画在舞台顶层——不能留在自己那页，
+   否则跨页翻页时会被 #pager 的位移带走。压在 #pager（2）与对齐参考线（25）之上，
+   仍在搜索行（30）与 Dock（40）之下；整层不接指针，命中测试照旧交给真实卡片 */
+.drag-layer{position:absolute;left:0;top:0;width:1920px;height:945px;z-index:26;pointer-events:none}
+/* 多选拖拽的目标落点：虚线占位格（落点与松手后的落位算法完全一致，见 App 的 spots / crossPlan） */
+.drag-slot{border-radius:14px;border:2px dashed color-mix(in srgb,var(--accent) 62%,transparent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent)}
+/* 多选拖拽的数量角标：是「一共搬几张」；放不下时直接显示「能放/总数」，松手瞬间即知结果 */
+.drag-count{position:absolute;min-width:22px;height:22px;padding:0 7px;border-radius:999px;
+  background:var(--accent);color:#fff;font-size:12px;font-weight:700;line-height:22px;text-align:center;
+  box-shadow:0 8px 18px -8px rgba(6,12,24,.6)}
+
+/* —— 拖拽的跟手与降噪（v4.4 补丁 37） —— */
+/* 拖拽中翻页提速：跨页时 0.42s 的滑动会明显拖慢节奏，拖拽期间压到 0.24s（其它入口仍是 0.42s） */
+#pager[data-drag='1']{transition-duration:.24s}
+/* 拖拽中指针横扫一排图标时，底层卡片不再各自播 hover 动效（上浮 / 字形放大 / 悬浮按钮淡入）：
+   既有视觉噪声，又让每张被扫过的卡都跑一次 transform 过渡与合成 */
+#stage[data-drag='1'] .item:hover{transform:none}
+#stage[data-drag='1'] .item[data-t='icon']:hover .v-icon,
+#stage[data-drag='1'] .item[data-t='folder']:hover .v-icon{transform:none}
+#stage[data-drag='1'] .item .item-acts{opacity:0}
 
 /* —— Dock：玻璃磨砂悬浮栏（苹果式尺寸），快捷方式显 favicon、功能键显线性图标 —— */
 .dock-bar{border-radius:24px;padding:9px 12px;

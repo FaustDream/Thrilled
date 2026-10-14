@@ -252,6 +252,8 @@ export interface AppSettings {
   cover: number;
   /** 字体颜色（名称标签覆盖色；空串 = 跟随风格令牌） */
   fontColor: string;
+  /** 自动对比（v4.4 补丁 38）：按壁纸局部明暗自动选墨色 / 垫护罩 / 加光晕 / 抬遮罩 */
+  autoContrast: boolean;
   /** 沉浸式搜索框（与壁纸融合的透明样式） */
   immersive: boolean;
   /** 简洁模式搜索框改为线框样式 */

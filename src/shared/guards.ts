@@ -229,6 +229,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     gAlpha: numish(o['gAlpha'], d.gAlpha, 0.2, 1),
     cover: numish(o['cover'], d.cover, 0, 1),
     fontColor: strish(o['fontColor'], d.fontColor),
+    autoContrast: boolish(o['autoContrast'], d.autoContrast),
     immersive: boolish(o['immersive'], d.immersive),
     simpleSearch: boolish(o['simpleSearch'], d.simpleSearch),
     skinId: strish(o['skinId'], d.skinId),

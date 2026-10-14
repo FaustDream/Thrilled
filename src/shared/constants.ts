@@ -69,8 +69,11 @@ export const WHEEL_PAGE_COOLDOWN_MS = 450 as const;
 export const WHEEL_MIN_DELTA = 12 as const;
 /** 搜索历史上限 */
 export const SEARCH_HISTORY_LIMIT = 8 as const;
-/** 卡片拖拽判定阈值（px，原型 4px） */
-export const DRAG_THRESHOLD_PX = 4 as const;
+/** 跨页拖拽：指针进入舞台左右边缘多少像素内开始准备翻页（屏幕像素；另有「不超过舞台宽 15%」的上限，
+ *  窄窗口下不至于把半屏都算成边缘） */
+export const PAGE_EDGE_PX = 110 as const;
+/** 跨页拖拽：在边缘带停留多久翻页（ms）；翻过后仍停在带内会继续翻下一页 */
+export const PAGE_EDGE_MS = 600 as const;
 
 /** ===== 透明度 / 毛玻璃换算（两者已解耦，分别由 settings.glass 与 settings.blur 驱动） ===== */
 /** 玻璃底色的透气因子：alpha = 1 − 0.55×值（保留可读下限，滑到底不会消失） */

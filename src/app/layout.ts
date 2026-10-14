@@ -320,3 +320,95 @@ export const dropPlan = (page: readonly GridItem[], id: string, c: number, r: nu
   const slot = findSlotNear(page.filter((x) => x.id !== id), it.w, it.h, { c, r });
   return slot === null ? { kind: 'fail', c, r } : { kind: 'near', c: slot.c, r: slot.r };
 };
+
+/* ---------- 跨页搬动（拖到另一页 / 右键「移动到第 N 页」） ---------- */
+
+/** 跨页落位结果：能搬的（含新落点）与放不下、留在原页的 id */
+export interface CrossPlan {
+  placed: { id: string; c: number; r: number }[];
+  kept: string[];
+}
+
+/**
+ * 跨页落位方案（纯函数，可单测）：把 ids 里的卡片搬到第 to 页。
+ *
+ * 与页内 dropPlan 的差异：**跨页不做互换**——页内的「同尺寸互换」搬到这里会变成「把别人甩到另一页」，
+ * 与直觉相反；所以跨页只有「空位直接落 / 就近落位 / 放不下」三种结局。
+ *
+ * - 只搬 1 张且给了 prefer（拖拽时指针所在的格）→ 就近落位（findSlotNear），落在指针附近；
+ * - 多张（含右键搬页）→ 按「源页页序 + 页内自上而下、自左而右」排序后**依次填空位**：目标页最靠前的
+ *   空位优先、不保持相对形状——目标页通常已排满，保持形状几乎必然失败，而「依次填空位」与「整理图标」
+ *   同一口径，落点可预期且绝不重叠。
+ * - 已落下的卡片立刻算作后续卡片的障碍，所以结果之间绝不会重叠。
+ *
+ * 参与搬运的 id **包含已经在目标页的**（整组视作一个整体：同页多选拖动 = 把这一组重新排一遍）；
+ * 找不到的 id 一律忽略。placed / kept 的顺序 = 处理顺序，kept 用于提示「其余 N 个留在原页」。
+ */
+export const crossPlan = (
+  pages: readonly GridItem[][],
+  ids: readonly string[],
+  to: number,
+  prefer?: { c: number; r: number },
+): CrossPlan => {
+  const placed: CrossPlan['placed'] = [];
+  const kept: string[] = [];
+  const target = pages[to];
+  if (target === undefined || ids.length === 0) return { placed, kept };
+  const byId = new Map<string, GridItem>();
+  const pgOf = new Map<string, number>();
+  pages.forEach((items, i) => items.forEach((x) => { byId.set(x.id, x); pgOf.set(x.id, i); }));
+  /* 要搬的卡片：按「源页页序 + 页内 (r,c)」排序，批量落位的先后可预期 */
+  const moving = ids
+    .map((id) => byId.get(id))
+    .filter((x): x is GridItem => x !== undefined)
+    .sort((a, b) => (pgOf.get(a.id) ?? 0) - (pgOf.get(b.id) ?? 0) || a.r - b.r || a.c - b.c);
+  if (moving.length === 0) return { placed, kept };
+  /* 障碍 = 目标页上「不参与本次搬运」的卡片：要搬的都被拎起来了，不该挡自己 */
+  const movingIds = new Set(moving.map((x) => x.id));
+  const obstacles = target
+    .filter((x) => !movingIds.has(x.id))
+    .map((x) => ({ c: x.c, r: x.r, w: x.w, h: x.h }));
+  for (const it of moving) {
+    const hit = moving.length === 1 && prefer !== undefined
+      ? findSlotNear(obstacles, it.w, it.h, prefer)
+      : findSlot(obstacles, it.w, it.h);
+    if (hit === null) { kept.push(it.id); continue; }
+    placed.push({ id: it.id, c: hit.c, r: hit.r });
+    obstacles.push({ c: hit.c, r: hit.r, w: it.w, h: it.h });
+  }
+  return { placed, kept };
+};
+
+/**
+ * 单页整理（纯函数，可单测）：把**本页**的图标类卡片（ARRANGE_KINDS）按「自上而下、自左而右」依次补到
+ * 本页最靠前的空位；组件（时钟 / 天气 / 待办…）钉住不动、充当障碍。无需移动时返回 null。
+ *
+ * 跨页搬走图标后源页会留下空洞，用本函数补位。**不要改用跨页的 arrangePages**：那是全局打包，
+ * 会把用户刚落下的卡片又挪走——等于把刚做的操作抹掉。
+ */
+export const packPage = (page: readonly GridItem[]): GridItem[] | null => {
+  const order = page.filter((x) => ARRANGE_KINDS.has(x.t)).sort((a, b) => a.r - b.r || a.c - b.c);
+  if (order.length === 0) return null;
+  const at = new Map<string, { c: number; r: number }>();
+  page.forEach((x) => at.set(x.id, { c: x.c, r: x.r }));
+  let moved = 0;
+  for (const it of order) {
+    const obstacles: { c: number; r: number; w: number; h: number }[] = [];
+    page.forEach((x) => {
+      if (x.id === it.id) return;
+      const p = at.get(x.id);
+      if (p === undefined) return;
+      obstacles.push({ c: p.c, r: p.r, w: x.w, h: x.h });
+    });
+    const hit = findSlot(obstacles, it.w, it.h);
+    /* 自身原位必然仍空着（前面的卡片只往空位走），一定找得到；找不到只是防御性兜底 */
+    if (hit === null) continue;
+    const cur = at.get(it.id);
+    if (cur !== undefined && (cur.c !== hit.c || cur.r !== hit.r)) { at.set(it.id, hit); moved++; }
+  }
+  if (moved === 0) return null;
+  return page.map((x) => {
+    const p = at.get(x.id);
+    return p === undefined || (p.c === x.c && p.r === x.r) ? x : { ...x, c: p.c, r: p.r };
+  });
+};

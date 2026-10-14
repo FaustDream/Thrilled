@@ -6,7 +6,7 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { ARRANGE_KINDS, DEFAULT_PAGES, arrangePages, clonePages, dropPlan, mergeIconPages, prunePages, readLayoutDoc } from './layout'
+import { ARRANGE_KINDS, DEFAULT_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
@@ -90,6 +90,9 @@ interface AppState {
   drawer: DrawerKey | null
   modal: ModalKey | null
   ctx: CtxState | null
+  /** 多选集合（Ctrl/Cmd 单击切换、Shift 范围选中）：跨页有效——可以选好第 2、3 页的图标一次搬到第 1 页；
+   *  纯界面态、不落盘（buildDoc 只取设置 / 布局 / 引擎 / 皮肤 / 历史等字段） */
+  picked: readonly string[]
   /** 新建站点弹窗的预置（空白处右键「新建网址图标 / 添加到 Dock」写入） */
   newSite: NewSiteDraft | null
   /** 刚放置的实例 id：该卡片播一次落位提示（App 在动画结束后清除），让用户看清新图标落在哪 */
@@ -152,6 +155,14 @@ interface AppState {
    * 不再「目标被占就整体回退」——那样满页时怎么拖都没反应。
    */
   drop: (id: string, c: number, r: number) => void
+  /**
+   * 跨页搬动：把 ids 搬到第 to 页（拖到另一页 / 右键「移动到第 N 页」共用）。
+   * 单张且给了 prefer（拖拽落点）时就近落位；多张按「源页序 + 页内 (r,c)」依次填空位；
+   * 放不下的留在原页并在提示里说明（见 layout.crossPlan）。
+   */
+  moveToPage: (ids: readonly string[], to: number, prefer?: { c: number; r: number }) => void
+  /** 替换多选集合（Ctrl/Cmd 单击切换、Shift 范围、点空白与 Esc 清空都走它） */
+  setPicked: (ids: readonly string[]) => void
   remove: (id: string) => void
   /** 手动整理（空白处右键「整理图标」）：把所有页的图标类卡片依次前移到最靠前的空位（跨页） */
   arrange: () => void
@@ -326,6 +337,7 @@ export const useApp = create<AppState>()((set, get) => ({
   drawer: null,
   modal: null,
   ctx: null,
+  picked: [],
   newSite: null,
   flashId: null,
   toast: '',
@@ -588,6 +600,49 @@ export const useApp = create<AppState>()((set, get) => ({
       toast: plan.kind === 'near' ? '目标位置被占用，已就近放置' : '',
     }
   }),
+
+  /* 跨页搬动：把选中（或单张）的卡片搬到另一页——拖到页面边缘停留翻页后松手、右键「移动到第 N 页」共用。
+     落位见 crossPlan；搬完按「删除后自动整理」整理**各源页**（不能用跨页的 arrangePages：那是全局打包，
+     会把刚落下的卡片又挪走），源页被搬空则连空页一起移除（页点不留一个空白页） */
+  moveToPage: (ids, to, prefer) => set((s) => {
+    if (ids.length === 0) return {}
+    const plan = crossPlan(s.pages, ids, to, prefer)
+    if (plan.placed.length === 0) {
+      return {
+        ctx: null,
+        toast: plan.kept.length > 1
+          ? `第 ${to + 1} 页放不下这 ${plan.kept.length} 个图标，已留在原页`
+          : `第 ${to + 1} 页放不下这一张，已留在原页`,
+      }
+    }
+    const slotOf = new Map(plan.placed.map((p) => [p.id, p]))
+    const movedIds = new Set(plan.placed.map((p) => p.id))
+    /* 源页：整理与空页清理只作用于这些页 */
+    const srcPages = new Set<number>()
+    s.pages.forEach((pg, i) => pg.forEach((x) => { if (movedIds.has(x.id)) srcPages.add(i) }))
+    const list = s.pages.map((pg) => pg
+      .filter((x) => !movedIds.has(x.id))
+      .map((x) => { const p = slotOf.get(x.id); return p === undefined ? x : { ...x, c: p.c, r: p.r } }))
+    const come = s.pages.flat().filter((x) => movedIds.has(x.id)).map((x) => {
+      const p = slotOf.get(x.id)
+      return p === undefined ? x : { ...x, c: p.c, r: p.r }
+    })
+    list[to] = [...(list[to] ?? []), ...come]
+    if (s.settings.autoArrange) {
+      for (const i of srcPages) {
+        const packed = packPage(list[i] ?? [])
+        if (packed !== null) list[i] = packed
+      }
+    }
+    const pruned = prunePages(list, s.cur)
+    const n = plan.placed.length
+    const head = n > 1 ? `已移动 ${n} 个图标到第 ${to + 1} 页` : `已移动到第 ${to + 1} 页`
+    const tail = plan.kept.length > 0 ? `，${plan.kept.length} 个放不下留在原页` : ''
+    const prune = pruned.removed > 0 ? `（并移除 ${pruned.removed} 个空页面）` : ''
+    return { pages: pruned.pages, cur: pruned.cur, ctx: null, picked: [], toast: `${head}${tail}${prune}` }
+  }),
+
+  setPicked: (ids) => set({ picked: [...ids] }),
 
   remove: (id) => set((s) => {
     /* 被删卡片所在页与它自身的类型：自动整理只对「图标类」生效（组件钉住，删组件不触发） */

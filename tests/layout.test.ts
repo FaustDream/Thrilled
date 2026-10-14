@@ -3,7 +3,7 @@
  * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, REPEATABLE_KINDS, arrangePages, dropPlan, isIconOnlyPage, mergeIconPages, normPages, placedKindsOf, prunePages, uid } from '../src/app/layout'
+import { DEFAULT_PAGES, REPEATABLE_KINDS, arrangePages, crossPlan, dropPlan, isIconOnlyPage, mergeIconPages, normPages, packPage, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, ICON_INSET, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, insetOf, isLegalSize, itemBox, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
@@ -535,6 +535,108 @@ describe('dropPlan：拖拽落位（空位直接落 / 同尺寸互换 / 否则�
 
   it('卡片不在这一页 → fail', () => {
     expect(dropPlan([card(0, 0)], 'nope', 0, 0).kind).toBe('fail')
+  })
+})
+
+describe('crossPlan：跨页搬动（单张就近 / 多张依次填空位 / 放不下的留在原页）', () => {
+  const card = (id: string, c: number, r: number, w = 2, h = 2, t: WidgetKind = 'icon'): GridItem =>
+    ({ id, c, r, w, h, t, config: {} })
+
+  it('单张 + 给了落点：目标格空着就落在那里', () => {
+    const a = card('a', 0, 0)
+    expect(crossPlan([[a], []], ['a'], 1, { c: 6, r: 4 })).toEqual({ placed: [{ id: 'a', c: 6, r: 4 }], kept: [] })
+  })
+
+  it('单张 + 目标格被占：就近落位，落点不与占位卡片重叠', () => {
+    const a = card('a', 0, 0)
+    const b = card('b', 6, 4, 4, 2, 'clock')
+    const plan = crossPlan([[a], [b]], ['a'], 1, { c: 6, r: 4 })
+    const hit = plan.placed[0]
+    expect(hit).toBeDefined()
+    expect(overlaps({ c: hit?.c ?? 0, r: hit?.r ?? 0, w: 2, h: 2 }, b)).toBe(false)
+  })
+
+  it('多张：按「源页 (r,c) 靠前者优先」依次填空位，结果之间不重叠', () => {
+    const a = card('a', 0, 4)
+    const b = card('b', 0, 0)
+    const c = card('c', 4, 0)
+    /* 传入顺序被打乱，落位顺序仍按源页 (r,c)：b(0,0) → c(0,4) → a(4,0) */
+    const plan = crossPlan([[a, b, c], []], ['a', 'c', 'b'], 1)
+    expect(plan.placed).toEqual([
+      { id: 'b', c: 0, r: 0 },
+      { id: 'c', c: 2, r: 0 },
+      { id: 'a', c: 4, r: 0 },
+    ])
+    expect(plan.kept).toEqual([])
+  })
+
+  it('多来源页：先按页序，再按页内 (r,c)', () => {
+    const p1 = card('p1', 8, 8)
+    const p2 = card('p2', 0, 0)
+    expect(crossPlan([[p1], [p2], []], ['p2', 'p1'], 2).placed)
+      .toEqual([{ id: 'p1', c: 0, r: 0 }, { id: 'p2', c: 2, r: 0 }])
+  })
+
+  it('目标页只剩一个空位：放得下的先放，其余留在原页（kept 按处理顺序）', () => {
+    const x = card('x', 2, 0, 22, 10, 'clock')
+    const y = card('y', 0, 2, 2, 8, 'clock')
+    const a = card('a', 0, 4)
+    const b = card('b', 0, 0)
+    const plan = crossPlan([[a, b], [x, y]], ['a', 'b'], 1)
+    expect(plan.placed).toEqual([{ id: 'b', c: 0, r: 0 }])
+    expect(plan.kept).toEqual(['a'])
+  })
+
+  it('目标页整页放不下 → placed 为空、全部留在原页', () => {
+    const full: GridItem[] = []
+    for (let r = 0; r < ROWS; r += 2) for (let c = 0; c < COLS; c += 4) full.push(card(`f${r}-${c}`, c, r, 4, 2, 'clock'))
+    const a = card('a', 0, 0)
+    const plan = crossPlan([[a], full], ['a'], 1)
+    expect(plan.placed).toEqual([])
+    expect(plan.kept).toEqual(['a'])
+  })
+
+  it('已经在目标页的选中项也参与重新落位（整组视作一个整体）', () => {
+    const a = card('a', 8, 8)
+    const b = card('b', 0, 0)
+    expect(crossPlan([[], [a, b]], ['a', 'b'], 1).placed)
+      .toEqual([{ id: 'b', c: 0, r: 0 }, { id: 'a', c: 2, r: 0 }])
+  })
+
+  it('找不到的 id 忽略；空 ids / 目标页越界 → 空结果', () => {
+    const a = card('a', 0, 0)
+    expect(crossPlan([[a], []], ['a', 'nope'], 1)).toEqual({ placed: [{ id: 'a', c: 0, r: 0 }], kept: [] })
+    expect(crossPlan([[a], []], [], 1)).toEqual({ placed: [], kept: [] })
+    expect(crossPlan([[a], []], ['a'], 9)).toEqual({ placed: [], kept: [] })
+  })
+
+  it('不改入参（纯函数）', () => {
+    const a = card('a', 0, 0)
+    const pages = [[a], []]
+    crossPlan(pages, ['a'], 1, { c: 4, r: 4 })
+    expect(pages[0]?.[0]).toEqual(a)
+    expect(a.c).toBe(0)
+  })
+})
+
+describe('packPage：单页整理（跨页搬走后源页补位，组件钉住不动）', () => {
+  const card = (id: string, c: number, r: number, w = 2, h = 2, t: WidgetKind = 'icon'): GridItem =>
+    ({ id, c, r, w, h, t, config: {} })
+
+  it('图标依次前移到本页最靠前的空位，组件原位不动', () => {
+    const clock = card('k', 0, 0, 4, 2, 'clock')
+    const out = packPage([clock, card('a', 4, 2), card('b', 8, 2)])
+    expect(out).not.toBeNull()
+    expect(out?.find((x) => x.id === 'k')).toEqual(clock)
+    /* 时钟占住 (0,0)-(3,1)：a 补到 (4,0)，b 再补到 (6,0) */
+    expect(out?.find((x) => x.id === 'a')).toMatchObject({ c: 4, r: 0 })
+    expect(out?.find((x) => x.id === 'b')).toMatchObject({ c: 6, r: 0 })
+  })
+
+  it('本来就紧凑 / 只有组件 / 空页 → null', () => {
+    expect(packPage([card('a', 0, 0), card('b', 2, 0)])).toBeNull()
+    expect(packPage([card('k', 0, 0, 4, 2, 'clock'), card('k2', 4, 0, 4, 2, 'clock')])).toBeNull()
+    expect(packPage([])).toBeNull()
   })
 })
 

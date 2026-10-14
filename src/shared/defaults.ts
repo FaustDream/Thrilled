@@ -59,6 +59,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   gAlpha: 1,
   cover: 0.18,
   fontColor: '',
+  /* 自动对比默认开：出厂壁纸是纯色，开与不开都看不出差别；换上亮 / 花壁纸才见效 */
+  autoContrast: true,
   immersive: false,
   simpleSearch: false,
   skinId: 'classic',
