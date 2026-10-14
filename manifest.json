@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Thrilled",
-  "version": "4.4",
+  "version": "4.6",
   "description": "新标签页",
   "chrome_url_overrides": {
     "newtab": "index.html"
