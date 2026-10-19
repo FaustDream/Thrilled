@@ -9,7 +9,9 @@
  *   5. 通过 gh CLI 创建 GitHub Release 并上传 releases/<项目名>-<版本>.zip 作为产物
  *
  * 说明：dist/ 不提交到 git 仓库，仅其压缩包作为 Release 产物上传。
- *       releases/ 为本地产物目录，不提交 git。bug 修复汇总见 BUG_FIXES.md（本地文档，不提交 git）。
+ *       releases/ 为本地产物目录，不提交 git。
+ *       Release 说明只取 BUG_FIXES.md 当前版本分组的几条，简短即可（不贴整份记录）。
+ *       BUG_FIXES.md 为本地文档（已 gitignore），上传前需存在当前版本分组。
  *
  * 用法：node scripts/release.mjs
  */
@@ -78,17 +80,16 @@ function main() {
   run('git', ['push', 'origin', '-f', tag]);
   console.log(`[release] 已推送 tag ${tag}`);
 
-  // 4. 创建 GitHub Release 并上传本地包作为产物（已存在则仅上传产物）
-  const notesFile = join(ROOT, 'BUG_FIXES.md');
-  const releaseNotes = existsSync(notesFile) ? readFileSync(notesFile, 'utf8') : `Release ${version}`;
+  // 4. 创建 GitHub Release 并上传本地包作为产物（已存在则更新产物与说明）
   const tmpNotes = join(ROOT, `.release-notes-${version}.md`);
   mkdirSync(dirname(tmpNotes), { recursive: true });
-  writeFileSync(tmpNotes, releaseNotes, 'utf8');
+  writeFileSync(tmpNotes, releaseNotesOf(version), 'utf8');
 
   const releaseAlreadyExists = runCapture('gh', ['release', 'view', tag]).length > 0;
   if (releaseAlreadyExists) {
     run('gh', ['release', 'upload', tag, releaseZipPath, '--clobber']);
-    console.log(`[release] GitHub Release ${tag} 已存在，已更新产物 ${releaseZipName}`);
+    run('gh', ['release', 'edit', tag, '--notes-file', tmpNotes]);
+    console.log(`[release] GitHub Release ${tag} 已存在，已更新产物与说明 ${releaseZipName}`);
   } else {
     run('gh', ['release', 'create', tag, releaseZipPath,
       '--title', `${pkg.productName || 'Thrilled'} ${version}`,
@@ -97,6 +98,29 @@ function main() {
     console.log(`[release] 已创建 Release ${tag} 并上传 ${releaseZipName}`);
   }
   rmSync(tmpNotes, { force: true });
+}
+
+/**
+ * Release 说明：只取 BUG_FIXES.md 中当前版本那一组条目（简短几句），
+ * 不把整份修复记录贴上去；找不到对应分组时退回一行说明。
+ */
+function releaseNotesOf(version) {
+  const notesFile = join(ROOT, 'BUG_FIXES.md');
+  const fallback = `Thrilled ${version}\n\n- 下载 zip 解压后，在浏览器扩展页「加载解压缩的扩展」选择该目录。`;
+  if (!existsSync(notesFile)) return fallback;
+  const lines = readFileSync(notesFile, 'utf8').split(/\r?\n/);
+  const start = lines.findIndex((l) => l.startsWith(`## v${version}`));
+  if (start < 0) return fallback;
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((l) => l.startsWith('## '));
+  const section = (end < 0 ? rest : rest.slice(0, end)).join('\n').trim();
+  return [
+    `Thrilled ${version}`,
+    '',
+    section,
+    '',
+    '安装 / 更新：解压后覆盖原目录，在扩展管理页点「重新加载」。详见 INSTALL.md。',
+  ].join('\n');
 }
 
 main();

@@ -318,8 +318,12 @@ export interface StoredDoc {
   engines: EngineDef[];
   skins: SkinPack[];
   history: string[];
-  /** 首次访问欢迎弹窗已展示 */
+  /** 首次引导已完成（首次安装为空白页，完成引导后不再显示） */
   welcomed: boolean;
   /** 上次备份时间（本地记录） */
   backupTime: string | null;
+  /** 最近一次写入时间（ISO）：本地目录快照与内存数据比较新旧，避免旧快照覆盖新数据 */
+  updatedAt?: string | null;
+  /** 写入该文档时的扩展版本：识别版本升级并自动备份旧数据 */
+  appVersion?: string | null;
 }

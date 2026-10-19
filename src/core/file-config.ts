@@ -26,6 +26,7 @@ import {
   FILECONFIG_WRITE_DEBOUNCE_MS,
 } from '../shared/constants';
 import { collectSnapshot, restoreSnapshot } from './export';
+import { isSnapshotOlder } from './doc-version';
 import { kvGetRaw, kvRemove, kvSetRaw, loadDoc, onStorageChange, saveDoc } from './storage';
 
 /** 确认弹窗选项（对应原 dialogs.ConfirmOptions） */
@@ -399,13 +400,23 @@ async function readAllCategoryFiles(): Promise<ReadResult> {
 
 async function restoreAllData(data: Record<string, unknown>): Promise<void> {
   const doc = restoreSnapshot(data['doc']);
-  if (doc !== null) {
-    saveDoc(doc);
-    info(MODULE, '界面文档已恢复到应用');
-  } else {
+  if (doc === null) {
     warn(MODULE, '同步目录中的界面文档无法解析，已忽略');
+    return;
   }
+  /* 新旧保护：扩展升级后本地文档可能比目录快照新（快照是上次运行写的）。
+     快照更旧时只把当前数据写回目录，不用它覆盖内存与存储。 */
+  const current = loadDoc();
+  if (current !== null && isSnapshotOlder(doc, current)) {
+    info(MODULE, '目录快照早于本机数据，改为把本机数据写回目录');
+    await syncToFile(true);
+    return;
+  }
+  saveDoc(doc);
+  info(MODULE, '界面文档已恢复到应用');
 }
+
+/** 快照是否比当前文档更旧（缺时间戳时按「未知」处理，不阻断恢复） */
 
 /* ================= 同步逻辑 ================= */
 

@@ -8,7 +8,7 @@ import { DEFAULT_SETTINGS, BUILTIN_SKINS } from '../src/shared/defaults'
 import { BUILTIN_ENGINES } from '../src/shared/types'
 import { WIDGET_KINDS } from '../src/shared/widget-defs'
 import { buildLayoutDoc, collectSnapshot, restoreSnapshot } from '../src/core/export'
-import { DEFAULT_PAGES } from '../src/app/layout'
+import { SAMPLE_PAGES } from '../src/app/layout'
 
 describe('设置归一化（normalizeSettings）', () => {
   it('空数据回退出厂默认', () => {
@@ -162,7 +162,7 @@ describe('持久化文档解析（parseStoredDoc）', () => {
   const doc = () => ({
     v: 3 as const,
     settings: DEFAULT_SETTINGS,
-    pages: DEFAULT_PAGES,
+    pages: SAMPLE_PAGES,
     engines: BUILTIN_ENGINES,
     skins: BUILTIN_SKINS,
     history: ['a', 'b'],
@@ -175,7 +175,7 @@ describe('持久化文档解析（parseStoredDoc）', () => {
     expect(out).not.toBeNull()
     expect(out?.v).toBe(3)
     expect(out?.welcomed).toBe(true)
-    expect(out?.pages).toHaveLength(DEFAULT_PAGES.length)
+    expect(out?.pages).toHaveLength(SAMPLE_PAGES.length)
   })
 
   it('v2 双套旧文档自动合并：隐私页在前为基准，标准页卡片追加', () => {
@@ -205,6 +205,19 @@ describe('持久化文档解析（parseStoredDoc）', () => {
     expect(parseStoredDoc({ pages: null }, WIDGET_KINDS)).toBeNull()
     expect(parseStoredDoc({ pages: { standard: [], privacy: [] } }, WIDGET_KINDS)).toBeNull()
     expect(parseStoredDoc('x', WIDGET_KINDS)).toBeNull()
+  })
+
+  it('空白页是合法文档（首次安装 / 用户清空后不被当成坏数据）', () => {
+    const out = parseStoredDoc({ pages: [[]] }, WIDGET_KINDS)
+    expect(out).not.toBeNull()
+    expect(out?.pages).toEqual([[]])
+    expect(parseStoredDoc({ pages: [] }, WIDGET_KINDS)?.pages).toEqual([[]])
+  })
+
+  it('记录写入时间与版本号，供升级备份与快照新旧比较使用', () => {
+    const out = parseStoredDoc({ pages: [[]], updatedAt: '2026-10-19T10:00:00.000Z', appVersion: '4.7' }, WIDGET_KINDS)
+    expect(out?.updatedAt).toBe('2026-10-19T10:00:00.000Z')
+    expect(out?.appVersion).toBe('4.7')
   })
 
   it('卡片未知类型被丢弃，同页合法卡片保留', () => {
@@ -255,18 +268,18 @@ describe('持久化文档解析（parseStoredDoc）', () => {
 
 describe('导出 / 快照（core/export）', () => {
   it('布局导出文档形状符合 01 §5.1（单套 pages）', () => {
-    const doc = buildLayoutDoc(DEFAULT_PAGES)
+    const doc = buildLayoutDoc(SAMPLE_PAGES)
     expect(Object.keys(doc).sort()).toEqual(['app', 'exportedAt', 'pages', 'v'])
     expect(doc.v).toBe(4)
     expect(doc.app).toBe('Thrilled')
-    expect(doc.pages).toHaveLength(DEFAULT_PAGES.length)
+    expect(doc.pages).toHaveLength(SAMPLE_PAGES.length)
   })
 
   it('快照收集 → 恢复往返无损', () => {
     const stored = {
       v: 3 as const,
       settings: DEFAULT_SETTINGS,
-      pages: DEFAULT_PAGES,
+      pages: SAMPLE_PAGES,
       engines: [...BUILTIN_ENGINES],
       skins: [...BUILTIN_SKINS],
       history: ['x'],
@@ -278,7 +291,7 @@ describe('导出 / 快照（core/export）', () => {
     const out = restoreSnapshot(snap)
     expect(out).not.toBeNull()
     expect(out?.backupTime).toBe('2026-09-27 12:00')
-    expect(out?.pages).toHaveLength(DEFAULT_PAGES.length)
+    expect(out?.pages).toHaveLength(SAMPLE_PAGES.length)
   })
 
   it('恢复非快照 / 坏结构返回 null', () => {

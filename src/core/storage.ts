@@ -8,7 +8,7 @@
  * 启动时一次性加载进内存缓存，读同步、写异步落盘（与 v3 的同步门面约定一致）。
  */
 
-import { DOC_KEY } from '../shared/constants';
+import { BACKUP_DOC_KEY, DOC_KEY } from '../shared/constants';
 import { WIDGET_KINDS } from '../shared/widget-defs';
 import { parseStoredDoc } from '../shared/guards';
 import type { StoredDoc } from '../shared/types';
@@ -146,7 +146,7 @@ export const kvRemove = (key: string): void => {
 
 /* ================= v4 文档 ================= */
 
-/** 读取 v4 界面文档（未初始化 / 坏数据返回 null，调用方种入出厂布局） */
+/** 读取 v4 界面文档（未初始化 / 坏数据返回 null，调用方种入空白页） */
 export const loadDoc = (): StoredDoc | null => {
   const raw = cache.get(DOC_KEY);
   if (raw === undefined) return null;
@@ -156,6 +156,18 @@ export const loadDoc = (): StoredDoc | null => {
 /** 写入 v4 界面文档（立即更新缓存 + 异步落盘） */
 export const saveDoc = (doc: StoredDoc): void => {
   kvSet(DOC_KEY, doc);
+};
+
+/** 更新前备份的文档（没有备份返回 null） */
+export const loadBackupDoc = (): StoredDoc | null => {
+  const raw = cache.get(BACKUP_DOC_KEY);
+  if (raw === undefined) return null;
+  return parseStoredDoc(raw, WIDGET_KINDS);
+};
+
+/** 写入更新前备份（保留完整原始文档，不做归一化裁剪） */
+export const saveBackupDoc = (doc: StoredDoc): void => {
+  kvSet(BACKUP_DOC_KEY, doc);
 };
 
 /** 序列化原始文档（迁移 / 诊断用） */

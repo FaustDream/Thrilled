@@ -8,6 +8,12 @@
 /** ===== 本地持久化（v4 文档单键整存整取，见 core/storage.ts） ===== */
 /** v4 界面文档键（StoredDoc） */
 export const DOC_KEY = 'thrilled:v4:doc' as const;
+/** 更新前自动备份的文档键（版本升级 / 快照覆盖前留一份，数据不丢） */
+export const BACKUP_DOC_KEY = 'thrilled:v4:doc:backup' as const;
+/** 已为哪个版本留过更新前备份（同一版本只备份一次，避免每次启动重复覆盖） */
+export const BACKUP_VERSION_KEY = 'thrilled:v4:doc:backup-version' as const;
+/** 当前扩展版本（随文档落盘，用于识别版本升级并自动备份） */
+export const APP_VERSION = '4.7' as const;
 /** v3 → v4 一次性迁移标记键 */
 export const MIGRATED_KEY = 'thrilled:v4:migrated' as const;
 /** 一次性布局修正标记键（v4.1 迁移的多图标页合并，store/hydrate） */

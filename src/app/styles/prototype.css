@@ -939,6 +939,9 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 
 .grid-hint .gh-title{font-size:20px;font-weight:600;color:var(--label-color);opacity:.55}
 .grid-hint .gh-sub{font-size:13px;color:var(--label-color);opacity:.42;line-height:1.8;margin-top:10px}
+/* 首次安装的空白页：三个入口直接可点（其余提示仍不拦截指针） */
+.grid-hint .gh-acts{display:flex;gap:10px;justify-content:center;margin-top:18px;pointer-events:auto}
+.grid-hint .gh-tip{font-size:12px;color:var(--label-color);opacity:.34;margin-top:14px}
 
 /* ============ 21. 极简模式（v4.4）：图6/7 搜索框 + 页面降噪 ============ */
 /* 极简模式只留：模式胶囊 / 大时钟+日期 / 搜索框 / 鼓励语 / Dock */

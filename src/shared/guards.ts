@@ -322,7 +322,9 @@ export const normalizeModePages = (v: unknown, kinds: ReadonlySet<string>): Mode
 };
 
 /**
- * 持久化文档归一化：任何一部分坏数据只丢该部分（布局空则回退 null 由调用方种入出厂布局）。
+ * 持久化文档归一化：任何一部分坏数据只丢该部分。
+ * 布局允许为空（首次安装是空白页，用户可能只留一个空页），空数组是合法文档；
+ * 只有结构非法（pages 不是数组/对象，或 v2 双套都为空）才返回 null。
  * v2 旧文档（standard + privacy 双套）自动合并为单套：隐私页在前为基准，标准页卡片追加其后。
  */
 export const parseStoredDoc = (v: unknown, kinds: ReadonlySet<string>): StoredDoc | null => {
@@ -334,18 +336,23 @@ export const parseStoredDoc = (v: unknown, kinds: ReadonlySet<string>): StoredDo
   const single = normalizeModePages(pages, kinds);
   const standard = normalizeModePages(po['standard'], kinds);
   const privacy = normalizeModePages(po['privacy'], kinds);
-  // v3 单套直读；v2 双套合并（隐私页在前为基准）；两者皆空判为坏数据
+  // v3 单套直读；v2 双套合并（隐私页在前为基准）
   const merged = single.length > 0 ? single : [...privacy, ...standard];
-  if (merged.length === 0) return null;
+  /* 空白页是合法状态（首次安装 / 用户清空）：结构完好但没有任何卡片时保留一个空页；
+     有卡片却全部无法识别仍判为坏数据（回退空白页会让用户误以为数据丢了） */
+  const blankV3 = Array.isArray(pages) && pages.every((pg) => Array.isArray(pg) && pg.length === 0);
+  if (merged.length === 0 && !blankV3) return null;
   return {
     v: 3,
     settings: normalizeSettings(o['settings']),
-    pages: merged,
+    pages: merged.length > 0 ? merged : [[]],
     engines: normalizeEngines(o['engines']),
     skins: normalizeSkins(o['skins']),
     history: Array.isArray(o['history']) ? o['history'].filter((h): h is string => typeof h === 'string').slice(0, 20) : [],
     welcomed: boolish(o['welcomed'], false),
     backupTime: typeof o['backupTime'] === 'string' ? o['backupTime'] : null,
+    updatedAt: typeof o['updatedAt'] === 'string' ? o['updatedAt'] : null,
+    appVersion: typeof o['appVersion'] === 'string' ? o['appVersion'] : null,
   };
 };
 

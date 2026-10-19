@@ -1,9 +1,9 @@
 /**
- * 出厂默认布局（v4）
+ * 出厂默认布局（v4.7 起为空白）
  *
- * 布局规则冻结在 docs/v4/02-UI规格.md §12.1（常量与算法在 shared/grid.ts）：
- * 用户改动只影响实例，出厂数据（DEFAULT_PAGES）只作为种入与「恢复默认」的来源。
- * 单套页面（隐私模式已并入标准模式）：出厂以原隐私页为第 1 页，原标准两页依次并入。
+ * 首次安装不预置任何卡片：界面只有搜索框、Dock 与空页提示，用户按自己的方式开始。
+ * 需要现成编排时，可在「设置 → 数据 → 恢复为默认界面」里手动载入示例布局（SAMPLE_PAGES）。
+ * 布局规则冻结在 docs/v4/02-UI规格.md §12.1（常量与算法在 shared/grid.ts）。
  */
 import type { GridItem, LayoutDoc, ModePages, WidgetKind } from '../shared/types';
 import { WIDGET_KINDS, fromLegacyKind } from '../shared/widget-defs';
@@ -96,8 +96,11 @@ const STANDARD_SEED: ModePages = [
   ],
 ]
 
-/** 出厂布局（深拷贝，避免用户改动污染出厂数据）：原隐私页在前为基准 + 原标准两页并入 */
-export const DEFAULT_PAGES: ModePages = [...PRIVACY_SEED, ...STANDARD_SEED]
+/** 示例布局（深拷贝，避免用户改动污染）：原隐私页在前为基准 + 原标准两页并入，供「载入示例布局」使用 */
+export const SAMPLE_PAGES: ModePages = [...PRIVACY_SEED, ...STANDARD_SEED]
+
+/** 出厂布局：空白单页（首次安装 / 清除数据后从这里开始） */
+export const DEFAULT_PAGES: ModePages = [[]]
 
 export const clonePages = (pages: ModePages): ModePages => JSON.parse(JSON.stringify(pages)) as ModePages
 

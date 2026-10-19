@@ -6,17 +6,19 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { ARRANGE_KINDS, DEFAULT_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc } from './layout'
+import { ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { getWeather, type WeatherData } from '../core/weather'
 import { pushHistory } from '../core/utils'
-import { initStorage, kvGetRaw, kvSetRaw, loadDoc, saveDoc } from '../core/storage'
+import { initStorage, kvGetRaw, kvSetRaw, loadBackupDoc, loadDoc, saveBackupDoc, saveDoc } from '../core/storage'
 import { markActiveWallpaper } from '../core/wallpaper'
+import { needsUpgradeBackup } from '../core/doc-version'
+import { restoreFileConfigOnStartup } from '../core/file-config'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
-import { ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
+import { APP_VERSION, BACKUP_VERSION_KEY, ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import { DEFAULT_SHORTCUTS } from '../shared/shortcuts'
 import { isBlankStyle, styleSliceOf, withoutStyle, withoutStyleDefault } from '../shared/widget-style'
 import type {
@@ -48,7 +50,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'theme' | 'addEngine' | 'editItem' | 'itemDetail' | 'kindSizes' | 'backup' | 'restore' | 'reset' | 'newSite'
+export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'kindSizes' | 'backup' | 'restore' | 'reset' | 'newSite'
 
 /** 空白处右键「新建站点」的落点 */
 export type NewSiteTarget = 'page' | 'dock' | 'both'
@@ -100,6 +102,8 @@ interface AppState {
   toast: string
   /** 设置抽屉当前分区下标（供右键菜单等外部入口先切分区再打开抽屉） */
   settingsTab: number
+  /** 个性化抽屉当前页签（壁纸 / 背景效果 / 主题 / 组件库；首次引导直达组件库） */
+  personalTab: number
   /** 添加抽屉当前页签（供 Dock 菜单「配置快捷方式」等外部入口先切页签再开抽屉） */
   addTab: number
   enginePanel: boolean
@@ -171,8 +175,10 @@ interface AppState {
   placeMany: (entries: { label: string; url: string }[]) => number
   exportLayout: () => LayoutDoc
   importLayout: (data: unknown) => boolean
-  /** 恢复出厂布局；keepIcons 时把现有网址图标（与出厂不重复的）追加到新页 */
-  restoreDefault: (opts?: { keepIcons?: boolean }) => void
+  /** 恢复出厂布局（空白页）；keepIcons 时把现有网址图标（与出厂不重复的）追加到新页；sample 时改为载入示例布局 */
+  restoreDefault: (opts?: { keepIcons?: boolean; sample?: boolean }) => void
+  /** 恢复更新前自动备份的文档（没有备份返回 false） */
+  restoreBackup: () => boolean
   loadWeather: () => Promise<void>
   markBackedUp: () => void
   resetParts: (parts: { layout: boolean; skins: boolean; wallpaper: boolean }) => void
@@ -183,6 +189,7 @@ interface AppState {
   showToast: (msg: string) => void
   setDrawer: (k: DrawerKey | null) => void
   setSettingsTab: (i: number) => void
+  setPersonalTab: (i: number) => void
   setAddTab: (i: number) => void
   setModal: (k: ModalKey | null) => void
   /** 打开新建站点弹窗：一次性写入预置并收起抽屉 / 菜单（弹窗层级低于抽屉，必须先收抽屉） */
@@ -209,6 +216,8 @@ const buildDoc = (s: AppState) => ({
   history: s.history,
   welcomed: s.welcomed,
   backupTime: s.backupTime,
+  updatedAt: new Date().toISOString(),
+  appVersion: APP_VERSION,
 })
 
 const scheduleSave = (): void => {
@@ -221,8 +230,25 @@ const scheduleSave = (): void => {
   }, 300)
 }
 
-/** 标记欢迎弹窗已展示（持久化） */
+/** 标记首次引导已完成（持久化） */
 export const markWelcomed = (): void => useApp.setState({ welcomed: true })
+
+/**
+ * 版本升级保护：文档由更早版本写入时，先整份留一份备份再继续。
+ * 覆盖安装 / 重新加载扩展不会清空 chrome.storage.local，这里只是多一层回滚保险；
+ * 同一版本只备份一次（否则每次启动都会把「更新前」的那份覆盖成当前数据）。
+ */
+const backupIfUpgraded = (doc: StoredDoc): boolean => {
+  if (!needsUpgradeBackup(doc, APP_VERSION)) return false
+  if (kvGetRaw(BACKUP_VERSION_KEY) === APP_VERSION) return false
+  try {
+    saveBackupDoc(doc)
+    kvSetRaw(BACKUP_VERSION_KEY, APP_VERSION)
+  } catch {
+    return false
+  }
+  return true
+}
 
 /** 一次性布局修正：v4.1 迁移曾把每个 v3 分组各建一页 —— 存量文档全为图标页时合并回尽量少的新页 */
 const withLayoutMerge = (doc: StoredDoc): { doc: StoredDoc; merged: boolean } => {
@@ -267,10 +293,19 @@ export const hydrate = (): Promise<void> => {
 
 const doHydrate = async (): Promise<void> => {
   await initStorage()
+  /* 本地目录快照恢复可能写回更新的文档：先等它结束再读，避免启动载入用旧文档覆盖它。
+     目录未配置 / 无权限时该调用很快返回，不影响首屏。 */
+  try {
+    await restoreFileConfigOnStartup()
+  } catch {
+    /* 目录同步不可用不影响本地数据 */
+  }
   const loaded = loadDoc()
   const toasts: string[] = []
   let doc: StoredDoc
   if (loaded !== null) {
+    /* 版本升级：先把旧文档整份留底，再继续载入（数据不会因为升级被动过） */
+    if (backupIfUpgraded(loaded)) toasts.push('已自动备份更新前的数据')
     const { doc: mergedDoc, merged } = withLayoutMerge(loaded)
     const { doc: fixed, restored } = await withEngineRestore(mergedDoc)
     doc = fixed
@@ -279,28 +314,29 @@ const doHydrate = async (): Promise<void> => {
   } else {
     let migrated: MigrationResult | null = null
     try {
-      migrated = await migrateV3(DEFAULT_PAGES)
+      migrated = await migrateV3([])
     } catch {
       migrated = null
     }
     const skins = cloneSkins(BUILTIN_SKINS)
-    if (migrated !== null) {
+    if (migrated !== null && migrated.standard.length > 0) {
       doc = {
         v: 3,
         settings: { ...DEFAULT_SETTINGS, ...migrated.settings },
-        pages: [...clonePages(DEFAULT_PAGES), ...migrated.standard],
+        pages: migrated.standard,
         engines: migrated.engines,
         skins,
         history: migrated.history,
-        welcomed: false,
+        welcomed: true,
         backupTime: null,
       }
-      toasts.push(`已从 v3 迁移：${migrated.appended} 个网站图标已放到出厂布局之后`)
+      toasts.push(`已从 v3 迁移：${migrated.appended} 个网站图标已导入`)
     } else {
+      /* 首次安装：空白页，不预置任何卡片与示例设置，让用户自己开始 */
       doc = {
         v: 3,
         settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass }, blur: { ...DEFAULT_SETTINGS.blur } },
-        pages: clonePages(DEFAULT_PAGES),
+        pages: [[]],
         engines: BUILTIN_ENGINES.map((e) => ({ ...e })),
         skins,
         history: [],
@@ -342,6 +378,7 @@ export const useApp = create<AppState>()((set, get) => ({
   flashId: null,
   toast: '',
   settingsTab: 0,
+  personalTab: 0,
   addTab: 0,
   enginePanel: false,
 
@@ -702,15 +739,15 @@ export const useApp = create<AppState>()((set, get) => ({
     return true
   },
   restoreDefault: (opts) => set((s) => {
-    const pages = clonePages(DEFAULT_PAGES)
+    const pages = clonePages(opts?.sample === true ? SAMPLE_PAGES : DEFAULT_PAGES)
     const next: Partial<AppState> = {
       pages,
       cur: 0,
-      toast: '已恢复为默认界面',
+      toast: opts?.sample === true ? '已载入示例布局' : '已恢复为空白页',
     }
     if (opts?.keepIcons) {
-      // 收集现有网址图标（与出厂布局不重复的），追加为新页（最多 5 页）
-      const factoryKeys = new Set(DEFAULT_PAGES.flat()
+      // 收集现有网址图标（与目标布局不重复的），追加为新页（最多 5 页）
+      const factoryKeys = new Set(pages.flat()
         .filter((it) => it.t === 'icon')
         .map((it) => `${String(it.config['label'] ?? '')}|${String(it.config['url'] ?? '')}`))
       const seen = new Set<string>()
@@ -734,11 +771,31 @@ export const useApp = create<AppState>()((set, get) => ({
       }
       if (count > 0) {
         if (page.length > 0) pages.push(page)
-        next.toast = `已恢复默认界面，你的 ${count} 个网址图标保留在第 ${pages.length} 页`
+        /* 目标布局本身是空白页时，不要留下一个空页再把图标放到第 2 页 */
+        const firstEmpty = pages.findIndex((pg) => pg.length === 0)
+        if (firstEmpty >= 0 && pages.some((pg, i) => i !== firstEmpty && pg.length > 0)) pages.splice(firstEmpty, 1)
+        next.toast = `已恢复，你的 ${count} 个网址图标保留在第 ${pages.length} 页`
       }
     }
     return next
   }),
+
+  restoreBackup: () => {
+    const backup = loadBackupDoc()
+    if (backup === null) return false
+    set({
+      settings: backup.settings,
+      pages: backup.pages,
+      engines: backup.engines.length > 0 ? backup.engines : get().engines,
+      skins: backup.skins,
+      history: backup.history,
+      backupTime: backup.backupTime,
+      welcomed: true,
+      cur: 0,
+      toast: '已恢复更新前的数据',
+    })
+    return true
+  },
 
   loadWeather: async () => {
     const data = await getWeather()
@@ -776,6 +833,7 @@ export const useApp = create<AppState>()((set, get) => ({
   showToast: (msg) => set({ toast: msg }),
   setDrawer: (k) => set({ drawer: k, ctx: null, enginePanel: false }),
   setSettingsTab: (i) => set({ settingsTab: i }),
+  setPersonalTab: (i) => set({ personalTab: i }),
   setAddTab: (i) => set({ addTab: i }),
   /* 打开弹窗时收起抽屉：弹窗层级（50）低于抽屉（60），否则被盖住 */
   setModal: (k) => set({ modal: k, ctx: null, enginePanel: false, drawer: k !== null ? null : get().drawer }),

@@ -423,16 +423,13 @@ export const App = () => {
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
 
-  /* ---------- 启动：持久化恢复 + 天气 + 首访欢迎 ---------- */
+  /* ---------- 启动：持久化恢复 + 天气 + 首次引导标记 ---------- */
   useEffect(() => {
     void (async () => {
       await hydrate()
       void useApp.getState().loadWeather()
-      const st = useApp.getState()
-      if (!st.welcomed) {
-        markWelcomed()
-        st.setModal('theme')
-      }
+      /* 首次安装不弹欢迎 / 风格弹窗：空白页上直接给出添加入口，用户自己开始 */
+      if (!useApp.getState().welcomed) markWelcomed()
     })()
   }, [])
 
@@ -631,6 +628,8 @@ export const App = () => {
           break
         }
         case 'drawer-open': st.setDrawer(v as DrawerKey); break
+        /* 空页引导「添加组件」：直达个性化 → 组件库 */
+        case 'open-library': st.setPersonalTab(3); st.setDrawer('personal'); break
         case 'ctx-blocked': st.showToast(v); st.openCtx(null); break
         /* 空白处右键「整理图标」：把当前页的图标类卡片依次前移补位（组件钉住不动） */
         case 'arrange': st.arrange(); st.openCtx(null); break
@@ -644,7 +643,6 @@ export const App = () => {
           dockMenuAct(name, v)
           break
         case 'dock-act': st.setDrawer(({ add: 'add', personal: 'personal', setting: 'setting' } as const)[v] ?? 'setting'); break
-        case 'open-modal': st.setModal(v as 'theme'); break
         case 'item-edit': st.openCtx(null); st.setModal('editItem'); break
         case 'item-del': st.remove(id); break
         case 'item-swap': st.swapKind(id, v as GridItem['t']); break
@@ -1092,8 +1090,14 @@ export const App = () => {
               ))}
               {pg.length === 0 && (
                 <div className="grid-hint">
-                  <div className="gh-title">这里可以放小组件和网站</div>
-                  <div className="gh-sub">右键空白处可快速新建网址图标或添加到 Dock；也可以在底部 Dock 点「+」，添加抽屉里有网址导航 / 自定义网站 / Dock 快捷方式，组件库在「个性化」里</div>
+                  <div className="gh-title">从这里开始</div>
+                  <div className="gh-sub">添加一个网站，或者放一个小组件</div>
+                  <div className="gh-acts">
+                    <button className="btn sm" data-act="drawer-open" data-v="add">添加网站</button>
+                    <button className="btn sm ghost" data-act="open-library">添加组件</button>
+                    <button className="btn sm ghost" data-act="drawer-open" data-v="personal">换壁纸</button>
+                  </div>
+                  <div className="gh-tip">也可以右键空白处，或按 Alt+A 打开添加面板</div>
                 </div>
               )}
             </div>

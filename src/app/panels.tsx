@@ -813,7 +813,9 @@ const PersonalPanel = () => {
   const toggleWallSource = useApp((st) => st.toggleWallSource)
   const updateWallSource = useApp((st) => st.updateWallSource)
   const showToast = useApp((st) => st.showToast)
-  const [tab, setTab] = useState(0)
+  /* 页签状态放 store：首次引导与外部入口需要先切页签再开抽屉 */
+  const tab = useApp((st) => st.personalTab)
+  const setTab = useApp((st) => st.setPersonalTab)
   const [prevWallRef, setPrevWallRef] = useState<string | null>(null)
   const [previewId, setPreviewId] = useState('')
   const [wall, setWall] = useState<BgData | null>(null)
@@ -1362,25 +1364,29 @@ const DataStatusRow = () => {
   )
 }
 
-/** 备份与迁移卡片：3 列等宽网格——行 1 界面级（备份 / 取快照 / 恢复默认）、行 2 文件级（导出 / 导入 / 收藏夹）；
+/** 备份与迁移卡片：3 列等宽网格——行 1 界面级（备份 / 取快照 / 恢复布局）、行 2 文件级（导出 / 导入 / 收藏夹）；
  *  「备份当前界面」是全组唯一的主按钮；易混操作的适用范围统一写进标题 ⓘ（不再用按钮下方的小字，避免切碎行距） */
 const SettingBackupCard = () => {
   const setModal = useApp((st) => st.setModal)
   const importLayout = useApp((st) => st.importLayout)
+  const restoreBackup = useApp((st) => st.restoreBackup)
   const showToast = useApp((st) => st.showToast)
   const file = useRef<HTMLInputElement | null>(null)
   const bkFile = useRef<HTMLInputElement | null>(null)
   return (
-    <SecCard t="备份与迁移" info={`导出内容 = 全部页面的卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来。\n恢复本地快照 = 回滚到最近快照\n恢复为默认界面 = 仅重置布局、保留数据\n一键重置 = 全量清空，不可撤销`}>
+    <SecCard t="备份与迁移" info={`导出内容 = 全部页面的卡片实例（引用的小组件、各自配置、位置与尺寸），改完文件可直接导入回来。\n恢复本地快照 = 回滚到最近快照\n恢复布局 = 清空为空白页，或载入示例布局\n恢复更新前数据 = 回到升级 / 覆盖前自动留底的那一份\n一键重置 = 全量清空，不可撤销`}>
       <div className="btn-grid">
         <button className="btn" onClick={() => setModal('backup')}>备份当前界面</button>
         <button className="btn ghost" onClick={() => bkFile.current?.click()}>恢复本地快照</button>
-        <button className="btn ghost" onClick={() => setModal('restore')}>恢复为默认界面</button>
+        <button className="btn ghost" onClick={() => setModal('restore')}>恢复布局</button>
       </div>
       <div className="btn-grid">
         <button className="btn sm ghost" onClick={exportLayoutFile}>导出布局 JSON</button>
         <button className="btn sm ghost" onClick={() => file.current?.click()}>导入布局 JSON</button>
         <button className="btn sm ghost" onClick={() => void importBookmarks()}>导入收藏夹</button>
+      </div>
+      <div className="btn-grid">
+        <button className="btn sm ghost" onClick={() => showToast(restoreBackup() ? '已恢复更新前的数据' : '没有可用的更新前备份')}>恢复更新前数据</button>
       </div>
       <input ref={file} type="file" accept=".json,application/json" style={{ display: 'none' }}
         onChange={(e) => pickJson(e, (v) => showToast(importLayout(v) ? '布局导入成功' : '布局导入失败：没有有效的页面数据'), '布局导入失败')} />
@@ -1443,6 +1449,13 @@ interface LogVersion {
 
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
+  {
+    v: '4.7', d: '2026-10-19', items: [
+      { k: '调整', s: '首次安装改为空白页，不再预置示例卡片与欢迎弹窗', d: '空页上直接给出「添加网站 / 添加组件 / 换壁纸」三个入口。需要现成编排时，在设置 → 数据 → 恢复布局里选「载入示例布局」。' },
+      { k: '新增', s: '更新不丢数据：版本升级时自动留一份更新前备份', d: '设置 → 数据新增「恢复更新前数据」；本地目录快照比本机数据旧时不再覆盖，改为把本机数据写回目录。' },
+      { k: '优化', s: '支持 Edge 安装：同一份扩展可直接加载', d: 'Edge 打开 edge://extensions → 开发人员模式 → 加载解压缩的扩展；安装与更新步骤见 INSTALL.md。' },
+    ],
+  },
   {
     v: '4.6', d: '2026-09-30 – 2026-10-14', items: [
       { k: '新增', s: '自动对比：图标与文字跟着壁纸的明暗自动调深浅', d: '换上亮壁纸后，白色的图标与文字会糊在背景里——同一张壁纸上半是白云、下半是深色人物，靠一种颜色根本不成立。现在**每一张卡片都会看自己背后那块壁纸的亮度**（把壁纸降采样成小灰度图，按「填满不变形」的同一条规则算出你实际看到的那块区域再取样），然后按侵入性从小到大出手：**①翻墨色**——浅底自动用深墨、深底用皮肤原色；**②外圈光晕**——字形外圈一圈反向描边加一点投影，白字在白云上靠它立住，方向跟着背景明暗走，所以**品牌图标（保留自己的品牌色，不会被翻色）也一样受益**；**③软底衬**——上面两招还不够时，才在字形背后垫一圈**渐隐的软底衬**（解到刚好跨过 3:1 的可见门槛，壁纸够暗时它是 0，整条背景都不出现，「图标直接落在壁纸上」的观感原样保留）；**④壁纸遮罩**——壁纸明暗交错（人物 + 天空 + 反光）时自动补一点遮罩，均匀的纯色 / 天空壁纸不加，你设的遮罩值当基准。卡片上的文字同样吃这套（按它自己的墨色算对比缺口加描边）。护罩 / 描边 / 投影都按设计像素写，所以 4K 与 1080p 的观感一致；缩放窗口也不会让取样点漂移。设置 → 个性化 → 壁纸与文字里的「自动对比」默认开启，关掉后完全按遮罩滑杆与字体颜色走' },
@@ -2169,9 +2182,6 @@ const NewSiteModal = () => {
 export const Modal = () => {
   const modal = useApp((s) => s.modal)
   const setModal = useApp((s) => s.setModal)
-  const settings = useApp((s) => s.settings)
-  const skins = useApp((s) => s.skins)
-  const applySkin = useApp((s) => s.applySkin)
   const markBackedUp = useApp((s) => s.markBackedUp)
   const restoreDefault = useApp((s) => s.restoreDefault)
   const resetParts = useApp((s) => s.resetParts)
@@ -2179,7 +2189,6 @@ export const Modal = () => {
   const pages = useApp((s) => s.pages)
   const cur = useApp((s) => s.cur)
   const itemId = useApp((s) => s.itemId)
-  const [selSkin, setSelSkin] = useState(settings.skinId)
   const [engName, setEngName] = useState('')
   const [engBase, setEngBase] = useState('')
   const [engImg, setEngImg] = useState('')
@@ -2191,31 +2200,6 @@ export const Modal = () => {
   const narrow = modal === 'backup' || modal === 'restore' || modal === 'reset' || modal === 'newSite'
   const body = () => {
     switch (modal) {
-      case 'theme':
-        return (
-          <>
-            <h2>欢迎来到 Thrilled</h2>
-            <p className="sub">选择风格来搭配组件和图标，之后可随时在「个性化 - 主题与风格」中更换。</p>
-            <div className="th-grid" style={{ gridTemplateColumns: 'repeat(3,1fr)' }}>
-              {skins.map((k) => (
-                <div key={k.id} className={`th-card${k.id === selSkin ? ' sel' : ''}`} onClick={() => setSelSkin(k.id)}>
-                  <div className="th-prev" style={{ background: k.tokens['--mask-color'] }}>
-                    <div className="t-card" style={{ left: '10%', top: '14%', width: '34%', height: '26%', background: k.tokens['--card-bg'] }} />
-                    <div className="t-card" style={{ left: '52%', top: '14%', width: '34%', height: '26%', background: k.tokens['--card-bg'] }} />
-                    <div className="t-card" style={{ left: '10%', top: '48%', width: '34%', height: '22%', background: k.tokens['--card-bg'] }} />
-                    <div className="t-card" style={{ left: '52%', top: '48%', width: '34%', height: '22%', background: k.tokens['--card-bg'] }} />
-                    <div className="t-dock" />
-                  </div>
-                  <div className="th-name">{k.name}</div>
-                </div>
-              ))}
-            </div>
-            <div className="btn-row end" style={{ marginTop: 16 }}>
-              <button className="btn ghost" onClick={() => setModal(null)}>稍后再说</button>
-              <button className="btn" onClick={() => { applySkin(selSkin); setModal(null); useApp.getState().showToast('应用成功') }}>应用风格</button>
-            </div>
-          </>
-        )
       case 'addEngine':
         return (
           <>
@@ -2273,16 +2257,20 @@ export const Modal = () => {
       case 'restore':
         return (
           <>
-            <h2>恢复为默认界面</h2>
-            <p className="sub">恢复后将覆盖当前布局（回到出厂卡片编排），设置与皮肤保留。</p>
+            <h2>恢复布局</h2>
+            <p className="sub">清空当前页面，回到空白页；设置、皮肤与 Dock 保留。需要现成编排时可载入示例布局。</p>
 
-            <SwitchRow l="保留我的网址图标" d="与出厂不重复的图标会追加到最后一页" on={keepIcons} onToggle={() => setKeepIcons(!keepIcons)} />
+            <SwitchRow l="保留我的网址图标" d="恢复后把现有网址图标重新放到新页" on={keepIcons} onToggle={() => setKeepIcons(!keepIcons)} />
             <div className="btn-row end" style={{ marginTop: 16 }}>
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
+              <button className="btn ghost" onClick={() => {
+                restoreDefault({ keepIcons, sample: true })
+                setModal(null)
+              }}>载入示例布局</button>
               <button className="btn" onClick={() => {
                 restoreDefault({ keepIcons })
                 setModal(null)
-              }}>确认恢复</button>
+              }}>清空为空白页</button>
             </div>
           </>
         )

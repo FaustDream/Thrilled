@@ -3,7 +3,7 @@
  * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, REPEATABLE_KINDS, arrangePages, crossPlan, dropPlan, isIconOnlyPage, mergeIconPages, normPages, packPage, placedKindsOf, prunePages, uid } from '../src/app/layout'
+import { DEFAULT_PAGES, SAMPLE_PAGES, REPEATABLE_KINDS, arrangePages, crossPlan, dropPlan, isIconOnlyPage, mergeIconPages, normPages, packPage, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, ICON_INSET, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, insetOf, isLegalSize, itemBox, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
@@ -11,9 +11,13 @@ import {
 } from '../src/shared/widget-defs'
 import type { GridItem, WidgetKind } from '../src/shared/types'
 
-const PAGES = DEFAULT_PAGES.map((items, i) => ({ name: `出厂第 ${i + 1} 页`, items }))
+const PAGES = SAMPLE_PAGES.map((items, i) => ({ name: `示例第 ${i + 1} 页`, items }))
 
-describe('出厂布局（冻结规范：六档尺寸 / 24×10 网格 / 100% 填满）', () => {
+describe('示例布局（冻结规范：六档尺寸 / 24×10 网格 / 100% 填满）', () => {
+  it('出厂布局是空白页（首次安装不预置卡片）', () => {
+    expect(DEFAULT_PAGES).toEqual([[]])
+  })
+
   it('每张卡片都用合法的六档尺寸', () => {
     const legal = new Set(SIZES.map((s) => `${s.w}x${s.h}`))
     const bad = PAGES.flatMap((p) => p.items).filter((it) => !legal.has(`${it.w}x${it.h}`))
@@ -425,7 +429,7 @@ describe('图标格容器自适应（groupGrid）', () => {
   })
 
   it('出厂每个图标格容器：所有应用都装得下，且网格不溢出可用框', () => {
-    const groups = DEFAULT_PAGES.flat().filter((it) => it.t === 'group')
+    const groups = SAMPLE_PAGES.flat().filter((it) => it.t === 'group')
     expect(groups.length).toBeGreaterThan(0)
     for (const it of groups) {
       const apps = Array.isArray(it.config['apps']) ? (it.config['apps'] as string[]) : []
