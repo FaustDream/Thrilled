@@ -11,8 +11,8 @@ import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
 import { WIDGET_GROUPS_ORDER, WIDGET_DEFS, maxSizeOf, minSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
-import { SKIN_FIELDS } from '../shared/defaults'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
+import { BLUR_KEYS, GLASS_KEYS } from '../shared/visual'
 import { STYLE_PRESETS, isBlankStyle } from '../shared/widget-style'
 import { Icon } from './icons'
 import { SiteIcon, bool, cfg, dateText, num, p2, str } from './widgets'
@@ -790,9 +790,9 @@ const KindSizeModal = () => {
 }
 
 /** 个性化面板导航页签（分组导航，避免单页堆全部设置）
- *  「背景效果」= 透明度 / 毛玻璃 / 壁纸与文字 / 搜索与 Dock（搜索框与 Dock 的视觉参数与背景同域）
- *  「主题」= 风格皮肤 + 风格编辑器 + 显示（整页显示项与主题同页） */
-const PANEL_TABS: readonly string[] = ['壁纸', '背景效果', '主题', '组件库']
+ *  「背景效果」= 主题（主题 + 显示）→ 全局效果 → 各控件单独设置 → 壁纸与文字 → 搜索与 Dock
+ *  「组件库」= 放什么组件 */
+const PANEL_TABS: readonly string[] = ['壁纸', '背景效果', '组件库']
 
 const PersonalPanel = () => {
   const s = useApp((st) => st.settings)
@@ -800,13 +800,10 @@ const PersonalPanel = () => {
   const toggle = useApp((st) => st.toggle)
   const setGlass = useApp((st) => st.setGlass)
   const setBlur = useApp((st) => st.setBlur)
+  const applyGlobalGlass = useApp((st) => st.applyGlobalGlass)
+  const applyGlobalBlur = useApp((st) => st.applyGlobalBlur)
   const applySkin = useApp((st) => st.applySkin)
   const skins = useApp((st) => st.skins)
-  const skinNew = useApp((st) => st.skinNew)
-  const skinRestore = useApp((st) => st.skinRestore)
-  const skinDelete = useApp((st) => st.skinDelete)
-  const skinRename = useApp((st) => st.skinRename)
-  const skinToken = useApp((st) => st.skinToken)
   const setWallpaperRef = useApp((st) => st.setWallpaperRef)
   const addWallSource = useApp((st) => st.addWallSource)
   const removeWallSource = useApp((st) => st.removeWallSource)
@@ -843,7 +840,9 @@ const PersonalPanel = () => {
     ['panel', '面板与弹窗', '抽屉 / 弹窗 / 搜索建议'],
     ['menu', '菜单与浮层', '右键菜单 / 模式胶囊 / 提示气泡'],
   ]
-  const skin = skins.find((x) => x.id === s.skinId) ?? skins[0]
+  /* 全局玻璃度 / 模糊度：取六项玻璃底色的平均值作为滑杆当前值 */
+  const globalGlass = Math.round((GLASS_KEYS.reduce((sum, k) => sum + s.glass[k], 0) / GLASS_KEYS.length) * 100)
+  const globalBlur = Math.round((BLUR_KEYS.reduce((sum, k) => sum + s.blur[k], 0) / BLUR_KEYS.length) * 10) / 10
 
   const upload = async (f: File | undefined): Promise<void> => {
     if (!f) return
@@ -867,12 +866,18 @@ const PersonalPanel = () => {
       .catch(() => showToast('外链获取失败，请检查地址是否允许跨域'))
   }
 
-  /** 行尾「···」→ 改地址：仅接受 http(s) 基址，可指向镜像服务 */
+  /** 行尾「···」→ 改名称 / 改地址：名称任意，地址仅接受 http(s) 基址（可指向镜像服务） */
   const editWallSource = (ws: WallpaperSource): void => {
     const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
     if (next === '') return
     if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
     else showToast('地址需以 http(s):// 开头')
+  }
+
+  const renameWallSource = (ws: WallpaperSource): void => {
+    const next = window.prompt('修改来源名称', ws.name)?.trim() ?? ''
+    if (next === '') return
+    updateWallSource(ws.id, { name: next })
   }
 
   /* 当前壁纸的缩略图与体积（仅读取引用对应的那份数据，不写入） */
@@ -897,7 +902,8 @@ const PersonalPanel = () => {
   /* 预览对象：列表行点击切换；来源被禁用后自动落到首个启用来源 */
   const enabledSources = s.wallSources.filter((ws) => ws.enabled)
   const preview = enabledSources.find((x) => x.id === previewId) ?? enabledSources[0]
-  const pendingSources = WALL_SOURCE_TEMPLATES.filter((t) => !s.wallSources.some((ws) => ws.kind === t.kind))
+  /* 新增来源不限次数：同一协议可加多个（分别指向不同镜像 / 不同名称），模板始终可选 */
+  const sourceTemplates = WALL_SOURCE_TEMPLATES
 
   /* 可清理的历史 = 除当前使用中那张以外的全部记录（当前壁纸不参与清理） */
   const otherWallCount = history.filter((h) => h.ref !== s.wallpaperRef).length
@@ -917,9 +923,16 @@ const PersonalPanel = () => {
     setPreviewId(ws.id)
   }
 
-  /** 列表末尾「+ 添加来源」：加入尚未添加的协议模板并立即预览 */
+  /** 列表末尾「+ 添加来源」：按协议模板新增，名称与基址都可当场改（同一协议可重复添加） */
   const addSource = (t: (typeof WALL_SOURCE_TEMPLATES)[number]): void => {
-    const src = { id: `ws${Date.now().toString(36)}`, kind: t.kind, name: t.name, apiBase: t.apiBase, enabled: true }
+    const same = s.wallSources.filter((ws) => ws.kind === t.kind).length
+    const defaultName = same === 0 ? t.name : `${t.name} ${same + 1}`
+    const name = window.prompt('来源名称', defaultName)?.trim() ?? ''
+    if (name === '') return
+    const base = window.prompt('API 基址（可填镜像地址）', t.apiBase)?.trim() ?? ''
+    if (base === '') return
+    if (!/^https?:\/\//.test(base)) { showToast('地址需以 http(s):// 开头'); return }
+    const src = { id: `ws${Date.now().toString(36)}${same}`, kind: t.kind, name, apiBase: base, enabled: true }
     addWallSource(src)
     setPreviewId(src.id)
   }
@@ -988,6 +1001,7 @@ const PersonalPanel = () => {
               <OverflowMenu
                 trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
                 items={[
+                  { label: '改名称', onClick: () => renameWallSource(ws) },
                   { label: '改地址', onClick: () => editWallSource(ws) },
                   { label: '移除', onClick: () => removeWallSource(ws.id) },
                 ]} />
@@ -997,9 +1011,7 @@ const PersonalPanel = () => {
             <OverflowMenu
               align="left"
               trigger={() => <span className="ws-add">{Icon.plus()}添加来源</span>}
-              items={pendingSources.length === 0
-                ? [{ label: '全部来源均已添加' }]
-                : pendingSources.map((t) => ({ label: t.name, onClick: () => addSource(t) }))} />
+              items={sourceTemplates.map((t) => ({ label: t.name, onClick: () => addSource(t) }))} />
           </div>
         </div>
         <WallBrowser src={preview} />
@@ -1007,16 +1019,39 @@ const PersonalPanel = () => {
       )}
       {tab === 1 && (
       <>
-      <SecCard t="透明度" info="0% 完全不透明、100% 完全透明。玻璃底色类保留可读下限（滑到底仍可辨认），元素显隐类可直接调到消失。全局透明度会再乘一层，两者叠加。">
-        <SliderRow l="全局透明度" min={20} max={100} value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}
+      <SecCard t="主题" info="经典 = 浅色配色，暗黑 = 深色配色。页面内容的显隐也在这一组里。">
+        <div className="theme-grid theme-grid-2">
+          {skins.map((k) => (
+            <div key={k.id} className={`theme-btn${k.id === s.skinId ? ' sel' : ''}`} onClick={() => applySkin(k.id)}>
+              <MiniSkinPreview tokens={k.tokens} />
+              <div className="tb-name">{k.name}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ height: 14 }} />
+        <ColorField label="时间颜色" value={s.clockColor} onChange={(hex) => setSetting('clockColor', hex)} />
+        <div style={{ height: 10 }} />
+        <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
+        <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
+      </SecCard>
+      <SecCard t="全局效果" info="一次调好整页观感：下面三项会同时写入所有控件，之后再按控件单独微调。">
+        <SliderRow l="全局透明度" info="0% 完全不透明、100% 完全透明；会与各控件自己的透明度叠加" min={20} max={100}
+          value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}
           onInput={(v) => setSetting('gAlpha', v / 100)} />
-        <div style={{ height: 12 }} />
+        <div style={{ height: 10 }} />
+        <SliderRow l="全局玻璃度" info="卡片 / 图标容器 / Dock / 搜索框 / 面板 / 菜单的玻璃底色一起调" min={0} max={100}
+          value={globalGlass} display={`${globalGlass}%`} onInput={(v) => applyGlobalGlass(v / 100)} />
+        <div style={{ height: 10 }} />
+        <SliderRow l="全局模糊度" info="六处毛玻璃半径一起调，0px 即整体关闭毛玻璃" min={0} max={BLUR_MAX_PX}
+          value={globalBlur} display={`${globalBlur}px`} onInput={(v) => applyGlobalBlur(v)} />
+      </SecCard>
+      <SecCard t="透明度" info="按控件单独设置。玻璃底色类保留可读下限（滑到底仍可辨认），元素显隐类可直接调到消失。">
         {GLASS.map(([k, l, d]) => (
           <SliderRow key={k} l={l} info={d} min={0} max={100} value={Math.round(s.glass[k] * 100)}
             display={`${Math.round(s.glass[k] * 100)}%`} onInput={(v) => setGlass(k, v / 100)} />
         ))}
       </SecCard>
-      <SecCard t="毛玻璃模糊" info="与透明度分开设置：只降透明度不调模糊，背景会「透但看不清」、观感发脏；两者配对才通透。0px 即关闭毛玻璃。">
+      <SecCard t="毛玻璃模糊" info="按控件单独设置：与透明度分开，只降透明度不调模糊，背景会「透但看不清」、观感发脏。0px 即关闭该处毛玻璃。">
         {BLUR.map(([k, l, d]) => (
           <SliderRow key={k} l={l} info={d} min={0} max={BLUR_MAX_PX} value={s.blur[k]}
             display={`${s.blur[k]}px`} onInput={(v) => setBlur(k, v)} />
@@ -1029,7 +1064,7 @@ const PersonalPanel = () => {
         <SliderRow l={s.autoContrast ? '壁纸遮罩（基准值）' : '壁纸遮罩'} min={0} max={100} value={Math.round(s.cover * 100)} display={`${Math.round(s.cover * 100)}%`}
           onInput={(v) => setSetting('cover', v / 100)} />
         <div style={{ height: 12 }} />
-        <ColorField label="字体颜色" value={s.fontColor === '' ? '#1f2937' : s.fontColor} auto="跟随风格"
+        <ColorField label="字体颜色" value={s.fontColor === '' ? '#1f2937' : s.fontColor} auto="跟随主题"
           onAuto={() => setSetting('fontColor', '')} onChange={(hex) => setSetting('fontColor', hex)} />
       </SecCard>
       <SecCard t="搜索与 Dock" info="搜索框与 Dock 的外观参数——与背景效果同域，故并入本页签。">
@@ -1047,51 +1082,7 @@ const PersonalPanel = () => {
       )
       }
 
-      {tab === 2 && (
-      <>
-      <SecCard t="主题与风格">
-        <div className="theme-grid">
-          {skins.map((k) => (
-            <div key={k.id} className={`theme-btn${k.id === s.skinId ? ' sel' : ''}`} onClick={() => applySkin(k.id)}>
-              <MiniSkinPreview tokens={k.tokens} />
-              <div className="tb-name">{k.name}</div>
-            </div>
-          ))}
-        </div>
-      </SecCard>
-      <SecCard t="风格编辑器">
-        <div className="f-row inline">
-          <label className="f-label">皮肤名称</label>
-          <input className="f-input" value={skin?.name ?? ''} onChange={(e) => skinRename(e.target.value)} />
-          <OverflowMenu
-            trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
-            items={[
-              { label: '还原内置', onClick: skinRestore },
-              // 内置皮肤不可删：不给 onClick 即为禁用项
-              skin?.builtin === true ? { label: '删除皮肤' } : { label: '删除皮肤', onClick: skinDelete },
-            ]} />
-        </div>
-        <div className="color-grid">
-          {SKIN_FIELDS.map(([token, label]) => {
-            const raw = skin?.tokens[token] ?? '#ffffff'
-            const hex = raw.startsWith('#') ? raw : '#ffffff'
-            return <ColorField key={token} compact label={label} value={hex} onChange={(v) => skinToken(token, v)} />
-          })}
-        </div>
-        <div className="btn-row" style={{ marginTop: 12 }}>
-          <button className="btn sm" onClick={skinNew}>新建皮肤</button>
-        </div>
-      </SecCard>
-      <SecCard t="显示" info="页面内容由「组件库」管理（时间 / 日期 / 每日一言 都是组件自身的配置），这里只留与具体组件无关的整页显示项。">
-        <ColorField label="时间颜色" value={s.clockColor} onChange={(hex) => setSetting('clockColor', hex)} />
-        <div style={{ height: 10 }} />
-        <SwitchRow l="隐藏顶部区域" d="隐藏左上角模式胶囊" on={s.hideTop} onToggle={() => toggle('hideTop')} />
-        <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
-      </SecCard>
-      </>
-      )}
-
-      {tab === 3 && <ComponentLibraryTab />}
+      {tab === 2 && <ComponentLibraryTab />}
     </>
   )
 }
@@ -1449,6 +1440,15 @@ interface LogVersion {
 
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
+  {
+    v: '4.8', d: '2026-10-19', items: [
+      { k: '调整', s: '主题只保留经典与暗黑，风格编辑器移除', d: '原来的光感 / 黑紫 / 晨曦 / 黛青不再提供；旧的皮肤 id 载入时回退经典。配色编辑与自建皮肤一并移除，页面观感改由「背景效果」统一调。' },
+      { k: '调整', s: '主题与显示并入「背景效果」顶部', d: '个性化页签收敛为壁纸 / 背景效果 / 组件库；主题（经典、暗黑）+ 时间颜色 + 隐藏顶部与搜索框，都放在背景效果最上面。' },
+      { k: '新增', s: '全局效果：一次调好整页的透明度、玻璃度与模糊度', d: '背景效果顶部新增三项全局滑杆，写入所有玻璃控件；下方仍可按控件单独微调。' },
+      { k: '优化', s: '壁纸来源可自由新增与修改', d: '同一协议可添加多个（分别指向不同镜像），新增时可自定义名称与地址，行尾菜单支持改名称 / 改地址 / 移除。' },
+      { k: '优化', s: '暗黑主题下的搜索框、Dock 与图标底改为跟随主题', d: '原先写死的白色底在暗黑主题下会把白字压没，现统一取主题令牌，明暗两套都可读。' },
+    ],
+  },
   {
     v: '4.7', d: '2026-10-19', items: [
       { k: '调整', s: '首次安装改为空白页，不再预置示例卡片与欢迎弹窗', d: '空页上直接给出「添加网站 / 添加组件 / 换壁纸」三个入口。需要现成编排时，在设置 → 数据 → 恢复布局里选「载入示例布局」。' },

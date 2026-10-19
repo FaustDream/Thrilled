@@ -38,12 +38,12 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .search-row{position:absolute;left:0;top:var(--search-top,44px);width:100%;height:50px;display:flex;
   justify-content:center;align-items:flex-start;z-index:var(--z-pop)}
 .search-box{width:var(--search-width);height:54px;border-radius:var(--search-radius);
-  border:2px solid rgba(255,255,255,.72);
-  background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-search)));
+  border:2px solid color-mix(in srgb,var(--card-text) 10%,transparent);
+  background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-search) * 100%),transparent);
   backdrop-filter:blur(var(--blur-search));
   box-shadow:0 8px 24px rgba(6,12,24,.14);
   display:flex;align-items:center;gap:10px;padding:0 18px;transition:border-radius .18s,background .18s,width .18s}
-.search-box.line{border-radius:12px;background:transparent;border-color:rgba(255,255,255,.6)}
+.search-box.line{border-radius:12px;background:transparent;border-color:color-mix(in srgb,var(--card-text) 14%,transparent)}
 .engine-ico{width:20px;height:20px;flex:0 0 auto;border-radius:6px;display:flex;align-items:center;
   justify-content:center;font-size:11px;font-weight:700;color:#fff;cursor:pointer;background:var(--engine-color,#2932e1)}
 .search-box input{flex:1;height:100%;border:none;background:transparent;outline:none;
@@ -54,13 +54,13 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .search-go-btn:hover{background:rgba(255,255,255,.25)}
 .search-go-btn svg{width:16px;height:16px}
 .search-panel{position:absolute;left:50%;top:calc(var(--search-top,44px) + 62px);transform:translateX(-50%);width:772px;
-  background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
+  background:color-mix(in srgb,var(--panel-bg) calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
   backdrop-filter:blur(var(--blur-panel));
   border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);padding:6px 0;display:none;z-index:var(--z-pop)}
 .search-panel.show{display:block}
-.sp-head{font-size:13px;font-weight:700;color:#111827;padding:8px 16px 4px}
+.sp-head{font-size:13px;font-weight:700;color:var(--panel-text);padding:8px 16px 4px}
 .sp-row{display:flex;align-items:center;gap:10px;height:40px;padding:0 16px;font-size:14px;
-  color:#1f2937;cursor:pointer;white-space:nowrap;overflow:hidden}
+  color:var(--panel-text);cursor:pointer;white-space:nowrap;overflow:hidden}
 .sp-row:hover{background:var(--menu-hover)}
 .sp-row span.t{flex:1;overflow:hidden;text-overflow:ellipsis}
 
@@ -151,9 +151,9 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
    网格图标、图标格容器、Dock 应用与 Dock 功能按钮全部共用这一套，不出现第二种图标语言。 */
 .v-icon,.gi,.nv-ico,.dock-icon,.gtile{display:flex;align-items:center;justify-content:center;
   font-weight:800;letter-spacing:-.5px;
-  background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-tile) * 100%),transparent);
+  background:color-mix(in srgb,var(--tile-bg) calc(var(--g-alpha) * var(--ga-tile) * 100%),transparent);
   backdrop-filter:blur(var(--blur-tile));
-  border:1px solid rgba(255,255,255,.55);box-shadow:0 2px 8px rgba(6,12,24,.12)}
+  border:1px solid var(--tile-line);box-shadow:0 2px 8px rgba(6,12,24,.12)}
 .v-icon{font-size:24px;border-radius:14px}
 .v-icon.lat{font-size:17px}
 .gcell{display:flex;align-items:center;justify-content:center}
@@ -255,11 +255,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .dock{position:absolute;left:0;bottom:0;width:100%;height:96px;display:flex;align-items:flex-end;
   justify-content:center;z-index:var(--z-float);padding-bottom:14px}
 .dock-bar{display:flex;align-items:center;padding:9px 12px;border-radius:24px;
-  background:rgba(255,255,255,calc(var(--g-alpha) * (var(--ga-dock) + .08)));
+  background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * (var(--ga-dock) + .08) * 100%),transparent);
   backdrop-filter:blur(var(--blur-dock)) saturate(1.6);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 18px 44px -14px rgba(6,12,24,.36);
-  outline:1px solid rgba(255,255,255,.38);outline-offset:-1px}
-#stage[data-mode='minimal'] .dock-bar{background:rgba(255,255,255,calc(var(--g-alpha) * (var(--ga-dock) + .12)))}
+  outline:1px solid color-mix(in srgb,var(--card-text) 10%,transparent);outline-offset:-1px}
+#stage[data-mode='minimal'] .dock-bar{background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * (var(--ga-dock) + .12) * 100%),transparent)}
 .dock-apps,.dock-actions{display:flex;align-items:center}
 .dock-sep{width:1px;height:34px;margin:0 14px;background:var(--label-color);opacity:.22;flex:0 0 auto}
 .dock-item{width:64px;height:60px;display:flex;align-items:center;justify-content:center;
@@ -267,7 +267,7 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .dock-icon{width:46px;height:46px;border-radius:15px;font-size:22px;flex:0 0 auto;overflow:hidden}
 .dock-icon.circle{border-radius:50%}
 .dock-favicon{width:38px;height:38px;object-fit:cover;display:flex;align-items:center;justify-content:center}
-.dock-fn{background:rgba(255,255,255,.42);color:var(--label-color)}
+.dock-fn{background:color-mix(in srgb,var(--card-text) 8%,transparent);color:var(--label-color)}
 .dock-fn svg{width:21px;height:21px}
 .dock-name{display:none;position:absolute;top:4px;left:50%;transform:translate(-50%,-100%) scale(.92);
   background:rgba(15,23,42,.86);color:#fff;font-size:12px;padding:4px 10px;border-radius:8px;
@@ -293,8 +293,8 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .pill-btn{display:flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;font-size:13px;
   white-space:nowrap;color:var(--chip-text);transition:background .16s}
 .pill-btn svg{width:15px;height:15px}
-.pill-btn:hover{background:rgba(255,255,255,.28)}
-.pill-btn.active{background:rgba(255,255,255,.92);color:#1f2937;font-weight:600}
+.pill-btn:hover{background:color-mix(in srgb,var(--chip-text) 12%,transparent)}
+.pill-btn.active{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);font-weight:600}
 
 /* ============ 8. 极简模式：大时钟 ============ */
 .minimal-clock{position:absolute;left:50%;top:270px;transform:translateX(-50%);text-align:center;
@@ -577,6 +577,8 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .wall-thumb:hover{transform:translateY(-2px)}
 .wall-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .theme-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+/* 两套内置主题：并排两列，缩略图更大更好辨认 */
+.theme-grid.theme-grid-2{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .theme-btn{cursor:pointer;min-width:0}
 .theme-btn .tb-name{margin-top:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 选中态描边落在缩略图上（小卡密排，整卡描边会挤掉内容） */
@@ -595,15 +597,15 @@ input[type='range']{width:100%;accent-color:var(--accent)}
   align-items:center;justify-content:center}
 .modal-mask.show{display:flex}
 .modal{width:780px;max-height:660px;overflow-y:auto;border-radius:20px;padding:30px 34px;
-  background:color-mix(in srgb,#fff calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
+  background:color-mix(in srgb,var(--panel-bg) calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
   backdrop-filter:blur(var(--blur-panel));
-  color:#1f2937;box-shadow:0 24px 70px rgba(6,10,18,.4)}
+  color:var(--panel-text);box-shadow:0 24px 70px rgba(6,10,18,.4)}
 .modal.narrow{width:520px}
 .modal h2{margin:0 0 10px;font-size:24px}
-.modal p.sub{margin:0 0 22px;font-size:14px;color:#8b95a6;line-height:1.6}
+.modal p.sub{margin:0 0 22px;font-size:14px;color:var(--panel-sub);line-height:1.6}
 .th-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:24px}
-.th-card{border:2px solid #e8edf3;border-radius:14px;padding:8px;cursor:pointer}
-.th-card.sel{border-color:#3b82f6}
+.th-card{border:2px solid var(--line);border-radius:14px;padding:8px;cursor:pointer}
+.th-card.sel{border-color:var(--accent)}
 .th-prev{height:94px;border-radius:10px;overflow:hidden;position:relative;margin-bottom:8px}
 .th-prev .t-card{position:absolute;border-radius:4px;background:#fff}
 .th-prev .t-dock{position:absolute;left:14%;right:14%;bottom:8px;height:10px;border-radius:5px;
@@ -674,7 +676,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .wall-video{position:absolute;inset:-40px;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;z-index:0;pointer-events:none}
 .search-box.immersive{background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
 /* 线框样式仅极简模式生效（02 §11） */
-#stage[data-mode='standard'] .search-box.line{border-radius:var(--search-radius);background:rgba(255,255,255,calc(var(--g-alpha) * var(--ga-search)));border:2px solid rgba(255,255,255,.72);backdrop-filter:blur(var(--blur-search))}
+#stage[data-mode='standard'] .search-box.line{border-radius:var(--search-radius);background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * var(--ga-search) * 100%),transparent);border:2px solid color-mix(in srgb,var(--card-text) 12%,transparent);backdrop-filter:blur(var(--blur-search))}
 
 /* ============ 16. v4.2 视觉升级：光影 / 动效 / 形状体系 ============ */
 
@@ -719,7 +721,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 /* —— 模式胶囊 —— */
 .mode-pill{border-radius:14px;box-shadow:0 10px 28px -12px rgba(6,12,24,.36)}
 .pill-btn{border-radius:10px;transition:background .16s}
-.pill-btn.active{background:rgba(255,255,255,.95)}
+.pill-btn.active{background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent)}
 
 /* —— 页点：胶囊形变指示当前页 —— */
 .page-dot{width:6px;height:6px;border-radius:999px;transition:all .28s var(--ease)}
@@ -800,7 +802,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 
 /* —— 搜索框：唯一强焦点（去描边、单投影、聚焦光环） —— */
 .search-box{border:1px solid transparent;border-radius:25px;
-  background:color-mix(in srgb,#ffffff calc(var(--g-alpha) * (var(--ga-search) + .28) * 100%),transparent);
+  background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * (var(--ga-search) + .28) * 100%),transparent);
   backdrop-filter:blur(var(--blur-search)) saturate(1.4);
   box-shadow:0 10px 32px -14px rgba(15,23,42,.30)}
 .search-box:focus-within{border-color:transparent;box-shadow:var(--ring),0 14px 38px -14px rgba(15,23,42,.34)}
@@ -860,7 +862,7 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .dock-icon{--dock-sh:0 6px 16px rgba(6,12,24,.16);box-shadow:var(--dock-sh);
   transform-origin:50% 100%;will-change:transform;
   transition:transform .22s var(--ease),box-shadow .22s var(--ease)}
-.dock-fn{background:rgba(255,255,255,.42);--dock-sh:0 0 transparent}
+.dock-fn{background:color-mix(in srgb,var(--card-text) 8%,transparent);--dock-sh:0 0 transparent}
 .dock-item:hover .dock-icon{
   transition:transform .34s var(--ease-spring),box-shadow .34s var(--ease-spring);
   transform:scale(calc(1 + .18 * var(--ga-hover))) translateY(calc(-5px * var(--ga-hover)));
@@ -955,12 +957,13 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 #stage[data-mode='minimal'] .search-box input::placeholder{color:rgba(255,255,255,.85);text-shadow:0 1px 6px rgba(0,0,0,.35)}
 #stage[data-mode='minimal'] .search-go-btn{color:#fff;text-shadow:0 1px 6px rgba(0,0,0,.35)}
 #stage[data-mode='minimal'] .search-go-btn:hover{background:rgba(255,255,255,.22)}
-/* 聚焦：展开为白色玻璃卡片（图7），历史 / 引擎面板贴合成整体 */
-#stage[data-mode='minimal'] .search-box:focus-within{border-radius:22px;background:rgba(255,255,255,.94);
+/* 聚焦：展开为与主题同色的玻璃卡片（图7），历史 / 引擎面板贴合成整体 */
+#stage[data-mode='minimal'] .search-box:focus-within{border-radius:22px;
+  background:color-mix(in srgb,var(--card-bg) 94%,transparent);
   border-color:transparent;box-shadow:0 24px 64px -18px rgba(6,12,24,.4);backdrop-filter:blur(var(--blur-search)) saturate(1.5)}
-#stage[data-mode='minimal'] .search-box:focus-within input{color:#1f2937;text-shadow:none}
-#stage[data-mode='minimal'] .search-box:focus-within input::placeholder{color:rgba(31,41,55,.5);text-shadow:none}
-#stage[data-mode='minimal'] .search-box:focus-within .search-go-btn{color:#1f2937;text-shadow:none}
+#stage[data-mode='minimal'] .search-box:focus-within input{color:var(--card-text);text-shadow:none}
+#stage[data-mode='minimal'] .search-box:focus-within input::placeholder{color:var(--card-sub);text-shadow:none}
+#stage[data-mode='minimal'] .search-box:focus-within .search-go-btn{color:var(--card-text);text-shadow:none}
 /* 搜索引擎图标：未聚焦白色玻璃底、聚焦恢复品牌色底 */
 #stage[data-mode='minimal'] .search-box .engine-ico{background:rgba(255,255,255,.28);backdrop-filter:blur(4px)}
 #stage[data-mode='minimal'] .search-box:focus-within .engine-ico{background:var(--engine-color,#2932e1)}
@@ -1118,7 +1121,7 @@ img.v-icon,img.gi,img.gtile,img.nv-ico{opacity:var(--ga-glyph)}
 .ck-time{color:color-mix(in srgb,var(--clock-color) calc(var(--ga-clock) * 100%),transparent)}
 .ck-date{color:color-mix(in srgb,var(--card-sub) calc(var(--ga-clock) * 100%),transparent)}
 .minimal-clock{color:color-mix(in srgb,#fff calc(var(--ga-clock) * 100%),transparent)}
-/* 悬停 / 激活态：胶囊内白色浮层与选中项描边（菜单与列表的 hover 底色由 --menu-hover 在 JS 层派生） */
-.pill-btn:hover{background:color-mix(in srgb,#fff calc(var(--ga-hover) * 28%),transparent)}
+/* 悬停 / 激活态：胶囊内浮层与选中项描边（菜单与列表的 hover 底色由 --menu-hover 在 JS 层派生） */
+.pill-btn:hover{background:color-mix(in srgb,var(--chip-text) calc(var(--ga-hover) * 12%),transparent)}
 .theme-btn.sel .theme-thumb{border-color:color-mix(in srgb,var(--accent) calc(var(--ga-hover) * 100%),transparent);
   box-shadow:0 0 0 1px color-mix(in srgb,var(--accent) calc(var(--ga-hover) * 100%),transparent)}

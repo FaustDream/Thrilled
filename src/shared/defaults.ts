@@ -74,17 +74,11 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sizeDefaults: {},
 };
 
-/** 12 项用户可编辑令牌（风格抽屉取色行，02 §6.1） */
-export const SKIN_FIELDS: readonly (readonly [string, string])[] = [
-  ['--card-bg', '卡片背景'], ['--card-text', '卡片文字'], ['--card-sub', '次要文字'], ['--accent', '主题色'],
-  ['--label-color', '名称标签'], ['--panel-bg', '面板背景'], ['--panel-text', '面板文字'],
-  ['--line', '分隔线'], ['--chip-bg', '顶部胶囊'], ['--chip-text', '胶囊文字'],
-  ['--menu-bg', '菜单背景'], ['--menu-hover', '菜单悬停'],
-];
-
+/** 内置主题只有两套：经典（浅色）与暗黑（深色）；配色不再提供编辑器 */
 const CLASSIC_TOKENS: Record<string, string> = {
   '--card-bg': '#ffffff', '--card-text': '#1f2937', '--card-sub': '#6b7280', '--accent': '#3b82f6',
   '--label-color': '#1f2937', '--panel-bg': '#ffffff', '--panel-text': '#1f2937', '--panel-sub': '#6b7280',
+  '--tile-bg': '#ffffff', '--tile-line': 'rgba(255,255,255,.55)',
   '--line': '#eef1f6', '--chip-bg': 'rgba(255,255,255,.55)', '--chip-text': '#1f2937', '--menu-bg': '#ffffff',
   '--menu-hover': '#f3f5f9', '--clock-color': '#1f2937', '--search-text': '#1f2937',
   '--search-ph': 'rgba(31,41,55,.55)', '--mask-color': '#ffffff',
@@ -93,53 +87,14 @@ const CLASSIC_TOKENS: Record<string, string> = {
 export const BUILTIN_SKINS: readonly SkinPack[] = [
   { id: 'classic', name: '经典', builtin: true, base: 'light', tokens: { ...CLASSIC_TOKENS } },
   {
-    id: 'glass', name: '光感', builtin: true, base: 'light',
-    tokens: {
-      '--card-bg': 'rgba(255,255,255,.68)', '--card-text': '#141e2c', '--card-sub': '#5a6a7e', '--accent': '#2b7fff',
-      '--label-color': '#141e2c', '--panel-bg': '#ffffff', '--panel-text': '#141e2c', '--panel-sub': '#5a6a7e',
-      '--line': '#e4eaf3', '--chip-bg': 'rgba(255,255,255,.6)', '--chip-text': '#141e2c', '--menu-bg': '#ffffff',
-      '--menu-hover': '#f0f5fc', '--clock-color': '#141e2c', '--search-text': '#141e2c',
-      '--search-ph': 'rgba(20,30,44,.55)', '--mask-color': '#ffffff',
-    },
-  },
-  {
     id: 'dark', name: '暗黑', builtin: true, base: 'dark',
     tokens: {
       '--card-bg': '#1d2332', '--card-text': '#e8edf7', '--card-sub': '#8e9cb4', '--accent': '#4f8cff',
       '--label-color': '#f2f5fb', '--panel-bg': '#171c29', '--panel-text': '#e8edf7', '--panel-sub': '#8e9cb4',
+      '--tile-bg': '#2a3247', '--tile-line': 'rgba(255,255,255,.16)',
       '--line': '#2a3247', '--chip-bg': 'rgba(22,28,42,.74)', '--chip-text': '#e8edf7', '--menu-bg': '#1d2332',
       '--menu-hover': '#27304a', '--clock-color': '#ffffff', '--search-text': '#ffffff',
       '--search-ph': 'rgba(255,255,255,.68)', '--mask-color': '#05070c',
-    },
-  },
-  {
-    id: 'purple', name: '黑紫', builtin: true, base: 'dark',
-    tokens: {
-      '--card-bg': '#1a1326', '--card-text': '#efe8fa', '--card-sub': '#9d8bb5', '--accent': '#b06aff',
-      '--label-color': '#ffffff', '--panel-bg': '#160f20', '--panel-text': '#efe8fa', '--panel-sub': '#9d8bb5',
-      '--line': '#2b1f3c', '--chip-bg': 'rgba(25,18,36,.76)', '--chip-text': '#efe8fa', '--menu-bg': '#1d1429',
-      '--menu-hover': '#2d2140', '--clock-color': '#ecd5ff', '--search-text': '#ffffff',
-      '--search-ph': 'rgba(255,255,255,.66)', '--mask-color': '#07040c',
-    },
-  },
-  {
-    id: 'dawn', name: '晨曦', builtin: true, base: 'light',
-    tokens: {
-      '--card-bg': '#fffdf9', '--card-text': '#463225', '--card-sub': '#a68a76', '--accent': '#f0762b',
-      '--label-color': '#463225', '--panel-bg': '#fffaf3', '--panel-text': '#463225', '--panel-sub': '#a68a76',
-      '--line': '#f2e4d5', '--chip-bg': 'rgba(255,250,242,.62)', '--chip-text': '#463225', '--menu-bg': '#fffdf8',
-      '--menu-hover': '#f9efe2', '--clock-color': '#463225', '--search-text': '#463225',
-      '--search-ph': 'rgba(70,50,37,.55)', '--mask-color': '#fdf5ea',
-    },
-  },
-  {
-    id: 'teal', name: '黛青', builtin: true, base: 'dark',
-    tokens: {
-      '--card-bg': '#11211e', '--card-text': '#e3f2ec', '--card-sub': '#8fb0a6', '--accent': '#2fd4b0',
-      '--label-color': '#f0faf6', '--panel-bg': '#0d1a17', '--panel-text': '#e3f2ec', '--panel-sub': '#8fb0a6',
-      '--line': '#1f3730', '--chip-bg': 'rgba(14,27,24,.76)', '--chip-text': '#e3f2ec', '--menu-bg': '#122420',
-      '--menu-hover': '#1c3630', '--clock-color': '#c9f5e6', '--search-text': '#ffffff',
-      '--search-ph': 'rgba(255,255,255,.66)', '--mask-color': '#040e0c',
     },
   },
 ];

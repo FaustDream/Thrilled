@@ -20,6 +20,7 @@ import { restoreFileConfigOnStartup } from '../core/file-config'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
 import { APP_VERSION, BACKUP_VERSION_KEY, ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import { DEFAULT_SHORTCUTS } from '../shared/shortcuts'
+import { withGlobalBlur, withGlobalGlass } from '../shared/visual'
 import { isBlankStyle, styleSliceOf, withoutStyle, withoutStyleDefault } from '../shared/widget-style'
 import type {
   AppSettings,
@@ -133,12 +134,11 @@ interface AppState {
   commitEngineOrder: (ids: string[]) => void
   setGlass: (k: GlassKey, v: number) => void
   setBlur: (k: BlurKey, v: number) => void
+  /** 全局玻璃度：一次写入六个玻璃底色项（卡片 / 图标容器 / Dock / 搜索框 / 面板 / 菜单） */
+  applyGlobalGlass: (v: number) => void
+  /** 全局模糊度：一次写入六项毛玻璃半径 */
+  applyGlobalBlur: (v: number) => void
   applySkin: (id: string) => void
-  skinNew: () => void
-  skinRestore: () => void
-  skinDelete: () => void
-  skinRename: (name: string) => void
-  skinToken: (token: string, value: string) => void
   setWallpaperRef: (ref: string | null) => void
   /** 写入壁纸自适应裁剪焦点（由 app 层按视口比例算出） */
   setWallFocus: (f: WallFocus) => void
@@ -147,8 +147,7 @@ interface AppState {
   removeWallSource: (id: string) => void
   toggleWallSource: (id: string) => void
   /** 修改来源名称 / API 基址（镜像地址） */
-  updateWallSource: (id: string, patch: Partial<Pick<WallpaperSource, 'name' | 'apiBase'>>) => void
-  /** 放置组件；at 给定时优先落在该网格格附近（被占则就近），返回是否放置成功 */
+  updateWallSource: (id: string, patch: Partial<Pick<WallpaperSource, 'name' | 'apiBase'>>) => void  /** 放置组件；at 给定时优先落在该网格格附近（被占则就近），返回是否放置成功 */
   place: (kind: WidgetKind, config?: Record<string, unknown>, at?: { c: number; r: number }) => boolean
   /** 组件库：整体设置各类组件的默认大小（键 = 组件类型，缺键 = 用定义表出厂尺寸；只影响之后新增的实例） */
   setSizeDefaults: (next: Record<string, WidgetSize>) => void
@@ -497,35 +496,13 @@ export const useApp = create<AppState>()((set, get) => ({
 
   setGlass: (k, v) => set((s) => ({ settings: { ...s.settings, glass: { ...s.settings.glass, [k]: v } } })),
   setBlur: (k, v) => set((s) => ({ settings: { ...s.settings, blur: { ...s.settings.blur, [k]: v } } })),
-  applySkin: (id) => set((s) => ({ settings: { ...s.settings, skinId: id } })),
-  skinNew: () => set((s) => {
-    const cur = s.skins.find((x) => x.id === s.settings.skinId)
-    if (!cur) return {}
-    const copy: SkinPack = { ...cur, id: `c${Date.now()}`, name: `${cur.name} 副本`, builtin: false, tokens: { ...cur.tokens } }
-    return { skins: [...s.skins, copy], settings: { ...s.settings, skinId: copy.id }, toast: '新建成功' }
-  }),
-  skinRestore: () => set((s) => {
-    const cur = s.skins.find((x) => x.id === s.settings.skinId)
-    const def = BUILTIN_SKINS.find((x) => x.id === s.settings.skinId)
-    if (!cur || !def) return { toast: '自定义皮肤无法还原为内置' }
-    return {
-      skins: s.skins.map((x) => (x.id === cur.id ? { ...x, tokens: { ...def.tokens }, name: def.name } : x)),
-      toast: '恢复成功',
-    }
-  }),
-  skinDelete: () => set((s) => {
-    if (s.skins.length <= 1) return { toast: '至少保留一套皮肤' }
-    const idx = s.skins.findIndex((x) => x.id === s.settings.skinId)
-    if (s.skins[idx]?.builtin) return { toast: '内置皮肤不可删除' }
-    const skins = s.skins.filter((_, i) => i !== idx)
-    return { skins, settings: { ...s.settings, skinId: skins[0]?.id ?? s.settings.skinId }, toast: '删除成功' }
-  }),
-  skinRename: (name) => set((s) => ({
-    skins: s.skins.map((x) => (x.id === s.settings.skinId ? { ...x, name } : x)),
+  applyGlobalGlass: (v) => set((s) => ({
+    settings: { ...s.settings, glass: withGlobalGlass(s.settings.glass, v) },
   })),
-  skinToken: (token, value) => set((s) => ({
-    skins: s.skins.map((x) => (x.id === s.settings.skinId ? { ...x, tokens: { ...x.tokens, [token]: value } } : x)),
+  applyGlobalBlur: (v) => set((s) => ({
+    settings: { ...s.settings, blur: withGlobalBlur(s.settings.blur, v) },
   })),
+  applySkin: (id) => set((s) => ({ settings: { ...s.settings, skinId: BUILTIN_SKINS.some((x) => x.id === id) ? id : s.settings.skinId } })),
   setWallpaperRef: (ref) => set((s) => ({ settings: { ...s.settings, wallpaperRef: ref }, toast: ref === null ? '已移除壁纸' : '自定义壁纸已应用' })),
   setWallFocus: (f) => set((s) => ({ settings: { ...s.settings, wallFocus: f } })),
   addWallSource: (src) => set((s) => ({ settings: { ...s.settings, wallSources: [...s.settings.wallSources, src] }, toast: `已添加壁纸来源：${src.name}` })),

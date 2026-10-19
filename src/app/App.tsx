@@ -629,7 +629,7 @@ export const App = () => {
         }
         case 'drawer-open': st.setDrawer(v as DrawerKey); break
         /* 空页引导「添加组件」：直达个性化 → 组件库 */
-        case 'open-library': st.setPersonalTab(3); st.setDrawer('personal'); break
+        case 'open-library': st.setPersonalTab(2); st.setDrawer('personal'); break
         case 'ctx-blocked': st.showToast(v); st.openCtx(null); break
         /* 空白处右键「整理图标」：把当前页的图标类卡片依次前移补位（组件钉住不动） */
         case 'arrange': st.arrange(); st.openCtx(null); break

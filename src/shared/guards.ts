@@ -114,25 +114,12 @@ export const normalizeEngine = (v: unknown): EngineDef | null => {
   return r.success ? (r.data as EngineDef) : null;
 };
 
-/** 皮肤归一化：tokens 逐键校验为字符串 */
-const skinSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  builtin: z.boolean(),
-  base: z.enum(['light', 'dark']),
-  tokens: z.record(z.string()),
-});
+/** 皮肤归一化：只认两套内置主题的 id（旧版本的自定义皮肤与其余内置主题不再载入） */
+const skinIdOf = (v: unknown, d: string): string =>
+  typeof v === 'string' && BUILTIN_SKINS.some((s) => s.id === v) ? v : d;
 
-export const normalizeSkin = (v: unknown): SkinPack | null => {
-  const r = skinSchema.safeParse(v);
-  return r.success ? (r.data as SkinPack) : null;
-};
-
-export const normalizeSkins = (v: unknown): SkinPack[] => {
-  if (!Array.isArray(v)) return BUILTIN_SKINS.map((s) => ({ ...s, tokens: { ...s.tokens } }));
-  const out = v.map(normalizeSkin).filter((s): s is SkinPack => s !== null);
-  return out.length > 0 ? out : BUILTIN_SKINS.map((s) => ({ ...s, tokens: { ...s.tokens } }));
-};
+/** 皮肤归一化：只保留两套内置主题（经典 / 暗黑）；旧版本的自定义皮肤与其余内置主题不再载入 */
+export const normalizeSkins = (): SkinPack[] => BUILTIN_SKINS.map((s) => ({ ...s, tokens: { ...s.tokens } }));
 
 /** 引擎清单归一化：全部坏数据时回退内置表 */
 export const normalizeEngines = (v: unknown): EngineDef[] => {
@@ -232,7 +219,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     autoContrast: boolish(o['autoContrast'], d.autoContrast),
     immersive: boolish(o['immersive'], d.immersive),
     simpleSearch: boolish(o['simpleSearch'], d.simpleSearch),
-    skinId: strish(o['skinId'], d.skinId),
+    skinId: skinIdOf(o['skinId'], d.skinId),
     wallpaperRef: typeof o['wallpaperRef'] === 'string' ? o['wallpaperRef'] : null,
     wallFocus: ((): WallFocus => {
       const f = o['wallFocus'];
@@ -347,7 +334,7 @@ export const parseStoredDoc = (v: unknown, kinds: ReadonlySet<string>): StoredDo
     settings: normalizeSettings(o['settings']),
     pages: merged.length > 0 ? merged : [[]],
     engines: normalizeEngines(o['engines']),
-    skins: normalizeSkins(o['skins']),
+    skins: normalizeSkins(),
     history: Array.isArray(o['history']) ? o['history'].filter((h): h is string => typeof h === 'string').slice(0, 20) : [],
     welcomed: boolish(o['welcomed'], false),
     backupTime: typeof o['backupTime'] === 'string' ? o['backupTime'] : null,
