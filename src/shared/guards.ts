@@ -181,6 +181,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     mode: normalizedMode,
     iconNames: boolish(o['iconNames'], d.iconNames),
     autoArrange: boolish(o['autoArrange'], d.autoArrange),
+    autoArrangeWidgets: boolish(o['autoArrangeWidgets'], d.autoArrangeWidgets),
     hideTop: boolish(o['hideTop'], d.hideTop),
     hideSearch: boolish(o['hideSearch'], d.hideSearch),
     mascot: boolish(o['mascot'], d.mascot),

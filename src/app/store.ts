@@ -6,7 +6,7 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc } from './layout'
+import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc } from './layout'
 import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
@@ -655,15 +655,20 @@ export const useApp = create<AppState>()((set, get) => ({
   setPicked: (ids) => set({ picked: [...ids] }),
 
   remove: (id) => set((s) => {
-    /* 被删卡片所在页与它自身的类型：自动整理只对「图标类」生效（组件钉住，删组件不触发） */
+    /* 被删卡片所在页与它自身的类型：图标类走 autoArrange，组件走 autoArrangeWidgets（两个开关互不影响） */
     const pgIdx = s.pages.findIndex((pg) => pg.some((x) => x.id === id))
     const hit = pgIdx >= 0 ? s.pages[pgIdx]?.find((x) => x.id === id) : undefined
     let list = s.pages.map((pg) => pg.filter((x) => x.id !== id))
-    /* 删除后自动整理（设置默认开、跨页）：被删的是图标类时，把空洞用后面页的图标补上——
-       空洞被推到最后一页末尾，分页整体保持紧凑；组件钉住不动；无解或无需整理就保持原样 */
-    if (hit !== undefined && s.settings.autoArrange && pgIdx >= 0 && ARRANGE_KINDS.has(hit.t)) {
-      const done = arrangePages(list)
-      if (done !== null && done.moved > 0) list = done.pages
+    /* 删除后自动整理（设置默认开、跨页）：删图标时只有图标类可动（组件钉住），
+       删组件时整页卡片都可动——组件尺寸的空洞图标补不上，链条必须由组件自己往前接上 */
+    if (hit !== undefined && pgIdx >= 0) {
+      const movable = ARRANGE_KINDS.has(hit.t)
+        ? (s.settings.autoArrange ? ARRANGE_KINDS : null)
+        : (s.settings.autoArrangeWidgets ? ARRANGE_ALL_KINDS : null)
+      if (movable !== null) {
+        const done = arrangePages(list, movable)
+        if (done !== null && done.moved > 0) list = done.pages
+      }
     }
     /* 空页自动移除：页面删空后不再保留空页点（至少保留一页），当前页序号落到邻近保留页 */
     const pruned = prunePages(list, s.cur)

@@ -3,7 +3,7 @@
  * 覆盖：出厂布局满足冻结的栅格规范 / 网格空位查找 / 重叠判定 / 导入文档归一化 / 图标页合并
  */
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PAGES, SAMPLE_PAGES, REPEATABLE_KINDS, arrangePages, crossPlan, dropPlan, isIconOnlyPage, mergeIconPages, normPages, packPage, placedKindsOf, prunePages, uid } from '../src/app/layout'
+import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, REPEATABLE_KINDS, arrangePages, crossPlan, dropPlan, isIconOnlyPage, mergeIconPages, normPages, packPage, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, ICON_INSET, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, insetOf, isLegalSize, itemBox, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
   COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
@@ -757,6 +757,83 @@ describe('arrangePages：删除图标后的自动整理（跨页链式补位）'
       for (let i = 0; i < items.length; i++) {
         for (let j = i + 1; j < items.length; j++) {
           expect(overlaps(at(items, i), at(items, j))).toBe(false)
+        }
+      }
+    }
+  })
+})
+
+describe('arrangePages：删除组件后的自动整理（组件也参与补位）', () => {
+  const card = (id: string, c: number, r: number, w = 2, h = 2, t: WidgetKind = 'icon'): GridItem =>
+    ({ id, c, r, w, h, t, config: {} })
+  const pos = (x: GridItem): [number, number] => [x.c, x.r]
+  const arrangeAll = (pages: readonly GridItem[][]): { pages: GridItem[][]; moved: number } => {
+    const r = arrangePages(pages, ARRANGE_ALL_KINDS)
+    if (r === null) throw new Error('arrangePages 意外返回 null')
+    return r
+  }
+  const at2 = (items: readonly GridItem[], i: number): GridItem => {
+    const x = items[i]
+    if (x === undefined) throw new Error(`缺少下标 ${i}`)
+    return x
+  }
+  const byId = (items: readonly GridItem[], id: string): GridItem => {
+    const x = items.find((v) => v.id === id)
+    if (x === undefined) throw new Error(`缺少卡片 ${id}`)
+    return x
+  }
+
+  it('两个可移动类型集合：图标集只含图标类，全集含组件', () => {
+    expect([...ARRANGE_KINDS].sort()).toEqual(['folder', 'group', 'icon'])
+    for (const t of ARRANGE_KINDS) expect(ARRANGE_ALL_KINDS.has(t)).toBe(true)
+    for (const t of ['clock', 'cal', 'weather', 'todo', 'countdown', 'fav'] as WidgetKind[]) {
+      expect(ARRANGE_ALL_KINDS.has(t)).toBe(true)
+      expect(ARRANGE_KINDS.has(t)).toBe(false)
+    }
+  })
+
+  it('删掉组件后：图标口径只挪图标、组件钉住；全集口径组件也前移', () => {
+    const clock2 = card('c2', 4, 0, 4, 2, 'clock')
+    const icon = card('i', 8, 0)
+    /* 图标口径：组件不动，只有图标前移到组件左边的空位 */
+    const onlyIcons = arrangePages([[clock2, icon]])
+    expect(onlyIcons?.moved).toBe(1)
+    expect(pos(byId(onlyIcons?.pages[0] ?? [], 'c2'))).toEqual([4, 0])
+    expect(pos(byId(onlyIcons?.pages[0] ?? [], 'i'))).toEqual([0, 0])
+    /* 全集口径：组件也前移到最靠前的空位，图标顺次补到组件右边 */
+    const r = arrangeAll([[clock2, icon]])
+    expect(r.moved).toBe(2)
+    const page = r.pages[0] ?? []
+    expect(pos(byId(page, 'c2'))).toEqual([0, 0])
+    expect(pos(byId(page, 'i'))).toEqual([4, 0])
+  })
+
+  it('删组件后跨页补位：后面页的组件被提前填到前面页', () => {
+    const icon = card('i', 4, 0)
+    const clock = card('k', 0, 0, 4, 2, 'clock')
+    /* 第 1 页原本的组件已删，只剩 (4,0) 的图标；第 2 页还有一张组件 */
+    const r = arrangeAll([[icon], [clock]])
+    expect(r.moved).toBe(2)
+    expect(pos(byId(r.pages[0] ?? [], 'i'))).toEqual([0, 0])
+    expect(pos(byId(r.pages[0] ?? [], 'k'))).toEqual([2, 0])
+    expect(r.pages[1]).toEqual([]) /* 被搬空，交给调用方 prunePages 移除 */
+  })
+
+  it('本来紧凑时 moved=0，未移动的卡片返回原对象', () => {
+    const a = card('a', 0, 0, 4, 2, 'clock')
+    const b = card('b', 4, 0)
+    const r = arrangeAll([[a, b]])
+    expect(r.moved).toBe(0)
+    expect(r.pages[0]?.[0]).toBe(a)
+  })
+
+  it('整理结果不产生任何重叠', () => {
+    const page = [card('k', 0, 0, 4, 2, 'clock'), card('i', 6, 0), card('w', 8, 0, 4, 2, 'weather'), card('g', 0, 4, 4, 4, 'group')]
+    const pages = arrangeAll([page, [card('t', 0, 6, 4, 2, 'todo')]]).pages
+    for (const items of pages) {
+      for (let i = 0; i < items.length; i++) {
+        for (let j = i + 1; j < items.length; j++) {
+          expect(overlaps(at2(items, i), at2(items, j))).toBe(false)
         }
       }
     }

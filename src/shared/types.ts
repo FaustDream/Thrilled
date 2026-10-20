@@ -201,6 +201,8 @@ export interface AppSettings {
   iconNames: boolean;
   /** 删除图标类卡片后自动整理当前页：把后面的图标依次前移到空出来的位置（组件位置不受影响） */
   autoArrange: boolean;
+  /** 删除组件（时钟 / 天气 / 待办等）后自动整理：后面的卡片（含图标）依次前移补位 */
+  autoArrangeWidgets: boolean;
   hideTop: boolean;
   hideSearch: boolean;
   mascot: boolean;

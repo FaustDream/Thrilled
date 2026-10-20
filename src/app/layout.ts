@@ -221,6 +221,15 @@ export const placedKindsOf = (pages: readonly GridItem[][]): Set<WidgetKind> =>
  */
 export const ARRANGE_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['icon', 'folder', 'group']);
 
+/**
+ * 删除组件后整理时可移动的类型：**全部卡片**（图标类 + 组件）。
+ * 组件被删后只有组件也肯往前挪，它留下的空洞才补得上（否则后面的图标装不进组件尺寸的洞，链条当场停住）。
+ * 仅「删除组件」这一路使用；删除图标仍是 ARRANGE_KINDS，组件照旧钉住不动。
+ */
+export const ARRANGE_ALL_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>([
+  'clock', 'cal', 'weather', 'todo', 'countdown', 'fav', 'icon', 'folder', 'group',
+]);
+
 /** 整理过程中每张卡片的当前落点（页序 + 格）：先按原位建表，处理一张改一张 */
 type Slot = { pg: number; c: number; r: number };
 
@@ -244,13 +253,15 @@ const obstaclesOn = (
 };
 
 /**
- * 整理**全部页**（纯函数，可单测）：把可移动卡片（ARRANGE_KINDS）按「页序 + 页内自上而下、自左而右」排序，
- * 依次补到**全局最靠前**的空位上——删掉一张后即「链式补位」：后面的图标一张接一张前移，直到没有空洞可补
- * （尺寸对不上时链条自然停止：大卡片填不了小空洞，留在原位）。相对顺序不变。
+ * 整理**全部页**（纯函数，可单测）：把可移动卡片（默认 ARRANGE_KINDS，删组件时传 ARRANGE_ALL_KINDS）
+ * 按「页序 + 页内自上而下、自左而右」排序，依次补到**全局最靠前**的空位上——删掉一张后即「链式补位」：
+ * 后面的卡片一张接一张前移，直到没有空洞可补（尺寸对不上时链条自然停止：大卡片填不了小空洞，留在原位）。
+ * 相对顺序不变。
  *
- * 跨页的意义：前面的页留白时，后面页的图标会被提前填上，**空洞被推到最后一页末尾**，
+ * 跨页的意义：前面的页留白时，后面页的卡片会被提前填上，**空洞被推到最后一页末尾**，
  * 分页整体保持紧凑连贯，不会出现「中间页空一块、后面还排得满满当当」。
- * 组件（时钟 / 天气 / 待办 / 日历 / 收藏夹 / 倒计时）钉在各自页的原位不动。
+ * 删除图标时组件（时钟 / 天气 / 待办 / 日历 / 收藏夹 / 倒计时）钉在各自页的原位不动；
+ * 删除组件时整页卡片一起前移（否则组件尺寸的空洞图标补不上，链条当场停住）。
  *
  * 关键：判定空位时「其它所有卡片」都算障碍——**已处理的用新位置、未处理的用原位**。
  * 因此每张卡片只会往前补它前面被腾出来的位置，绝不会越过还没处理的卡片乱跳；
@@ -259,9 +270,12 @@ const obstaclesOn = (
  * 返回 { pages, moved }（页数不变，被搬空的页留成空数组，由调用方走 prunePages 移除并修正当前页序号）；
  * moved = 0 表示本来就紧凑（无需整理）；null 是防御性兜底（理论上不可达）。
  */
-export const arrangePages = (pages: readonly GridItem[][]): { pages: GridItem[][]; moved: number } | null => {
+export const arrangePages = (
+  pages: readonly GridItem[][],
+  movable: ReadonlySet<WidgetKind> = ARRANGE_KINDS,
+): { pages: GridItem[][]; moved: number } | null => {
   const order: GridItem[] = [];
-  pages.forEach((items) => items.filter((x) => ARRANGE_KINDS.has(x.t)).forEach((x) => order.push(x)));
+  pages.forEach((items) => items.filter((x) => movable.has(x.t)).forEach((x) => order.push(x)));
   if (order.length === 0) return { pages: pages.map((items) => [...items]), moved: 0 };
   const pgOf = new Map<string, number>();
   pages.forEach((items, i) => items.forEach((x) => pgOf.set(x.id, i)));

@@ -16,6 +16,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   iconNames: false,
   /* 删除后自动整理出厂开（用户需求）：删掉图标后不留空洞，后面的图标依次前移补位 */
   autoArrange: true,
+  /* 删掉组件后同样不留空洞：后面的卡片（含图标）依次前移补位 */
+  autoArrangeWidgets: true,
   hideTop: false,
   hideSearch: false,
   mascot: true,
