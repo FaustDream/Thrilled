@@ -33,7 +33,7 @@ export interface SlotSize {
  * text→input / num→number input / list→逗号分隔 input / bool→SwitchRow / sel→cats 胶囊 /
  * range→SliderRow / color→ColorField（后两者复用设置面板既有控件）
  */
-export type WidgetFieldType = 'text' | 'num' | 'list' | 'bool' | 'sel' | 'range' | 'color';
+export type WidgetFieldType = 'text' | 'num' | 'list' | 'bool' | 'sel' | 'multi' | 'range' | 'color';
 
 export interface WidgetField {
   /** config 键 */
@@ -41,7 +41,7 @@ export interface WidgetField {
   /** 显示名 */
   l: string;
   t: WidgetFieldType;
-  /** sel 的选项 */
+  /** sel 的选项 / multi 的可选项 */
   o?: string[];
   /** 占位提示 */
   ph?: string;
@@ -276,12 +276,24 @@ export interface AppSettings {
    * 键为 WidgetKind，值为六档尺寸之一；缺键 = 用定义表的出厂尺寸。
    */
   sizeDefaults: Record<string, WidgetSize>;
+  /**
+   * 天气定位：null = 用真实定位（浏览器定位权限）；有值 = 用户手选的城市坐标。
+   * 定位被拒绝时界面提示「允许定位」，用户也可在天气卡配置里手选城市作为替代。
+   */
+  weatherCity: CityPick | null;
 }
 
 /** 组件尺寸（网格单位数，取值见 shared/grid 的 SIZES 六档） */
 export interface WidgetSize {
   w: number;
   h: number;
+}
+
+/** 用户手选城市（天气定位的替代方案；坐标由地理编码搜索得到） */
+export interface CityPick {
+  name: string;
+  lat: number;
+  lon: number;
 }
 
 /**

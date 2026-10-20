@@ -296,7 +296,7 @@ describe('组件库数据（分组 / 默认大小 / 配置项上限）', () => {
   })
 
   it('专属字段只用受支持的字段类型（含 range / color 的配套参数）', () => {
-    const types = new Set(['text', 'num', 'list', 'bool', 'sel', 'range', 'color'])
+    const types = new Set(['text', 'num', 'list', 'bool', 'sel', 'multi', 'range', 'color'])
     for (const w of WIDGET_LIST) {
       for (const f of w.fields) {
         expect(types.has(f.t), `${w.n} · ${f.l} 的字段类型 ${f.t} 不受支持`).toBe(true)

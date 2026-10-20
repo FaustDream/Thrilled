@@ -15,7 +15,7 @@ import { normalizeShortcuts } from './shortcuts';
 import { isBlankStyle, normStyle } from './widget-style';
 import { WIDGET_KINDS, fromLegacyKind, sizeAllowed } from './widget-defs';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
-import type { AppSettings, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource, WidgetKind, WidgetSize, WidgetStyle } from './types';
+import type { AppSettings, CityPick, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource, WidgetKind, WidgetSize, WidgetStyle } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -238,7 +238,20 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     shortcuts: normalizeShortcuts(o['shortcuts']),
     styleDefaults: normStyleDefaults(o['styleDefaults']),
     sizeDefaults: normSizeDefaults(o['sizeDefaults']),
+    weatherCity: normCityPick(o['weatherCity']),
   };
+};
+
+/** 手选城市归一化：名称与有限坐标齐备才认，否则回退 null（= 用真实定位） */
+const normCityPick = (v: unknown): CityPick | null => {
+  if (typeof v !== 'object' || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
+  const lat = typeof o['lat'] === 'number' && Number.isFinite(o['lat']) ? o['lat'] : NaN;
+  const lon = typeof o['lon'] === 'number' && Number.isFinite(o['lon']) ? o['lon'] : NaN;
+  if (name === '' || Number.isNaN(lat) || Number.isNaN(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return { name, lat, lon };
 };
 
 /**

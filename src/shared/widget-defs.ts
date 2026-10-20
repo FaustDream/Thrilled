@@ -21,22 +21,23 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     def: { timeMode: '24 小时', showDate: true, showSeconds: false },
   },
   cal: {
-    t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '公历 / 农历 / 宜忌', units: { w: 4, h: 2 }, min: { w: 4, h: 2 },
+    t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '阳历农历 + 节日宜忌 + 日程', units: { w: 4, h: 4 }, min: { w: 4, h: 2 },
     fields: [
       { k: 'showMonth', l: '显示年月', t: 'bool' },
       { k: 'showLunar', l: '显示农历与宜忌', t: 'bool' },
+      { k: 'showSchedule', l: '显示日程与待办', t: 'bool' },
     ],
-    def: { showMonth: true, showLunar: true },
+    /* 节日与农历同开同关（同一个 showLunar）；日程存 config.events（见 core/schedule） */
+    def: { showMonth: true, showLunar: true, showSchedule: true, events: [] },
   },
   weather: {
-    t: 'weather', n: '天气', g: '天', c: '#38BDF8', s: '实况天气 · 城市可调', units: { w: 4, h: 2 },
+    t: 'weather', n: '天气', g: '天', c: '#38BDF8', s: '实况天气 · 自动定位（可手选城市）', units: { w: 4, h: 2 },
     min: { w: 4, h: 2 },
     fields: [
-      { k: 'city', l: '城市', t: 'text', ph: '北京' },
       { k: 'unit', l: '温度单位', t: 'sel', o: ['摄氏 °C', '华氏 °F'] },
       { k: 'showRange', l: '显示温度区间', t: 'bool' },
     ],
-    def: { city: '北京', unit: '摄氏 °C', showRange: true },
+    def: { unit: '摄氏 °C', showRange: true },
   },
   todo: {
     t: 'todo', n: '待办清单', g: '待', c: '#38A29E', s: '多清单 · 今日任务', units: { w: 4, h: 2 },
@@ -44,21 +45,21 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     def: { title: '待办', showCheck: true },
   },
   countdown: {
-    t: 'countdown', n: '倒计时', g: '倒', c: '#FB923C', s: '下班倒计时 + 倒数日 + 纪念日', units: { w: 8, h: 4 },
-    /* 三种计时模式共用一套卡片：主读数（下班时刻 HH:MM:SS / 目标日期天数 / 起始日期已过天数）+ 倒数列表 + 吉祥物。
-       倒数列表与吉祥物需要 4 格高才装得下；4×2 矮卡只留主读数（即原「倒数日」卡的形态），故下限 4×2 */
+    t: 'countdown', n: '倒计时', g: '倒', c: '#FB923C', s: '下班 / 倒数日 / 纪念日可同时显示', units: { w: 8, h: 4 },
+    /* 三种计时模式共用一套卡片：主读数（下班时刻 HH:MM:SS / 目标日期天数 / 起始日期已过天数）+ 倒数列表。
+       多模式可同时勾选，卡上按设定顺序依次轮播（也可固定显示其中一种），见 core/countdown。
+       各模式的时刻 / 日期 / 标题 / 单位在卡片详情弹窗里改（专属字段只留三项，守住配置项上限）。
+       4×2 矮卡只留主读数（即原「倒数日」卡的形态），故下限 4×2 */
     min: { w: 4, h: 2 },
     fields: [
-      { k: 'mode', l: '计时模式', t: 'sel', o: ['下班倒计时', '倒数日', '纪念日'] },
-      { k: 'at', l: '下班时刻', t: 'text', ph: '18:00' },
-      { k: 'date', l: '目标日期', t: 'text', ph: '2027-01-01' },
+      { k: 'modes', l: '显示模式', t: 'multi', o: ['下班倒计时', '倒数日', '纪念日'] },
+      { k: 'rotate', l: '多模式轮播', t: 'bool' },
+      { k: 'showFestivals', l: '显示节日倒数', t: 'bool' },
     ],
-    /* showFestivals / mascotEmoji / title / unitLabel 不占字段配额（录入在详情弹窗），但默认值仍归定义表：
-       渲染侧按「定义默认值 ⊕ 实例覆盖值」合成，旧配置（含 showMascot 兼容）也走这里 */
+    /* 旧键（mode / mascotEmoji）仍在读取时兼容：mode 会被转成 modes，见 core/countdown 的 normModes */
     def: {
-      mode: '下班倒计时', at: '18:00', date: '2027-01-01',
-      title: '与MiNa相识', unitLabel: '天',
-      showFestivals: true, mascotEmoji: '',
+      modes: ['下班倒计时'], rotate: true, at: '18:00', date: '2027-01-01', annDate: '2020-05-20',
+      title: '与MiNa相识', unitLabel: '天', showFestivals: true,
     },
   },
   fav: {

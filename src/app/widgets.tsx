@@ -10,8 +10,11 @@ import { brandOf } from './brands'
 import { WIDGET_DEFS } from '../shared/widget-defs'
 import { GROUP_GAP, GROUP_PAD, groupBoxOf, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
-import { daysUntil, normTodoItems } from '../core/utils'
+import { normTodoItems } from '../core/utils'
 import { normCountdownEntries, upcomingRows } from '../core/festivals'
+import { normModes, readoutOf, rotateMode } from '../core/countdown'
+import { eventsOn, dayKey, normScheduleEvents } from '../core/schedule'
+import { almanacOf, festivalsOf, solarToLunar } from '../core/lunar'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
 import { weatherText } from '../core/weather'
@@ -97,75 +100,55 @@ export const SiteIcon = ({ url, name, cls = 'v-icon', fs, size }: {
   return <TileGlyph name={name} cls={cls} fs={fs} size={size} />
 }
 
-const panda = () => (
-  <svg viewBox="0 0 160 140" width="100%" height="100%">
-    <ellipse cx="80" cy="128" rx="52" ry="8" fill="rgba(0,0,0,.14)" />
-    <circle cx="40" cy="30" r="19" fill="#2b2b33" /><circle cx="120" cy="30" r="19" fill="#2b2b33" />
-    <ellipse cx="80" cy="72" rx="52" ry="50" fill="#fff" />
-    <ellipse cx="58" cy="62" rx="15" ry="17" fill="#2b2b33" /><ellipse cx="102" cy="62" rx="15" ry="17" fill="#2b2b33" />
-    <circle cx="60" cy="62" r="5" fill="#fff" /><circle cx="100" cy="62" r="5" fill="#fff" />
-    <ellipse cx="80" cy="88" rx="9" ry="6" fill="#2b2b33" />
-  </svg>
-)
 
 /**
- * 倒计时卡（「下班倒计时 / 倒数日 / 纪念日」已合并为一个组件）：
+ * 倒计时卡（「下班倒计时 / 倒数日 / 纪念日」三种模式可同时启用）：
  * - 下班倒计时：到下班时刻（at）的 HH:MM:SS，到点停住
  * - 倒数日：到目标日期（date）的天数，已过显示「天前」
- * - 纪念日：自起始日期（date）起已过的天数（title 作标题行，unitLabel 按 天/周/月/年 换算）
- * 倒数列表（节日 + 用户自定义）与吉祥物三模式共用，仅 4 格高的卡片显示列表，
- * 4×2 矮卡只留主读数（即原「倒数日」卡的形态，日期行由 @container 窄卡规则隐去）。
+ * - 纪念日：自起始日期（annDate）起已过的天数（title 作标题行，unitLabel 按 天/周/月/年 换算）
+ * 多模式同时勾选时按设定顺序轮播（rotate 关掉则固定第一种）；内容整体居中，吉祥物已移除。
+ * 倒数列表（节日 + 用户自定义）只在 4 格高的卡片显示，4×2 矮卡只留主读数。
  */
 const CountdownCard = ({ item, c, now }: { item: GridItem; c: Record<string, unknown>; now: Date }) => {
-  const mode = str(c['mode'], '下班倒计时')
-  const dateStr = str(c['date'], '2027-01-01')
-  const left = daysUntil(dateStr, now)
-  const at = str(c['at'], '18:00').split(':')
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
-  const secs = Math.max(0, Math.floor((end.getTime() - now.getTime()) / 1000))
-  const timer = `${p2(Math.floor(secs / 3600))}:${p2(Math.floor(secs / 60) % 60)}:${p2(secs % 60)}`
-  /* 纪念日按天数单位换算（与旧纪念日组件同一算法：周 7 天 / 月 30 天 / 年 365 天） */
-  const unit = str(c['unitLabel'], '天')
-  const past = left === null ? null : Math.abs(left)
-  const annNum = past === null ? null
-    : unit === '周' ? Math.floor(past / 7)
-    : unit === '月' ? Math.floor(past / 30)
-    : unit === '年' ? Math.floor(past / 365)
-    : past
+  const modes = normModes(c['modes'], c['mode'])
+  /* 轮播节拍：每 6 秒换一个模式（多模式且开启轮播时）；单模式不建定时器 */
+  const [tick, setTick] = useState(0)
+  const rotating = modes.length > 1 && bool(c['rotate'])
+  useEffect(() => {
+    if (!rotating) return
+    const t = window.setInterval(() => setTick((v) => v + 1), 6000)
+    return () => window.clearInterval(t)
+  }, [rotating])
+  const mode = rotating ? rotateMode(modes, tick) : (modes[0] ?? '下班倒计时')
+  const r = readoutOf(mode, c, now, str)
   const rows = item.h >= 4
     ? upcomingRows(normCountdownEntries(c['entries']), bool(c['showFestivals']), now).slice(0, 4)
     : []
-  /* 吉祥物三态：留空 = 内置熊猫 SVG（兼容旧配置 showMascot:false）；填「无」隐藏；填 emoji 自定义 */
-  const mascot = str(c['mascotEmoji'], bool(c['showMascot']) === false ? '无' : '').trim()
   return (
-    <div className={`w-cd${mode === '下班倒计时' ? '' : ' day'}`} style={{ position: 'absolute', inset: 0 }}>
+    <div className={`w-cd${r.timer ? '' : ' day'}`} style={{ position: 'absolute', inset: 0 }}>
       <div className="cd-l">
-        <div className="cd-hint">
-          {mode === '纪念日' ? str(c['title'], '与MiNa相识') : mode === '倒数日' ? '距离目标日' : '坚持住，距下班只有'}
-        </div>
+        <div className="cd-hint">{r.hint}</div>
         <div className="cd-time">
-          {mode === '下班倒计时' ? timer : mode === '纪念日' ? (
-            <>{annNum === null ? '--' : annNum}<span className="cd-unit">{unit}</span></>
-          ) : (
-            <>{left === null ? '--' : Math.abs(left)}<span className="cd-unit">{left !== null && left < 0 ? '天前' : '天'}</span></>
-          )}
+          {r.value}
+          {r.unit !== '' && <span className="cd-unit">{r.unit}</span>}
         </div>
-        {mode !== '下班倒计时' && <div className="cd-date">{dateStr}</div>}
+        {r.sub !== '' && <div className="cd-date">{r.sub}</div>}
         {rows.length > 0 && (
           <div className="cd-grid">
-            {rows.map((r, i) => (
-              <div className="cd-entry" key={String(i)} title={r.note ?? ''}>
-                <span className="cd-label">{r.name}</span>
-                <span className="cd-val">{Math.abs(r.days)}{r.days < 0 ? '天前' : '天'}</span>
-                {r.progress !== null && <span className="cd-bar"><i style={{ width: `${Math.round(r.progress * 100)}%` }} /></span>}
+            {rows.map((row, i) => (
+              <div className="cd-entry" key={String(i)} title={row.note ?? ''}>
+                <span className="cd-label">{row.name}</span>
+                <span className="cd-val">{Math.abs(row.days)}{row.days < 0 ? '天前' : '天'}</span>
+                {row.progress !== null && <span className="cd-bar"><i style={{ width: `${Math.round(row.progress * 100)}%` }} /></span>}
               </div>
             ))}
           </div>
         )}
       </div>
-      {mascot !== '无' && (
-        <div className="cd-mascot">
-          {mascot === '' ? panda() : <span className="cd-emoji">{mascot}</span>}
+      {/* 多模式轮播指示点：让人知道这张卡在几种读数之间切换 */}
+      {rotating && (
+        <div className="cd-dots">
+          {modes.map((m) => <i key={m} className={m === mode ? 'on' : ''} />)}
         </div>
       )}
     </div>
@@ -185,22 +168,28 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
   const c = cfg(item)
   switch (item.t) {
     case 'weather': {
-      /* 专属配置：城市 / 温度单位（摄氏 · 华氏）/ 是否显示温度区间 */
+      /* 专属配置：温度单位（摄氏 · 华氏）/ 是否显示温度区间；
+         城市名优先用真实定位反查到的地名，未定位时提示允许定位 */
       const toF = str(c['unit'], '摄氏 °C') === '华氏 °F'
       const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
-      const temp = weather !== null ? `${conv(weather.currentTemp)}°${toF ? 'F' : 'C'}` : '20°C'
+      const temp = weather !== null ? `${conv(weather.currentTemp)}°${toF ? 'F' : 'C'}` : '--°'
       const dayRange = (i: number): string => weather !== null
         ? `${conv(weather.daily[i]?.min ?? 0)}°/${conv(weather.daily[i]?.max ?? 0)}°`
-        : i === 0 ? '18°/24°' : '17°/23°'
+        : '--/--'
       const range = dayRange(0)
+      const place = weather !== null ? weather.place : ''
       const desc = weather !== null
         ? `${weatherText(weather.currentCode)}${bool(c['showRange']) ? ` ${range}` : ''}`
-        : `多云转小雨${bool(c['showRange']) ? ` ${range}` : ''} 空气优`
+        : `待定位${bool(c['showRange']) ? ` ${range}` : ''}`
       return (
         <div className="w-weather" style={{ position: 'absolute', inset: 0 }}>
           <div className="wx-temp">{temp}</div>
           <div className="wx-mid">
-            <div className="wx-city">{str(c['city'], '北京')}</div>
+            <div className="wx-city">
+              {weather === null
+                ? <span className="wx-locate" data-act="weather-locate">允许定位</span>
+                : place !== '' ? place : '当前位置'}
+            </div>
             <div className="wx-desc">{desc}</div>
             {/* 宽卡扩展信息行：装得下时才显示（窄卡由 @container 隐去） */}
             <div className="wx-next">明日 {dayRange(1)}</div>
@@ -222,19 +211,59 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
         </div>
       )
     }
-    case 'cal':
+    case 'cal': {
+      /* 日历卡：左侧阳历大字 + 右侧农历 / 节日 / 宜忌 / 当日日程。
+         农历、节气、干支、宜忌都由 core/lunar 按真实历法算出（不再占位）。 */
+      const y = now.getFullYear()
+      const mo = now.getMonth() + 1
+      const d = now.getDate()
+      const lunar = solarToLunar(y, mo, d)
+      const fests = festivalsOf(y, mo, d)
+      const almanac = almanacOf(y, mo, d)
+      const events = normScheduleEvents(c['events'])
+      const today = dayKey(y, mo, d)
+      const todayEvents = eventsOn(events, today)
+      const doneCount = todayEvents.filter((e) => e.done).length
       return (
         <div className="w-cal" style={{ position: 'absolute', inset: 0 }}>
           <div className="cal-bar">
-            <div className="cal-day">{now.getDate()}</div>
+            <div className="cal-day">{d}</div>
             <div className="cal-wd">周{'日一二三四五六'[now.getDay()]}</div>
+            {bool(c['showMonth']) && <div className="cal-mon">{mo}月</div>}
           </div>
           <div className="cal-body">
-            {bool(c['showMonth']) && <div className="cal-month">{`${now.getFullYear()}年${now.getMonth() + 1}月`}</div>}
-            {bool(c['showLunar']) && <div className="cal-lunar">八月十五 · 宜出行</div>}
+            <div className="cal-lunar">
+              {lunar.monthCn}{lunar.dayCn}
+              {bool(c['showLunar']) && <span className="cal-gz"> · {lunar.ganZhiYear}{lunar.zodiac}年</span>}
+            </div>
+            {bool(c['showLunar']) && fests.length > 0 && (
+              <div className="cal-fest">{fests.join(' · ')}</div>
+            )}
+            {bool(c['showLunar']) && (
+              <div className="cal-yiji">
+                <span className="cal-yi">宜 {almanac.good.slice(0, 3).join(' ')}</span>
+                <span className="cal-ji">忌 {almanac.bad.slice(0, 3).join(' ')}</span>
+              </div>
+            )}
+            {bool(c['showSchedule']) && (
+              todayEvents.length === 0
+                ? <div className="cal-empty">今日暂无日程</div>
+                : (
+                  <div className="cal-events">
+                    {todayEvents.slice(0, 2).map((e, i) => (
+                      <div className={`cal-ev${e.done ? ' done' : ''}`} key={`${i}-${e.text}`}>
+                        <i className="cal-ev-dot" />{e.text}
+                      </div>
+                    ))}
+                    {todayEvents.length > 2 && <div className="cal-empty">还有 {todayEvents.length - 2} 项</div>}
+                    {doneCount > 0 && <div className="cal-empty">{doneCount}/{todayEvents.length} 已完成</div>}
+                  </div>
+                )
+            )}
           </div>
         </div>
       )
+    }
     case 'fav':
       return (
         <div className="w-fav" style={{ position: 'absolute', inset: 0 }}>

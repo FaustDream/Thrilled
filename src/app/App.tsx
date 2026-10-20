@@ -591,6 +591,11 @@ export const App = () => {
           }
           break
         }
+        /* 天气卡上的「允许定位」：重新请求定位权限并按真实坐标取天气 */
+        case 'weather-locate': {
+          void st.loadWeather(true)
+          break
+        }
         case 'engine-open': {
           setHistoryOpen(false)
           /* 引擎图标点击行为可在设置里改为「切换下一个引擎」（对只用一两个引擎的人更快） */

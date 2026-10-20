@@ -11,7 +11,7 @@ import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../sha
 import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
-import { getWeather, type WeatherData } from '../core/weather'
+import { getWeather, type GeoStatus, type WeatherData } from '../core/weather'
 import { pushHistory } from '../core/utils'
 import { initStorage, kvGetRaw, kvSetRaw, loadBackupDoc, loadDoc, saveBackupDoc, saveDoc } from '../core/storage'
 import { markActiveWallpaper } from '../core/wallpaper'
@@ -85,6 +85,8 @@ interface AppState {
   skins: SkinPack[]
   history: string[]
   weather: WeatherData | null
+  /** 天气定位状态：ok = 已定位；denied / unavailable = 需要用户允许定位 */
+  geoStatus: GeoStatus
   /** 上次备份时间 */
   backupTime: string | null
   /** 编辑中的卡片（弹窗 / 悬浮操作共用） */
@@ -177,7 +179,11 @@ interface AppState {
   restoreDefault: (opts?: { keepIcons?: boolean; sample?: boolean }) => void
   /** 恢复更新前自动备份的文档（没有备份返回 false） */
   restoreBackup: () => boolean
-  loadWeather: () => Promise<void>
+  /**
+   * 刷新天气：默认按设置里的定位方式（真实定位 / 手选城市）取数据。
+   * force = true 时跳过缓存并重新请求定位权限（用户点「允许定位」后走这里）。
+   */
+  loadWeather: (force?: boolean) => Promise<void>
   markBackedUp: () => void
   resetParts: (parts: { layout: boolean; skins: boolean; wallpaper: boolean }) => void
   addHistory: (term: string) => void
@@ -363,6 +369,7 @@ export const useApp = create<AppState>()((set, get) => ({
   skins: cloneSkins(BUILTIN_SKINS),
   history: [],
   weather: null,
+  geoStatus: 'unavailable',
   backupTime: null,
   itemId: null,
   drawer: null,
@@ -775,9 +782,11 @@ export const useApp = create<AppState>()((set, get) => ({
     return true
   },
 
-  loadWeather: async () => {
-    const data = await getWeather()
-    set({ weather: data })
+  loadWeather: async (force = false) => {
+    /* 定位方式以设置为准：手选城市优先，否则走真实定位 */
+    const data = await getWeather(get().settings.weatherCity)
+    set({ weather: data, geoStatus: data === null ? 'denied' : 'ok' })
+    if (force && data === null) set({ toast: '未获得定位权限：请在浏览器允许定位，或在天气卡配置里手选城市' })
   },
 
   markBackedUp: () => set({ backupTime: new Date().toLocaleString('zh-CN'), toast: '备份成功' }),
