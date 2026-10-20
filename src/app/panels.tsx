@@ -92,17 +92,52 @@ const InfoDot = ({ text }: { text: string }) => {
   )
 }
 
-const SliderRow = ({ l, info, min, max, value, display, onInput }: {
-  l: string; info?: string; min: number; max: number; value: number; display: string; onInput: (v: number) => void
-}) => (
-  <div className="slider-row">
-    <div className="sl-head">
-      <span className="sl-label">{l}{info !== undefined && <InfoDot text={info} />}</span>
-      <span>{display}</span>
+/**
+ * 数值行（原滑杆）：直接填数字，比拖滑杆更准确。
+ *
+ * - 标签在左、输入框在右，单位跟在输入框后（如「px」「%」「个」「条」）；
+ * - 输入过程中允许临时为空 / 越界（否则删到一半就被弹回，没法改），**失焦或回车时**钳到 [min, max] 并落值；
+ * - 步长默认 1，小数可选（模糊度这类允许 0.1 档）；
+ * - 按上下方向键按步长增减，键盘可直接微调。
+ */
+const NumberRow = ({ l, info, min, max, value, unit, step = 1, onInput }: {
+  l: string; info?: string; min: number; max: number; value: number
+  /** 单位后缀（如 px / % / 个 / 条）；空串表示纯数字 */
+  unit?: string; step?: number; onInput: (v: number) => void
+}) => {
+  /* 输入中的原始文本：'' 表示被清空；null 表示未在编辑（显示外部值） */
+  const [draft, setDraft] = useState<string | null>(null)
+  const shown = draft ?? String(value)
+  const clamp = (n: number): number => Math.min(max, Math.max(min, n))
+  const commit = (): void => {
+    const raw = draft
+    setDraft(null)
+    if (raw === null) return
+    const n = Number(raw.trim().replace(/,/g, '.'))
+    if (raw.trim() === '' || !Number.isFinite(n)) return
+    const v = clamp(step < 1 ? Math.round(n / step) * step : Math.round(n))
+    onInput(Number(v.toFixed(step < 1 ? 2 : 0)))
+  }
+  return (
+    <div className="num-row">
+      <div className="nr-main">
+        <span className="nr-label">{l}{info !== undefined && <InfoDot text={info} />}</span>
+        <div className="nr-field">
+          <input className="nr-input" type="number" inputMode="decimal"
+            min={min} max={max} step={step} value={shown}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { commit(); (e.currentTarget as HTMLInputElement).blur() }
+              if (e.key === 'Escape') setDraft(null)
+            }} />
+          {unit !== undefined && unit !== '' && <span className="nr-unit">{unit}</span>}
+        </div>
+      </div>
+      <div className="nr-range">{min} – {max}</div>
     </div>
-    <input type="range" min={min} max={max} value={value} onChange={(e) => onInput(Number(e.target.value))} />
-  </div>
-)
+  )
+}
 
 /* ---------- 网址导航数据（原创分类命名，04 §6 等价实现；与右键菜单共用，见 brands.ts） ---------- */
 
@@ -1038,45 +1073,41 @@ const PersonalPanel = () => {
         <SwitchRow l="隐藏搜索框" on={s.hideSearch} onToggle={() => toggle('hideSearch')} />
       </SecCard>
       <SecCard t="全局效果" info="一次调好整页观感：下面三项会同时写入所有控件，之后再按控件单独微调。">
-        <SliderRow l="全局透明度" info="0% 完全不透明、100% 完全透明；会与各控件自己的透明度叠加" min={20} max={100}
-          value={Math.round(s.gAlpha * 100)} display={`${Math.round(s.gAlpha * 100)}%`}
+        <NumberRow l="全局透明度" info="0% 完全不透明、100% 完全透明；会与各控件自己的透明度叠加" min={20} max={100}
+          value={Math.round(s.gAlpha * 100)} unit="%"
           onInput={(v) => setSetting('gAlpha', v / 100)} />
-        <div style={{ height: 10 }} />
-        <SliderRow l="全局玻璃度" info="卡片 / 图标容器 / Dock / 搜索框 / 面板 / 菜单的玻璃底色一起调" min={0} max={100}
-          value={globalGlass} display={`${globalGlass}%`} onInput={(v) => applyGlobalGlass(v / 100)} />
-        <div style={{ height: 10 }} />
-        <SliderRow l="全局模糊度" info="六处毛玻璃半径一起调，0px 即整体关闭毛玻璃" min={0} max={BLUR_MAX_PX}
-          value={globalBlur} display={`${globalBlur}px`} onInput={(v) => applyGlobalBlur(v)} />
+        <NumberRow l="全局玻璃度" info="卡片 / 图标容器 / Dock / 搜索框 / 面板 / 菜单的玻璃底色一起调" min={0} max={100}
+          value={globalGlass} unit="%" onInput={(v) => applyGlobalGlass(v / 100)} />
+        <NumberRow l="全局模糊度" info="六处毛玻璃半径一起调，0px 即整体关闭毛玻璃" min={0} max={BLUR_MAX_PX} step={0.1}
+          value={globalBlur} unit="px" onInput={(v) => applyGlobalBlur(v)} />
       </SecCard>
-      <SecCard t="透明度" info="按控件单独设置。玻璃底色类保留可读下限（滑到底仍可辨认），元素显隐类可直接调到消失。">
+      <SecCard t="透明度" info="按控件单独设置。玻璃底色类保留可读下限（调到最低仍可辨认），元素显隐类可直接调到消失。">
         {GLASS.map(([k, l, d]) => (
-          <SliderRow key={k} l={l} info={d} min={0} max={100} value={Math.round(s.glass[k] * 100)}
-            display={`${Math.round(s.glass[k] * 100)}%`} onInput={(v) => setGlass(k, v / 100)} />
+          <NumberRow key={k} l={l} info={d} min={0} max={100} value={Math.round(s.glass[k] * 100)}
+            unit="%" onInput={(v) => setGlass(k, v / 100)} />
         ))}
       </SecCard>
       <SecCard t="毛玻璃模糊" info="按控件单独设置：与透明度分开，只降透明度不调模糊，背景会「透但看不清」、观感发脏。0px 即关闭该处毛玻璃。">
         {BLUR.map(([k, l, d]) => (
-          <SliderRow key={k} l={l} info={d} min={0} max={BLUR_MAX_PX} value={s.blur[k]}
-            display={`${s.blur[k]}px`} onInput={(v) => setBlur(k, v)} />
+          <NumberRow key={k} l={l} info={d} min={0} max={BLUR_MAX_PX} value={s.blur[k]} step={0.1}
+            unit="px" onInput={(v) => setBlur(k, v)} />
         ))}
       </SecCard>
       <SecCard t="壁纸与文字" info="自动对比按壁纸每处的明暗自适应：图标墨色、字形背后的软底衬与外圈描边，以及壁纸明暗交错时补的遮罩。关掉后下面两项完全按设定的值走。">
         <SwitchRow l="自动对比" d="亮壁纸自动用深墨、暗壁纸用浅墨；对比不够时垫一层软底衬 + 外圈描边，壁纸明暗交错时再补一点遮罩"
           on={s.autoContrast} onToggle={() => setSetting('autoContrast', !s.autoContrast)} />
-        <div style={{ height: 10 }} />
-        <SliderRow l={s.autoContrast ? '壁纸遮罩（基准值）' : '壁纸遮罩'} min={0} max={100} value={Math.round(s.cover * 100)} display={`${Math.round(s.cover * 100)}%`}
+        <NumberRow l={s.autoContrast ? '壁纸遮罩（基准值）' : '壁纸遮罩'} min={0} max={100} value={Math.round(s.cover * 100)} unit="%"
           onInput={(v) => setSetting('cover', v / 100)} />
         <div style={{ height: 12 }} />
         <ColorField label="字体颜色" value={s.fontColor === '' ? '#1f2937' : s.fontColor} auto="跟随主题"
           onAuto={() => setSetting('fontColor', '')} onChange={(hex) => setSetting('fontColor', hex)} />
       </SecCard>
       <SecCard t="搜索与 Dock" info="搜索框与 Dock 的外观参数——与背景效果同域，故并入本页签。">
-        <SliderRow l="搜索框宽度" min={400} max={1400} value={s.searchWidth} display={`${s.searchWidth}px`} onInput={(v) => setSetting('searchWidth', v)} />
-        <SliderRow l="搜索框圆角" min={0} max={25} value={s.searchRadius} display={`${s.searchRadius}px`} onInput={(v) => setSetting('searchRadius', v)} />
+        <NumberRow l="搜索框宽度" min={400} max={1400} value={s.searchWidth} unit="px" onInput={(v) => setSetting('searchWidth', v)} />
+        <NumberRow l="搜索框圆角" min={0} max={25} value={s.searchRadius} unit="px" onInput={(v) => setSetting('searchRadius', v)} />
         <SwitchRow l="沉浸式搜索框" d="与壁纸融合的透明样式" on={s.immersive} onToggle={() => toggle('immersive')} />
         <SwitchRow l="极简模式用线框样式" on={s.simpleSearch} onToggle={() => toggle('simpleSearch')} />
-        <div style={{ height: 10 }} />
-        <SliderRow l="Dock 应用数量" min={4} max={8} value={s.dockCount} display={`${s.dockCount} 个`} onInput={(v) => setSetting('dockCount', v)} />
+        <NumberRow l="Dock 应用数量" min={4} max={8} value={s.dockCount} unit="个" onInput={(v) => setSetting('dockCount', v)} />
         <SwitchRow l="圆形 Dock 图标" on={s.dockIcon === 'circle'}
           onToggle={() => setSetting('dockIcon', s.dockIcon === 'circle' ? 'rect' : 'circle')} />
         <SwitchRow l="Dock 快捷栏" d="隐藏底部快捷栏" on={s.mascot} onToggle={() => toggle('mascot')} />
@@ -1275,13 +1306,13 @@ const SettingSearchTab = () => {
         <SwitchRow l="保留搜索内容" d="搜索后不清空输入框内容" on={s.searchKeep} onToggle={() => toggle('searchKeep')} />
         <SwitchRow l="隐藏搜索按钮" d="仅通过 Enter 键触发搜索" on={s.hideBtn} onToggle={() => toggle('hideBtn')} />
         <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')} />
-        <SliderRow l="历史保留条数" min={4} max={20} value={s.historyLimit} display={`${s.historyLimit} 条`}
+        <NumberRow l="历史保留条数" min={4} max={20} value={s.historyLimit} unit="条"
           onInput={setHistoryLimit} />
         <SwitchRow l="显示单条删除" d="历史面板每行右侧的 × 按钮" on={s.historyItemDel} onToggle={() => toggle('historyItemDel')} />
         <SwitchRow l="搜索后自动失焦" d="回车或点放大镜搜索后收起光标与历史面板" on={s.blurAfterSearch} onToggle={() => toggle('blurAfterSearch')} />
-        <SliderRow l="字号" min={13} max={20} value={s.searchFontSize} display={`${s.searchFontSize}px`}
+        <NumberRow l="字号" min={13} max={20} value={s.searchFontSize} unit="px"
           info="只作用于标准模式；极简模式在此值上再加 1px" onInput={(v) => setSetting('searchFontSize', v)} />
-        <SliderRow l="距顶距离" min={20} max={44} value={s.searchTop} display={`${s.searchTop}px`}
+        <NumberRow l="距顶距离" min={20} max={44} value={s.searchTop} unit="px"
           info="只能往上收：网格下方到 Dock 已排满，往下移会让卡片压到 Dock" onInput={(v) => setSetting('searchTop', v)} />
         <div className="f-row"><label className="f-label">回车时打开方式</label>
           <div className="cats">
@@ -1445,6 +1476,12 @@ interface LogVersion {
 
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
+  {
+    v: '4.95', d: '2026-10-20', items: [
+      { k: '优化', s: '所有滑杆改为填数字，数值更准', d: '背景效果的全局效果、透明度、毛玻璃、壁纸遮罩，以及搜索与 Dock、卡片配置里的字号 / 缩放 / 圆角，全部改成右侧窄输入框 + 单位后缀；键盘直接输入，不用再拖滑杆对齐刻度。' },
+      { k: '优化', s: '数字输入带范围校验与范围提示', d: '每个输入框下方标出可取区间（如 20 – 100、0 – 20px）；输入过程中允许临时留空或越界，失焦或回车时自动钳到区间内，留空则恢复原值。模糊度支持 0.1 的精度。' },
+    ],
+  },
   {
     v: '4.94', d: '2026-10-20', items: [
       { k: '优化', s: '日历月历不再出现 -1、-2、-3 这类日期', d: '上月与下月的补齐格改用真实日期（9 月末显示 30 号、下月开头显示 1 号），每格还能带出自己的农历与节日。' },
@@ -1699,8 +1736,8 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
     if (f.t === 'range') {
       const cur = typeof v === 'number' && Number.isFinite(v) ? v : (f.min ?? 0)
       return (
-        <SliderRow key={f.k} l={f.l} min={f.min ?? 0} max={f.max ?? 100} value={cur}
-          display={`${cur}${f.unit ?? ''}`} onInput={(x) => updateConfig(item.id, { [f.k]: x })} />
+        <NumberRow key={f.k} l={f.l} min={f.min ?? 0} max={f.max ?? 100} value={cur}
+          unit={f.unit ?? ''} onInput={(x) => updateConfig(item.id, { [f.k]: x })} />
       )
     }
     if (f.t === 'color') {
@@ -1753,20 +1790,20 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
       <SwitchRow l="透明度跟随全局" d="关掉后可单独设置这张卡片的透明度" on={typeof c['opacity'] !== 'number'}
         onToggle={() => updateConfig(item.id, { opacity: typeof c['opacity'] === 'number' ? null : 0.6 })} />
       {typeof c['opacity'] === 'number' && (
-        <SliderRow l="单独透明度" min={0} max={100} value={Math.round(Number(c['opacity']) * 100)}
-          display={`${Math.round(Number(c['opacity']) * 100)}%`}
+        <NumberRow l="单独透明度" min={0} max={100} value={Math.round(Number(c['opacity']) * 100)}
+          unit="%"
           onInput={(v) => updateConfig(item.id, { opacity: v / 100 })} />
       )}
       {/* 样式：所有组件共用的一套实例级排版变量（不写入定义表，故专属项仍守 ≤3 的上限） */}
       <div className="sec-title">样式</div>
-      <SliderRow l="字号缩放" min={60} max={160} value={Math.round(num(c['fontScale'], 1) * 100)}
-        display={`${Math.round(num(c['fontScale'], 1) * 100)}%`}
+      <NumberRow l="字号缩放" min={60} max={160} value={Math.round(num(c['fontScale'], 1) * 100)}
+        unit="%"
         onInput={(v) => updateConfig(item.id, { fontScale: v / 100 })} />
-      <SliderRow l="图标缩放" min={60} max={160} value={Math.round(num(c['iconScale'], 1) * 100)}
-        display={`${Math.round(num(c['iconScale'], 1) * 100)}%`}
+      <NumberRow l="图标缩放" min={60} max={160} value={Math.round(num(c['iconScale'], 1) * 100)}
+        unit="%"
         onInput={(v) => updateConfig(item.id, { iconScale: v / 100 })} />
-      <SliderRow l="卡片圆角" min={0} max={28} value={Math.round(num(c['radius'], 16))}
-        display={`${Math.round(num(c['radius'], 16))}px`}
+      <NumberRow l="卡片圆角" min={0} max={28} value={Math.round(num(c['radius'], 16))}
+        unit="px"
         onInput={(v) => updateConfig(item.id, { radius: v })} />
       <ColorField label="文字颜色" auto="跟随风格"
         value={/^#[0-9a-f]{6}$/i.test(String(c['textColor'] ?? '')) ? String(c['textColor']) : '#1f2937'}
@@ -2093,7 +2130,9 @@ const CountdownEntries = ({ item }: { item: GridItem }) => {
       if (j !== i) return x
       if (x.lunar !== undefined) {
         /* 关掉农历：把当前算出的日期留在 date 上，条目变成普通阳历倒数日 */
-        const { lunar: _drop, ...rest } = x
+        const rest: CountdownEntry = { name: x.name, date: x.date }
+        if (x.note !== undefined) rest.note = x.note
+        if (x.created !== undefined) rest.created = x.created
         return rest
       }
       const l = { month: 1, day: 1 }

@@ -487,12 +487,21 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .hint-text{font-size:12px;color:var(--panel-sub);line-height:1.7;margin:10px 0 0}
 .empty-box{text-align:center;padding:32px 10px;color:var(--panel-sub);font-size:13px}
 .empty-box svg{width:44px;height:44px;margin-bottom:12px;opacity:.65}
-/* 滑块行压到 50px（原「作用于」常驻行已收进名称右侧的 ⓘ 气泡） */
-.slider-row{margin-bottom:6px}
-.sl-head{display:flex;justify-content:space-between;align-items:center;font-size:12px;
-  color:var(--panel-sub);margin-bottom:6px;gap:8px}
-.sl-label{display:inline-flex;align-items:center;gap:5px;min-width:0}
-input[type='range']{width:100%;accent-color:var(--accent)}
+/* 数值行：左侧标签（可带 ⓘ），右侧窄数字输入 + 单位后缀，下面一行小字提示取值范围。
+   用单行布局换掉原来的滑杆：填数字比拖滑杆更准确，且高度从 ~50px 降到 ~52px 以内不至于更占地方 */
+.num-row{padding:6px 0;border-bottom:1px solid var(--line)}
+.sec-card>.num-row:last-child{border-bottom:none}
+.nr-main{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:13px}
+.nr-label{display:inline-flex;align-items:center;gap:5px;min-width:0;color:var(--panel-text)}
+.nr-field{display:flex;align-items:center;gap:5px;flex:0 0 auto}
+.nr-input{width:74px;height:30px;border-radius:8px;border:1px solid var(--line);
+  background:transparent;color:var(--panel-text);padding:0 8px;font-size:13px;outline:none;
+  font-family:inherit;text-align:right;font-variant-numeric:tabular-nums;
+  -moz-appearance:textfield;appearance:textfield}
+.nr-input::-webkit-outer-spin-button,.nr-input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.nr-input:focus{border-color:var(--accent)}
+.nr-unit{font-size:11px;color:var(--panel-sub);min-width:14px}
+.nr-range{font-size:10px;color:var(--panel-sub);opacity:.72;text-align:right;margin-top:2px}
 .color-ball{display:flex;gap:8px;flex-wrap:wrap}
 .cb{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent}
 .cb.on{border-color:var(--accent)}
