@@ -539,17 +539,34 @@ input[type='range']{width:100%;accent-color:var(--accent)}
 .dt-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;
   border:0.5px solid var(--line);border-radius:10px;font-size:12px;color:var(--panel-sub)}
 .dt-day span:first-child{color:var(--panel-text,var(--card-text));font-weight:600}
+.dt-cal-top{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.dt-cal-nav{width:24px;height:24px;border-radius:7px;border:1px solid var(--line);
+  background:transparent;color:var(--panel-text);font-size:15px;line-height:1;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.dt-cal-nav:hover{background:var(--menu-hover)}
 .dt-cal-head{font-size:14px;font-weight:600;margin-bottom:8px}
 .dt-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12px}
 .dt-cal-wd{color:var(--panel-sub);padding:4px 0}
-.dt-cal-wd.end,.dt-cal-cell.end{color:#e05a6d}
-.dt-cal-cell{padding:5px 0;border-radius:8px;position:relative}
-.dt-cal-cell.out{opacity:.28}
+.dt-cal-wd.end{color:#e05a6d}
+/* 日期格：上行公历日、下行农历日；可点选，选中态用强调色描边（今日用实心） */
+.dt-cal-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;
+  padding:4px 0;border-radius:8px;border:1px solid transparent;background:transparent;
+  color:inherit;font:inherit;cursor:pointer;position:relative;line-height:1.15}
+.dt-cal-cell:hover{background:var(--menu-hover)}
+.dt-cal-cell.out{opacity:.3}
 .dt-cal-cell.today{background:var(--accent);color:#fff;font-weight:600}
+.dt-cal-cell.today:hover{background:var(--accent)}
+.dt-cal-cell.sel:not(.today){border-color:var(--accent);color:var(--accent);font-weight:600}
+.dt-cal-cell.fest:not(.today) .dt-cal-d{text-decoration:underline dotted}
+.dt-cal-d{font-size:12px;font-weight:600}
+.dt-cal-l{font-size:9px;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 /* 有日程的日子：右下角一个小圆点（今日格子里用白点，保持对比） */
-.dt-cal-dot{position:absolute;right:5px;bottom:3px;width:4px;height:4px;border-radius:50%;
+.dt-cal-dot{position:absolute;right:4px;bottom:3px;width:4px;height:4px;border-radius:50%;
   background:var(--accent)}
 .dt-cal-cell.today .dt-cal-dot{background:#fff}
+/* 农历条目编辑：月 / 日两个小输入框 */
+.cd-edit-lunar{display:flex;align-items:center;gap:3px;flex:1.1;font-size:12px;color:var(--panel-sub)}
+.cd-num{width:48px!important;padding:4px 6px!important}
 .dt-list{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
 .dt-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:10px;cursor:pointer}
 .dt-row:hover{background:var(--line)}

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import {
-  almanacOf, dayGanZhi, festivalsOf, lunarShort, monthGanZhi, solarTermDay, solarTermOf, solarToLunar, termMonthZhi,
+  almanacOf, dayGanZhi, festivalsOf, lunarShort, lunarToSolar, monthGanZhi, nextLunarOccurrence, solarTermDay, solarTermOf, solarToLunar, termMonthZhi,
 } from '../src/core/lunar'
 
 describe('农历换算（阳历 → 农历）', () => {
@@ -111,5 +111,41 @@ describe('节日', () => {
 
   it('普通日子没有节日', () => {
     expect(festivalsOf(2026, 10, 20)).toEqual([])
+  })
+})
+
+describe('农历与阳历互转（农历生日 / 纪念日）', () => {
+  it('农历 → 阳历与反向验算一致', () => {
+    const d = lunarToSolar(2026, 6, 29)
+    expect(d).not.toBeNull()
+    expect(solarToLunar(d?.getFullYear() ?? 0, (d?.getMonth() ?? 0) + 1, d?.getDate() ?? 0))
+      .toMatchObject({ month: 6, day: 29 })
+    /* 已知：2026 年农历六月廿九 = 公历 8 月 11 日 */
+    expect([d?.getFullYear(), (d?.getMonth() ?? 0) + 1, d?.getDate()]).toEqual([2026, 8, 11])
+  })
+
+  it('正月初一 = 春节（2026-02-17）', () => {
+    const d = lunarToSolar(2026, 1, 1)
+    expect([d?.getFullYear(), (d?.getMonth() ?? 0) + 1, d?.getDate()]).toEqual([2026, 2, 17])
+  })
+
+  it('非法月 / 日返回 null', () => {
+    expect(lunarToSolar(2026, 0, 1)).toBeNull()
+    expect(lunarToSolar(2026, 13, 1)).toBeNull()
+    expect(lunarToSolar(2026, 1, 31)).toBeNull()
+    expect(lunarToSolar(1800, 1, 1)).toBeNull()
+  })
+
+  it('下次农历发生：已过则顺延到明年同一天', () => {
+    const now = new Date(2026, 9, 20) /* 2026-10-20，六月廿九已过 */
+    const next = nextLunarOccurrence(6, 29, now)
+    expect(next?.getFullYear()).toBe(2027)
+    expect(solarToLunar(next?.getFullYear() ?? 0, (next?.getMonth() ?? 0) + 1, next?.getDate() ?? 0))
+      .toMatchObject({ month: 6, day: 29 })
+    /* 还没到的日子就用今年那一次（农历十月廿九 → 公历 11 月底） */
+    const soon = nextLunarOccurrence(10, 29, now)
+    expect(soon?.getFullYear()).toBe(2026)
+    expect(solarToLunar(soon?.getFullYear() ?? 0, (soon?.getMonth() ?? 0) + 1, soon?.getDate() ?? 0))
+      .toMatchObject({ month: 10, day: 29 })
   })
 })

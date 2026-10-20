@@ -13,13 +13,15 @@ export const BACKUP_DOC_KEY = 'thrilled:v4:doc:backup' as const;
 /** 已为哪个版本留过更新前备份（同一版本只备份一次，避免每次启动重复覆盖） */
 export const BACKUP_VERSION_KEY = 'thrilled:v4:doc:backup-version' as const;
 /** 当前扩展版本（随文档落盘，用于识别版本升级并自动备份） */
-export const APP_VERSION = '4.93' as const;
+export const APP_VERSION = '4.94' as const;
 /** v3 → v4 一次性迁移标记键 */
 export const MIGRATED_KEY = 'thrilled:v4:migrated' as const;
 /** 一次性布局修正标记键（v4.1 迁移的多图标页合并，store/hydrate） */
 export const LAYOUT_MERGE_KEY = 'thrilled:v4:layout-merged' as const;
 /** 一次性引擎修正标记键（v4.1 迁移补齐了未设置的内置引擎，恢复 v3 引擎清单） */
 export const ENGINE_RESTORE_KEY = 'thrilled:v4:engine-restored' as const;
+/** 一次性补种标记键（v4.94 给已有倒计时卡补上两条农历生日） */
+export const BIRTHDAY_SEED_KEY = 'thrilled:v4:birthday-seeded' as const;
 
 /** ===== 本地目录同步（File System Access，core/file-config.ts） ===== */
 /** FileConfig IndexedDB 数据库名 */

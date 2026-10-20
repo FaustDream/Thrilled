@@ -140,6 +140,58 @@ export const solarToLunar = (y: number, m: number, d: number): LunarDate => {
 /** 农历日的中文名（1–30） */
 export const lunarDayCn = (day: number): string => DAY_CN[day - 1] ?? '初一';
 
+/** 农历月的中文名（闰月带「闰」字） */
+export const lunarMonthCn = (month: number, leap = false): string =>
+  `${leap ? '闰' : ''}${MONTH_CN[month - 1] ?? '正'}月`;
+
+/** 农历某年正月初一对应的公历日（1900 年 1 月 31 日为起点逐年的天数累加） */
+const lunarNewYear = (lunarYear: number): Date => {
+  let days = 0;
+  for (let y = 1900; y < lunarYear; y += 1) days += yearDaysOf(y);
+  const t = Date.UTC(1900, 0, 31) + days * 86400000;
+  const d = new Date(t);
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+};
+
+/**
+ * 农历 → 阳历（1900–2100）。月份越界、闰月不存在、日期超出该月天数时返回 null。
+ * 农历生日 / 纪念日按这个换算到每年那天的公历日期。
+ */
+export const lunarToSolar = (lunarYear: number, month: number, day: number, leap = false): Date | null => {
+  if (lunarYear < 1900 || lunarYear > 2100) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 30) return null;
+  /* 闰月不存在时按普通月处理，避免用户勾了闰月却得不到结果 */
+  const leapMonth = leapMonthOf(lunarYear);
+  const useLeap = leap && leapMonth === month;
+  let offset = 0;
+  for (let m = 1; m < month; m += 1) offset += monthDaysOf(lunarYear, m);
+  if (leapMonth > 0 && leapMonth < month) offset += leapDaysOf(lunarYear);
+  if (useLeap) {
+    offset += monthDaysOf(lunarYear, month);
+    if (day > leapDaysOf(lunarYear)) return null;
+  } else if (day > monthDaysOf(lunarYear, month)) {
+    return null;
+  }
+  const start = lunarNewYear(lunarYear);
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + offset + day - 1);
+};
+
+/** 农历循环日的下次发生：今年（或今年之后第一个存在的农历日）不早于今天 */
+export const nextLunarOccurrence = (
+  month: number,
+  day: number,
+  now: Date,
+  leap = false,
+): Date | null => {
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  for (let y = now.getFullYear(); y <= 2100; y += 1) {
+    const d = lunarToSolar(y, month, day, leap);
+    if (d === null) continue;
+    if (d.getTime() >= today) return d;
+  }
+  return null;
+};
+
 /* ---------- 节气 ---------- */
 
 const TERM_INFO: readonly number[] = [

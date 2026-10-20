@@ -8,6 +8,7 @@
  */
 
 import { daysUntil } from './utils';
+import { lunarDayCn, lunarMonthCn, nextLunarOccurrence } from './lunar';
 
 /** 节日定义：solar = [月, 日]（每年固定）；lunar = 公历日期对照表（农历/节气类节日） */
 export interface FestivalDef {
@@ -30,27 +31,75 @@ export const FESTIVALS: readonly FestivalDef[] = [
 /** 倒数条目（用户自定义，存在卡片 config.entries；festival 标记来源，渲染与详情弹窗共用） */
 export interface CountdownEntry {
   name: string;
+  /** 阳历日期（YYYY-MM-DD）；农历条目用它存「下次发生」的阳历日期，便于排序与展示 */
   date: string;
   note?: string;
   /** 创建时间戳（ms）：提供后该行显示「距目标」进度条 */
   created?: number;
+  /**
+   * 农历循环日（如每年农历六月廿九的生日）：{ month, day, leap? }。
+   * 有值时 date 只作渲染缓存，实际日期每年按农历重算——不能用阳历去推。
+   */
+  lunar?: LunarAnniversary;
 }
 
-/** 倒数条目归一化：名称与合法日期必需，note/created 可选，上限 20 条防脏数据 */
-export function normCountdownEntries(v: unknown): CountdownEntry[] {
+/** 农历纪念日：每年农历 month 月 day 日 */
+export interface LunarAnniversary {
+  /** 1–12 */
+  month: number;
+  /** 1–30 */
+  day: number;
+  /** 是否闰月（该年没有这个闰月时按普通月处理） */
+  leap?: boolean;
+}
+
+/** 农历纪念日的可读名称（如「农历六月廿九」） */
+export const lunarLabel = (l: LunarAnniversary): string =>
+  `农历${lunarMonthCn(l.month, l.leap === true)}${lunarDayCn(l.day)}`;
+
+/** 农历纪念日归一化：月 1–12、日 1–30 才认 */
+export const normLunarAnniversary = (v: unknown): LunarAnniversary | undefined => {
+  if (typeof v !== 'object' || v === null) return undefined;
+  const o = v as { month?: unknown; day?: unknown; leap?: unknown };
+  const month = typeof o.month === 'number' ? Math.trunc(o.month) : 0;
+  const day = typeof o.day === 'number' ? Math.trunc(o.day) : 0;
+  if (month < 1 || month > 12 || day < 1 || day > 30) return undefined;
+  return { month, day, ...(o.leap === true ? { leap: true } : {}) };
+};
+
+/**
+ * 农历纪念日的「下次发生」阳历日期（YYYY-MM-DD）。已过则顺延到下一年的农历同日；
+ * 表外年份 / 不存在的农历日（如小月的三十）顺延到下一年，实在没有则返回 null。
+ */
+export function nextLunarDate(l: LunarAnniversary, now: Date): string | null {
+  const d = nextLunarOccurrence(l.month, l.day, now, l.leap === true);
+  if (d === null) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 倒数条目归一化：名称必需；阳历条目要求合法日期，
+ * 农历条目只要求合法的月 / 日（date 由 nextLunarDate 随时重算）。上限 20 条防脏数据。
+ */
+export function normCountdownEntries(v: unknown, now: Date = new Date()): CountdownEntry[] {
   if (!Array.isArray(v)) return [];
   const out: CountdownEntry[] = [];
   for (const raw of v) {
     if (typeof raw !== 'object' || raw === null) continue;
-    const o = raw as { name?: unknown; date?: unknown; note?: unknown; created?: unknown };
+    const o = raw as { name?: unknown; date?: unknown; note?: unknown; created?: unknown; lunar?: unknown };
     const name = typeof o.name === 'string' ? o.name.trim() : '';
-    const date = typeof o.date === 'string' ? o.date.trim() : '';
-    if (name === '' || Number.isNaN(Date.parse(date))) continue;
+    if (name === '') continue;
+    const lunar = normLunarAnniversary(o.lunar);
+    const date = lunar !== undefined
+      ? (nextLunarDate(lunar, now) ?? '')
+      : (typeof o.date === 'string' ? o.date.trim() : '');
+    if (date === '' || Number.isNaN(Date.parse(date))) continue;
     out.push({
       name,
       date,
       ...(typeof o.note === 'string' && o.note.trim() !== '' ? { note: o.note.trim() } : {}),
       ...(typeof o.created === 'number' && Number.isFinite(o.created) ? { created: o.created } : {}),
+      ...(lunar !== undefined ? { lunar } : {}),
     });
     if (out.length >= 20) break;
   }
@@ -63,6 +112,8 @@ export interface CountdownRow {
   date: string;
   days: number;
   note?: string;
+  /** 农历条目的可读名称（如「农历六月廿九」）；阳历条目没有该字段 */
+  lunarLabel?: string;
   progress: number | null;
   festival: boolean;
 }
@@ -131,19 +182,22 @@ export function festivalRows(now: Date): CountdownRow[] {
 /** 用户自定义倒数行（created 提供时给进度：自创建到目标日的已流逝比例） */
 export function userRows(entries: readonly CountdownEntry[], now: Date): CountdownRow[] {
   return entries.map((e) => {
-    const days = daysUntil(e.date, now);
+    /* 农历条目每年按农历重算日期（不能用存下来的阳历日期跨年） */
+    const date = e.lunar !== undefined ? (nextLunarDate(e.lunar, now) ?? e.date) : e.date;
+    const days = daysUntil(date, now);
     let progress: number | null = null;
     if (e.created !== undefined) {
-      const t = parseDay(e.date);
+      const t = parseDay(date);
       if (t !== null && t > e.created && now.getTime() >= e.created) {
         progress = Math.min(1, Math.max(0, (now.getTime() - e.created) / (t - e.created)));
       }
     }
     return {
       name: e.name,
-      date: e.date,
+      date,
       days: days ?? 0,
       ...(e.note !== undefined ? { note: e.note } : {}),
+      ...(e.lunar !== undefined ? { lunarLabel: lunarLabel(e.lunar) } : {}),
       progress,
       festival: false,
     };

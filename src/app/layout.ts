@@ -8,6 +8,8 @@
 import type { GridItem, LayoutDoc, ModePages, WidgetKind } from '../shared/types';
 import { WIDGET_KINDS, fromLegacyKind } from '../shared/widget-defs';
 import { COLS, MAX_PAGES, ROWS, findSlot, findSlotNear, overlaps } from '../shared/grid';
+import { nextLunarOccurrence } from '../core/lunar';
+import { normCountdownEntries } from '../core/festivals';
 
 let seq = 0
 export const uid = (): string => `i${Date.now().toString(36)}${(seq++).toString(36)}`
@@ -103,6 +105,38 @@ export const SAMPLE_PAGES: ModePages = [...PRIVACY_SEED, ...STANDARD_SEED]
 export const DEFAULT_PAGES: ModePages = [[]]
 
 export const clonePages = (pages: ModePages): ModePages => JSON.parse(JSON.stringify(pages)) as ModePages
+
+/**
+ * 给所有倒计时卡补种农历生日（纯函数，可单测）：只追加**尚未存在**的条目（按名称识别），
+ * 用户已有的条目顺序与内容一律不动；没有任何倒计时卡时返回 null（不必新建卡片）。
+ * 这是一次性补种，由 store 的 withBirthdaySeed 打标记执行一次。
+ */
+export const seedBirthdays = (pages: ModePages, today: Date): ModePages | null => {
+  const y = today.getFullYear()
+  const dateOf = (month: number, day: number): string => {
+    const d = nextLunarOccurrence(month, day, today)
+    if (d === null) return `${y + 1}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  let touched = false
+  const out = pages.map((pg) => {
+    let pageTouched = false
+    const next = pg.map((it) => {
+      if (it.t !== 'countdown') return it
+      const cur = normCountdownEntries(it.config['entries'], today)
+      const have = new Set(cur.map((e) => e.name))
+      const add = BIRTHDAY_ENTRIES
+        .filter((b) => !have.has(b.name))
+        .map((b) => ({ name: b.name, date: dateOf(b.month, b.day), lunar: { month: b.month, day: b.day } }))
+      if (add.length === 0) return it
+      pageTouched = true
+      return { ...it, config: { ...it.config, entries: [...cur, ...add] } }
+    })
+    if (pageTouched) touched = true
+    return next
+  })
+  return touched ? out : null
+}
 
 /* ---------- 布局导入归一化（坏数据丢弃；引擎校验见 shared/guards） ---------- */
 
@@ -210,6 +244,18 @@ export const REPEATABLE_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['i
  */
 export const placedKindsOf = (pages: readonly GridItem[][]): Set<WidgetKind> =>
   new Set(pages.flat().map((it) => it.t).filter((t) => !REPEATABLE_KINDS.has(t)))
+
+/* ---------- 农历生日（出厂预置的两条农历纪念日） ---------- */
+
+/**
+ * 出厂预置的两条农历生日：**只按农历月日算**，每年按真实农历换算到公历（不能用阳历日期去凑）。
+ * 阿玲的生日 = 农历六月廿九；我的生日 = 农历六月廿六。
+ * 这两条在「补种」时只追加缺失的（按名称识别），不会覆盖或挪动用户已有条目。
+ */
+export const BIRTHDAY_ENTRIES: readonly { name: string; month: number; day: number }[] = [
+  { name: '阿玲的生日', month: 6, day: 29 },
+  { name: '我的生日', month: 6, day: 26 },
+];
 
 /* ---------- 页面整理（删除图标后把后面的图标依次前移补位） ---------- */
 

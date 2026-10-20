@@ -73,7 +73,9 @@ export const IconTip = () => {
       hovered.current = el
       showTimer.current = window.setTimeout(() => {
         setTip({ name, host, anchor })
-        window.requestAnimationFrame(() => setOn(true))
+        /* 直接置 on，不再等 requestAnimationFrame：后台标签页等环境里那一帧可能永远不来，
+           气泡会卡在 opacity:0（实测可见性为 false） */
+        setOn(true)
       }, SHOW_DELAY)
     }
     const resize = (): void => {

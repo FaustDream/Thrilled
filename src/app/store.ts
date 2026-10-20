@@ -6,7 +6,7 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc } from './layout'
+import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc, seedBirthdays } from './layout'
 import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
@@ -17,7 +17,7 @@ import { initStorage, kvGetRaw, kvSetRaw, loadBackupDoc, loadDoc, saveBackupDoc,
 import { markActiveWallpaper } from '../core/wallpaper'
 import { needsUpgradeBackup } from '../core/doc-version'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
-import { APP_VERSION, BACKUP_VERSION_KEY, ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
+import { APP_VERSION, BACKUP_VERSION_KEY, BIRTHDAY_SEED_KEY, ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import { DEFAULT_SHORTCUTS } from '../shared/shortcuts'
 import { withGlobalBlur, withGlobalGlass } from '../shared/visual'
 import { isBlankStyle, styleSliceOf, withoutStyle, withoutStyleDefault } from '../shared/widget-style'
@@ -266,6 +266,17 @@ const withLayoutMerge = (doc: StoredDoc): { doc: StoredDoc; merged: boolean } =>
 /** 单飞锁：StrictMode 双挂载 / 并发调用共享同一次 hydrate，防止二次执行用陈旧缓存覆盖已合并状态 */
 let hydrating: Promise<void> | null = null
 
+/**
+ * 一次性补种两条农历生日（阿玲 6-29 / 我 6-26）：只追加缺失条目，不动用户已有内容；
+ * 标记存在存储里，升级后只跑一次——用户删掉后不会再被种回来。
+ */
+const withBirthdaySeed = (doc: StoredDoc): { doc: StoredDoc; seeded: boolean } => {
+  if (kvGetRaw(BIRTHDAY_SEED_KEY) === '1') return { doc, seeded: false }
+  kvSetRaw(BIRTHDAY_SEED_KEY, '1')
+  const pages = seedBirthdays(doc.pages, new Date())
+  return pages === null ? { doc, seeded: false } : { doc: { ...doc, pages }, seeded: true }
+}
+
 /** 一次性引擎修正：v4.1 迁移把 v3 未设置的内置引擎补进了清单——按 v3 引擎偏好裁剪回用户设置的那套 */
 const withEngineRestore = async (doc: StoredDoc): Promise<{ doc: StoredDoc; restored: boolean }> => {
   if (kvGetRaw(ENGINE_RESTORE_KEY) === '1') return { doc, restored: false }
@@ -308,10 +319,12 @@ const doHydrate = async (): Promise<void> => {
     /* 版本升级：先把旧文档整份留底，再继续载入（数据不会因为升级被动过） */
     if (backupIfUpgraded(loaded)) toasts.push('已自动备份更新前的数据')
     const { doc: mergedDoc, merged } = withLayoutMerge(loaded)
-    const { doc: fixed, restored } = await withEngineRestore(mergedDoc)
-    doc = fixed
+    const { doc: restoredDoc, restored } = await withEngineRestore(mergedDoc)
+    const { doc: seededDoc, seeded } = withBirthdaySeed(restoredDoc)
+    doc = seededDoc
     if (merged) toasts.push('已把原来的多个图标页合并为一页')
     if (restored) toasts.push('已恢复 v3 的搜索引擎设置')
+    if (seeded) toasts.push('已添加两条农历生日')
   } else {
     let migrated: MigrationResult | null = null
     try {

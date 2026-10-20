@@ -5,6 +5,10 @@
 import { describe, expect, it } from 'vitest'
 import { normModes, readoutOf, rotateMode } from '../src/core/countdown'
 import { allDoneOn, eventsOn, isDateStr, normScheduleEvents, upcomingEvents } from '../src/core/schedule'
+import { lunarLabel, nextLunarDate, normCountdownEntries, userRows } from '../src/core/festivals'
+import { BIRTHDAY_ENTRIES, seedBirthdays } from '../src/app/layout'
+import { solarToLunar } from '../src/core/lunar'
+import type { GridItem } from '../src/shared/types'
 
 const str = (v: unknown, d = ''): string => (typeof v === 'string' ? v : d)
 const NOW = new Date(2026, 9, 20, 12, 0, 0)
@@ -105,5 +109,71 @@ describe('日程', () => {
     expect(allDoneOn(events, '2026-10-20')).toBe(false)
     expect(allDoneOn(events, '2026-10-21')).toBe(false)
     expect(allDoneOn(normScheduleEvents([{ date: '2026-10-20', text: 'A', done: true }]), '2026-10-20')).toBe(true)
+  })
+})
+
+describe('农历纪念日（每年按农历月日循环）', () => {
+  const now = new Date(2026, 9, 20) /* 2026-10-20：六月廿九已过 */
+
+  it('农历条目按农历重算下一次日期，已过顺延到明年', () => {
+    const date = nextLunarDate({ month: 6, day: 29 }, now)
+    expect(date).not.toBeNull()
+    const [y, m, d] = (date ?? '').split('-').map(Number)
+    expect(solarToLunar(y ?? 0, m ?? 1, d ?? 1)).toMatchObject({ month: 6, day: 29 })
+    expect(y).toBe(2027)
+  })
+
+  it('归一化保留 lunar，并为旧式阳历条目保留 date', () => {
+    const out = normCountdownEntries([
+      { name: '阿玲的生日', lunar: { month: 6, day: 29 } },
+      { name: '普通倒数日', date: '2027-01-01' },
+      { name: '坏月', lunar: { month: 13, day: 1 } },
+    ], now)
+    expect(out).toHaveLength(2)
+    expect(out[0]?.lunar).toEqual({ month: 6, day: 29 })
+    expect(out[0]?.date).toBe('2027-08-01')
+    expect(out[1]?.lunar).toBeUndefined()
+  })
+
+  it('行的日期逐年重算，并带上农历可读名', () => {
+    const entries = normCountdownEntries([{ name: '生日', lunar: { month: 6, day: 26 } }], now)
+    const rows = userRows(entries, now)
+    expect(rows[0]?.lunarLabel).toBe('农历六月廿六')
+    expect(rows[0]?.date).toBe('2027-07-29')
+    expect(rows[0]?.days).toBeGreaterThan(0)
+  })
+
+  it('lunarLabel 带闰月前缀', () => {
+    expect(lunarLabel({ month: 2, day: 1, leap: true })).toBe('农历闰二月初一')
+  })
+})
+
+describe('seedBirthdays：给已有倒计时卡补种两条农历生日', () => {
+  const card = (id: string, config: Record<string, unknown>): GridItem =>
+    ({ id, c: 0, r: 0, w: 4, h: 4, t: 'countdown', config })
+  const now = new Date(2026, 9, 20)
+
+  it('两条预置生日按农历月日写入，且不重复补种', () => {
+    const pages = [[card('a', {})]]
+    const out = seedBirthdays(pages, now)
+    expect(out).not.toBeNull()
+    const entries = normCountdownEntries(out?.[0]?.[0]?.config['entries'], now)
+    expect(entries.map((e) => e.name)).toEqual(BIRTHDAY_ENTRIES.map((b) => b.name))
+    expect(entries[0]?.lunar).toEqual({ month: 6, day: 29 })
+    expect(entries[1]?.lunar).toEqual({ month: 6, day: 26 })
+    /* 再跑一次：已有同名条目，不再追加 */
+    expect(seedBirthdays(out ?? [], now)).toBeNull()
+  })
+
+  it('用户已有条目原样保留、顺序不变，只补缺的两条', () => {
+    const existing = [{ name: '我的生日', lunar: { month: 6, day: 26 } }, { name: '项目上线', date: '2027-03-01' }]
+    const out = seedBirthdays([[card('a', { entries: existing })]], now)
+    const entries = normCountdownEntries(out?.[0]?.[0]?.config['entries'], now)
+    expect(entries.map((e) => e.name)).toEqual(['我的生日', '项目上线', '阿玲的生日'])
+  })
+
+  it('没有倒计时卡 / 空布局时不新建卡片', () => {
+    expect(seedBirthdays([[]], now)).toBeNull()
+    expect(seedBirthdays([[{ id: 'x', c: 0, r: 0, w: 4, h: 2, t: 'clock', config: {} }]], now)).toBeNull()
   })
 })

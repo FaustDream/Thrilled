@@ -85,20 +85,35 @@ export function clamp(value: number, min: number, max: number): number {
 
 /* ===== 日历 ===== */
 
+/** 月历单元格：day 为该格的真实日期数，year / month（1 起）是它实际所属的年月 */
+export interface MonthCell {
+  day: number;
+  /** 是否属于当月（false = 上月末尾 / 下月开头，降透明度显示） */
+  inMonth: boolean;
+  year: number;
+  /** 1–12 */
+  month: number;
+}
+
 /**
  * 生成某月日历网格（纯函数，日历详情弹窗用）：始终 6 行 × 7 列，周日起头。
- * 非本月日期照常返回日期数（渲染层降透明度显示），cell.day 为 1 起的日期。
+ * 补齐格用 Date 自动回退 / 前推，**给出真实日期**（9 月末是 30 号，不能出现 0 / -1 / -2），
+ * 调用方据此算出每格自己的农历、节日与宜忌。
  */
-export function monthCells(year: number, month: number): { day: number; inMonth: boolean }[][] {
+export function monthCells(year: number, month: number): MonthCell[][] {
   const first = new Date(year, month, 1);
   const lead = first.getDay(); // 1 号是周几（0 = 周日）
-  const daysIn = new Date(year, month + 1, 0).getDate();
-  const cells: { day: number; inMonth: boolean }[] = [];
+  const cells: MonthCell[] = [];
   for (let i = 0; i < 42; i++) {
-    const dayNum = i - lead + 1;
-    cells.push({ day: dayNum, inMonth: dayNum >= 1 && dayNum <= daysIn });
+    const d = new Date(year, month, i - lead + 1);
+    cells.push({
+      day: d.getDate(),
+      inMonth: d.getMonth() === month && d.getFullYear() === year,
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+    });
   }
-  const rows: { day: number; inMonth: boolean }[][] = [];
+  const rows: MonthCell[][] = [];
   for (let r = 0; r < 6; r++) rows.push(cells.slice(r * 7, r * 7 + 7));
   return rows;
 }

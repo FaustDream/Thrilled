@@ -73,6 +73,24 @@ describe('monthCells：月历网格（日历详情弹窗）', () => {
     expect(days[30]?.day).toBe(31)
     expect(rows.flat()).toHaveLength(42)
   })
+
+  it('补齐格给出真实日期，不出现 0 / 负数（上月末尾 27–30）', () => {
+    const cells = monthCells(2026, 9).flat() // 2026-10-01 周四
+    expect(cells.slice(0, 4).map((c) => c.day)).toEqual([27, 28, 29, 30])
+    expect(cells.slice(0, 4).every((c) => c.month === 9 && c.year === 2026)).toBe(true)
+    expect(cells.every((c) => c.day >= 1 && c.day <= 31)).toBe(true)
+    const tail = cells.slice(-3)
+    expect(tail.every((c) => c.day >= 1 && c.month === 11)).toBe(true)
+  })
+
+  it('跨年补齐：1 月前置格属上一年 12 月，12 月尾格属下一年 1 月', () => {
+    const jan = monthCells(2026, 0).flat()
+    expect(jan[0]?.year).toBe(2025)
+    expect(jan[0]?.month).toBe(12)
+    const dec = monthCells(2026, 11).flat()
+    expect(dec[41]?.year).toBe(2027)
+    expect(dec[41]?.month).toBe(1)
+  })
 })
 
 describe('normTodoItems：待办条目归一化（待办详情弹窗）', () => {

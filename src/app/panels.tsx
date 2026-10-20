@@ -20,9 +20,9 @@ import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
-import { daysUntil, getGreetingByHour, hostOf, monthCells, normalizeSiteUrl, normTodoItems, type TodoEntry } from '../core/utils'
+import { daysUntil, getGreetingByHour, hostOf, monthCells, normalizeSiteUrl, normTodoItems, type MonthCell, type TodoEntry } from '../core/utils'
 import { dockAppsWith, dockFailText, type DockAddResult } from '../shared/dock'
-import { normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
+import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { searchCities, weatherText, type GeoHit } from '../core/weather'
 import { dayKey, normScheduleEvents, upcomingEvents, type ScheduleEvent } from '../core/schedule'
 import { almanacOf, festivalsOf, solarToLunar } from '../core/lunar'
@@ -1446,6 +1446,14 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '4.94', d: '2026-10-20', items: [
+      { k: '优化', s: '日历月历不再出现 -1、-2、-3 这类日期', d: '上月与下月的补齐格改用真实日期（9 月末显示 30 号、下月开头显示 1 号），每格还能带出自己的农历与节日。' },
+      { k: '新增', s: '日历详情可点选任意一天，月历每格显示农历', d: '点某一天即切换当天详情，上 / 下月补齐格点中会顺手翻到那个月；每格下行是农历日（初一显示月名），有节日的日子带下划线、有日程的带圆点，鼠标悬停显示「日期 + 农历 + 节日」气泡。' },
+      { k: '新增', s: '农历纪念日：每年按农历月日循环倒数', d: '倒数日条目可切换为「农历」类型，只填农历月与日（如六月廿九），日期每年按真实农历重算，不会用阳历日期跨年；出厂已预置阿玲的生日（农历六月廿九）与我的生日（农历六月廿六）。' },
+      { k: '优化', s: '图标与日期的悬浮提示在部分环境不显示', d: '提示气泡不再等下一帧才显示，后台标签页等拿不到动画帧的环境里也能正常浮出。' },
+    ],
+  },
+  {
     v: '4.93', d: '2026-10-20', items: [
       { k: '优化', s: '天气按真实定位取数，定位不到时提示允许定位', d: '原来定位失败会静默用北京，看起来像「定位不对」。现在会询问是否允许定位，允许后按真实坐标取天气并反查出所在区市（如「拱墅区 · 杭州市」）；拒绝时卡片上直接给出「允许定位」入口，也可以点开详情搜索城市手选。' },
       { k: '调整', s: '倒计时内容居中，去掉吉祥物图形', d: '主读数与倒数列表整体居中排布；熊猫吉祥物（含自定义 emoji）功能移除，卡面留给计时本身。' },
@@ -1899,34 +1907,96 @@ const CityPicker = () => {
 }
 
 /** 日历日程：按月列出当天可写的日程 / 待办（存卡片 config.events，可勾选与删除） */
-const CalendarSchedule = ({ item }: { item: GridItem }) => {
+/**
+ * 日历详情：月历 + 选中日期的日程。
+ *
+ * 月历每格显示公历日 + 农历日（初一显示月名），有日程的日子带点、有节日的日子高亮；
+ * 点任意一格即选中（含上 / 下月的补齐格，点中会顺手翻到那个月），头顶显示该日的农历、干支、节日与宜忌。
+ * 日程仍按「选中日期」写入，勾选 / 删除即时保存。
+ */
+const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
   const updateConfig = useApp((s) => s.updateConfig)
   const c = cfg(item)
   const [events, setEvents] = useState<ScheduleEvent[]>(() => normScheduleEvents(c['events']))
   const [draft, setDraft] = useState('')
-  const [date, setDate] = useState(() => dayKey(new Date().getFullYear(), new Date().getMonth() + 1, new Date().getDate()))
+  const [view, setView] = useState(() => ({ y: now.getFullYear(), m: now.getMonth() }))
+  const [sel, setSel] = useState(() => dayKey(now.getFullYear(), now.getMonth() + 1, now.getDate()))
   const commit = (next: ScheduleEvent[]): void => {
     setEvents(next)
     updateConfig(item.id, { events: next })
   }
-  const dayList = events.filter((e) => e.date === date)
-  const upcoming = upcomingEvents(events, new Date(), 6)
+  const todayKey = dayKey(now.getFullYear(), now.getMonth() + 1, now.getDate())
+  const rows = monthCells(view.y, view.m)
+  const selDate = ((): { y: number; m: number; d: number } => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sel)
+    return m === null
+      ? { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() }
+      : { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) }
+  })()
+  const selLunar = solarToLunar(selDate.y, selDate.m, selDate.d)
+  const selFests = festivalsOf(selDate.y, selDate.m, selDate.d)
+  const selAlmanac = almanacOf(selDate.y, selDate.m, selDate.d)
+  const dayList = events.filter((e) => e.date === sel)
+  const upcoming = upcomingEvents(events, now, 6)
+  const shiftMonth = (delta: number): void => {
+    const d = new Date(view.y, view.m + delta, 1)
+    setView({ y: d.getFullYear(), m: d.getMonth() })
+  }
+  const pick = (cell: MonthCell): void => {
+    setSel(dayKey(cell.year, cell.month, cell.day))
+    if (!cell.inMonth) setView({ y: cell.year, m: cell.month - 1 })
+  }
   return (
     <>
-      <div className="dt-todo-head">当天日程 · {date}</div>
-      <div className="f-row">
-        <input className="f-input" style={{ flex: 1 }} type="date" value={date}
-          onChange={(e) => setDate(e.target.value)} />
+      <div className="dt-cal-top">
+        <button className="dt-cal-nav" onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button>
+        <span className="dt-cal-head" style={{ margin: 0 }}>{`${view.y} 年 ${view.m + 1} 月`}</span>
+        <button className="dt-cal-nav" onClick={() => shiftMonth(1)} aria-label="下个月">›</button>
+        <button className="btn sm ghost" style={{ marginLeft: 'auto' }}
+          onClick={() => { setView({ y: now.getFullYear(), m: now.getMonth() }); setSel(todayKey) }}>今天</button>
       </div>
+      <div className="dt-cal">
+        {'日一二三四五六'.split('').map((w, i) => (
+          <div key={w} className={`dt-cal-wd${i === 0 || i === 6 ? ' end' : ''}`}>{w}</div>
+        ))}
+        {rows.flat().map((cell) => {
+          const key = dayKey(cell.year, cell.month, cell.day)
+          const hasEv = events.some((e) => e.date === key)
+          const fest = festivalsOf(cell.year, cell.month, cell.day)
+          const lunar = solarToLunar(cell.year, cell.month, cell.day)
+          const tip = `${cell.year}-${String(cell.month).padStart(2, '0')}-${String(cell.day).padStart(2, '0')} ${lunar.monthCn}${lunar.dayCn}${fest.length > 0 ? ` · ${fest.join(' · ')}` : ''}`
+          return (
+            <button type="button" key={key}
+              data-tip={tip}
+              className={`dt-cal-cell${cell.inMonth ? '' : ' out'}${key === sel ? ' sel' : ''}${key === todayKey ? ' today' : ''}${fest.length > 0 ? ' fest' : ''}`}
+              onClick={() => pick(cell)}>
+              <span className="dt-cal-d">{cell.day}</span>
+              <span className="dt-cal-l">{lunar.day === 1 ? lunar.monthCn : lunar.dayCn}</span>
+              {hasEv && <i className="dt-cal-dot" />}
+            </button>
+          )
+        })}
+      </div>
+      <div className="dt-now" style={{ gap: 10, flexWrap: 'wrap' }}>
+        <span className="dt-host">{selDate.y}-{p2(selDate.m)}-{p2(selDate.d)}</span>
+        <span className="dt-host">农历 {selLunar.monthCn}{selLunar.dayCn}</span>
+        <span className="dt-host">{selLunar.ganZhiYear}{selLunar.zodiac}年 · {selAlmanac.officer}日</span>
+      </div>
+      {selFests.length > 0 && <Hint>当日节日：{selFests.join(' · ')}</Hint>}
+      <Hint>
+        宜 {selAlmanac.good.join('、')}；忌 {selAlmanac.bad.join('、')}
+        （{selAlmanac.ganZhiDay}日 · {selAlmanac.ganZhiMonth}月）。
+      </Hint>
+      <div className="dt-todo-head" style={{ marginTop: 10 }}>当天日程 · {sel}</div>
       <div className="f-row">
         <input className="f-input" placeholder="写下日程或待办，回车添加" value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             const txt = draft.trim()
-            if (e.key === 'Enter' && txt !== '') { commit([...events, { date, text: txt, done: false }]); setDraft('') }
+            if (e.key === 'Enter' && txt !== '') { commit([...events, { date: sel, text: txt, done: false }]); setDraft('') }
           }} />
       </div>
-      <div className="dt-list" style={{ maxHeight: 180 }}>
+      <div className="dt-list" style={{ maxHeight: 160 }}>
         {dayList.length === 0 && <Hint>这一天还没有日程。</Hint>}
         {dayList.map((e, i) => (
           <div className="dt-todo-row" key={`${i}-${e.text}`}>
@@ -1940,9 +2010,14 @@ const CalendarSchedule = ({ item }: { item: GridItem }) => {
       {upcoming.length > 0 && (
         <>
           <div className="dt-todo-head" style={{ marginTop: 10 }}>接下来</div>
-          <div className="dt-list" style={{ maxHeight: 140 }}>
+          <div className="dt-list" style={{ maxHeight: 130 }}>
             {upcoming.map((e, i) => (
-              <div className="dt-todo-row" key={`u${i}-${e.text}`}>
+              <div className="dt-todo-row" key={`u${i}-${e.text}`} style={{ cursor: 'pointer' }}
+                onClick={() => {
+                  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(e.date)
+                  if (m !== null) setView({ y: Number(m[1]), m: Number(m[2]) - 1 })
+                  setSel(e.date)
+                }}>
                 <span className="dt-tag">{e.date.slice(5)}</span>
                 <span className="dt-todo-txt">{e.text}</span>
               </div>
@@ -1950,7 +2025,7 @@ const CalendarSchedule = ({ item }: { item: GridItem }) => {
           </div>
         </>
       )}
-      <Hint>日程存在这张日历卡的配置里，可勾选完成、按日期查看；点击卡上的日历也能打开这里。</Hint>
+      <Hint>点月历上任意一天即可切换；日程存在这张日历卡的配置里，可勾选完成、按日期查看。</Hint>
     </>
   )
 }
@@ -2000,29 +2075,66 @@ const CountdownEntries = ({ item }: { item: GridItem }) => {
     setItems(next)
     updateConfig(item.id, { entries: next })
   }
-  const rows = upcomingRows(items, bool(c['showFestivals']), new Date())
+  const now = new Date()
+  const rows = upcomingRows(items, bool(c['showFestivals']), now)
+  /* 农历条目编辑：只改月 / 日，date 由农历重算（不能拿阳历日期去凑） */
+  const setLunar = (i: number, field: 'month' | 'day', raw: string): void => {
+    const v = Number(raw)
+    if (!Number.isFinite(v)) return
+    commit(items.map((x, j) => {
+      if (j !== i) return x
+      const cur = x.lunar ?? { month: 1, day: 1 }
+      const next = { ...cur, [field]: Math.max(1, Math.min(field === 'month' ? 12 : 30, Math.trunc(v))) }
+      return { ...x, lunar: next, date: nextLunarDate(next, now) ?? x.date }
+    }))
+  }
+  const toggleLunar = (i: number): void => {
+    commit(items.map((x, j) => {
+      if (j !== i) return x
+      if (x.lunar !== undefined) {
+        /* 关掉农历：把当前算出的日期留在 date 上，条目变成普通阳历倒数日 */
+        const { lunar: _drop, ...rest } = x
+        return rest
+      }
+      const l = { month: 1, day: 1 }
+      return { ...x, lunar: l, date: nextLunarDate(l, now) ?? x.date }
+    }))
+  }
   return (
     <>
       <div className="dt-todo-head">倒数列表 · 按剩余天数升序（节日自动取下一次发生，跨年自动计算）</div>
       <div className="dt-list" style={{ maxHeight: 200 }}>
         {rows.map((r, i) => (
           <div className="dt-todo-row" key={String(i)}>
-            <span className={`dt-tag${r.festival ? ' fest' : ''}`}>{r.festival ? '节日' : '自定义'}</span>
+            <span className={`dt-tag${r.festival ? ' fest' : ''}`}>{r.festival ? '节日' : r.lunarLabel !== undefined ? '农历' : '自定义'}</span>
             <span className="dt-todo-txt" title={r.note ?? ''}>{r.name}{r.note !== undefined ? ` · ${r.note}` : ''}</span>
-            <span className="dt-host">{r.date} · {Math.abs(r.days)} 天{r.days < 0 ? '前' : ''}</span>
+            <span className="dt-host">
+              {r.lunarLabel !== undefined ? `${r.lunarLabel} · ` : ''}{r.date} · {Math.abs(r.days)} 天{r.days < 0 ? '前' : ''}
+            </span>
           </div>
         ))}
         {rows.length === 0 && <Hint>列表为空：打开「显示节日倒数」，或在下面添加自定义倒数日。</Hint>}
       </div>
-      <div className="dt-todo-head" style={{ marginTop: 10 }}>自定义倒数日</div>
+      <div className="dt-todo-head" style={{ marginTop: 10 }}>自定义倒数日 / 农历纪念日</div>
       {items.map((e, i) => (
         <div className="cd-edit" key={i}>
           <input className="f-input" style={{ flex: 1.2 }} value={e.name} placeholder="名称"
             onChange={(ev) => commit(items.map((x, j) => (j === i ? { ...x, name: ev.target.value } : x)))} />
-          <input className="f-input" style={{ flex: 1.1 }} value={e.date} placeholder="2027-01-01"
-            onChange={(ev) => commit(items.map((x, j) => (j === i ? { ...x, date: ev.target.value } : x)))} />
-          <input className="f-input" style={{ flex: 1.4 }} value={e.note ?? ''} placeholder="备注（可选）"
-            onChange={(ev) => commit(items.map((x, j) => (j === i ? { ...x, note: ev.target.value } : x)))} />
+          {e.lunar === undefined ? (
+            <input className="f-input" style={{ flex: 1.1 }} value={e.date} placeholder="2027-01-01"
+              onChange={(ev) => commit(items.map((x, j) => (j === i ? { ...x, date: ev.target.value } : x)))} />
+          ) : (
+            <span className="cd-edit-lunar">
+              农历
+              <input className="f-input cd-num" type="number" min={1} max={12} value={e.lunar.month}
+                onChange={(ev) => setLunar(i, 'month', ev.target.value)} />月
+              <input className="f-input cd-num" type="number" min={1} max={30} value={e.lunar.day}
+                onChange={(ev) => setLunar(i, 'day', ev.target.value)} />日
+            </span>
+          )}
+          <button className="btn sm ghost" onClick={() => toggleLunar(i)}>
+            {e.lunar === undefined ? '改农历' : '改阳历'}
+          </button>
           <div className="dt-row-del" title="删除" onClick={() => commit(items.filter((_, j) => j !== i))}>{Icon.trash()}</div>
         </div>
       ))}
@@ -2031,8 +2143,19 @@ const CountdownEntries = ({ item }: { item: GridItem }) => {
           onClick={() => commit([...items, { name: '新的倒数日', date: `${new Date().getFullYear() + 1}-01-01`, created: Date.now() }])}>
           + 添加倒数日
         </button>
+        <button className="btn sm ghost"
+          onClick={() => {
+            const l = { month: 1, day: 1 }
+            commit([...items, { name: '新的农历纪念日', date: nextLunarDate(l, now) ?? '2027-01-01', lunar: l }])
+          }}>
+          + 添加农历纪念日
+        </button>
       </div>
-      <Hint>节日库：元旦 / 春节 / 清明 / 劳动节 / 端午 / 中秋 / 国庆——阳历节日永久有效，农历节日对照表覆盖 2026–2030 年（表外年份自动隐藏该行）；自定义条目按创建时间自动给出进度条；名称 / 日期 / 备注改完即存。</Hint>
+      <Hint>
+        节日库：元旦 / 春节 / 清明 / 劳动节 / 端午 / 中秋 / 国庆（农历节日按真实农历换算）；
+        自定义条目可按「农历月日」循环（如每年农历六月廿九的生日），跨年自动取下一年的同一农历日；
+        名称 / 日期 / 备注改完即存。
+      </Hint>
     </>
   )
 }
@@ -2121,42 +2244,11 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
       break
     }
     case 'cal': {
-      const y = now.getFullYear()
-      const mo = now.getMonth()
-      const rows = monthCells(y, mo)
-      const today = now.getDate()
-      const lunar = solarToLunar(y, mo + 1, today)
-      const fests = festivalsOf(y, mo + 1, today)
-      const almanac = almanacOf(y, mo + 1, today)
-      const events = normScheduleEvents(c['events'])
+      /* 月历与「选中日期的农历 / 宜忌 / 日程」都在 CalendarSchedule 里：
+         点任意一天切换，翻月会同步换网格，避免这里与它各算一套月历 */
       body = (
         <>
-          <div className="dt-cal-head">{`${y} 年 ${mo + 1} 月`}</div>
-          <div className="dt-cal">
-            {'日一二三四五六'.split('').map((w, i) => (
-              <div key={w} className={`dt-cal-wd${i === 0 || i === 6 ? ' end' : ''}`}>{w}</div>
-            ))}
-            {rows.flat().map((cell, i) => {
-              const hasEv = cell.inMonth && events.some((e) => e.date === dayKey(y, mo + 1, cell.day))
-              return (
-                <div key={i}
-                  className={`dt-cal-cell${cell.inMonth ? '' : ' out'}${i % 7 === 0 || i % 7 === 6 ? ' end' : ''}${cell.inMonth && cell.day === today ? ' today' : ''}`}>
-                  {cell.day}
-                  {hasEv && <i className="dt-cal-dot" />}
-                </div>
-              )
-            })}
-          </div>
-          <div className="dt-now" style={{ gap: 10 }}>
-            <span className="dt-host">农历 {lunar.monthCn}{lunar.dayCn}</span>
-            <span className="dt-host">{lunar.ganZhiYear}{lunar.zodiac}年</span>
-            <span className="dt-host">{almanac.officer}日</span>
-          </div>
-          {fests.length > 0 && <Hint>今日节日：{fests.join(' · ')}</Hint>}
-          <Hint>
-            宜 {almanac.good.join('、')}；忌 {almanac.bad.join('、')}（{almanac.ganZhiDay}日 · {almanac.ganZhiMonth}月）。
-          </Hint>
-          <CalendarSchedule item={item} />
+          <CalendarSchedule item={item} now={now} />
         </>
       )
       break
