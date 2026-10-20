@@ -58,7 +58,12 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   backdrop-filter:blur(var(--blur-panel));
   border-radius:12px;box-shadow:0 18px 48px rgba(8,15,30,.24);padding:6px 0;display:none;z-index:var(--z-pop)}
 .search-panel.show{display:block}
-.sp-head{font-size:13px;font-weight:700;color:var(--panel-text);padding:8px 16px 4px}
+.sp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+  font-size:13px;font-weight:700;color:var(--panel-text);padding:8px 16px 4px}
+/* 「清除全部」：小号纯文字，靠右对齐；悬停才转强调色，不抢历史条目的视觉重量 */
+.sp-clear{font-size:12px;font-weight:400;color:var(--panel-sub);cursor:pointer;
+  padding:2px 4px;border-radius:6px;transition:color .14s,background .14s}
+.sp-clear:hover{color:var(--accent);background:var(--menu-hover)}
 .sp-row{display:flex;align-items:center;gap:10px;height:40px;padding:0 16px;font-size:14px;
   color:var(--panel-text);cursor:pointer;white-space:nowrap;overflow:hidden}
 .sp-row:hover{background:var(--menu-hover)}

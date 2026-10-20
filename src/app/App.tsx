@@ -616,6 +616,8 @@ export const App = () => {
         /* 历史条目等价于「填好词再回车」，按回车的方式打开 */
         case 'sp-pick': if (inputRef.current) inputRef.current.value = v; runSearch('enter'); setHistoryOpen(false); break
         case 'sp-del': useApp.setState({ history: st.history.filter((h) => h !== v) }); break
+        /* 面板右上角「清除全部」：一次清空搜索历史（面板随之收起，输入框保留已输入内容） */
+        case 'sp-clear': st.clearHistory(); setHistoryOpen(false); break
         case 'set-mode': st.setMode(v as 'minimal' | 'standard'); break
         case 'go-page': st.goPage(Number(v)); break
         /* 空白处右键菜单：新建站点弹窗（落点由菜单项预选）、添加组件、打开三个面板 */
@@ -1164,7 +1166,10 @@ export const App = () => {
       </div>
       {settings.searchHistory && historyOpen && history.length > 0 && (
         <div className="search-panel show" id="searchPanel" onMouseLeave={() => setHistoryOpen(false)}>
-          <div className="sp-head">搜索历史</div>
+          <div className="sp-head">
+            <span>搜索历史</span>
+            <span className="sp-clear" data-act="sp-clear">清除全部</span>
+          </div>
           {history.map((h) => (
             <div className="sp-row" key={h} data-act="sp-pick" data-v={h}>
               {Icon.search()}<span className="t">{h}</span>
