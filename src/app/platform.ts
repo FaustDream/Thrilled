@@ -27,7 +27,7 @@ export const reloadDocIntoStore = (): void => {
   })
 }
 
-/** 注入 core 层 UI 回调并启动本地目录同步 */
+/** 注入 core 层 UI 回调并绑定本地目录同步的界面事件（不发起磁盘读取） */
 export const initPlatform = (): void => {
   setFileConfigUI({
     showConfirm: (message) => Promise.resolve(window.confirm(message)),
@@ -36,5 +36,14 @@ export const initPlatform = (): void => {
   })
   setOnLocalDataRestored(reloadDocIntoStore)
   initFileConfig()
+}
+
+/**
+ * 启动本地目录快照恢复。
+ *
+ * 要读磁盘、校验目录权限，耗时可达 1–2 秒，故不放在首屏之前：界面先按本地配置渲染，
+ * 这一步在后台跑；快照确实更新时才写回并刷新界面（旧快照会被 restoreAllData 挡掉）。
+ */
+export const startFileConfigRestore = (): void => {
   void restoreFileConfigOnStartup()
 }

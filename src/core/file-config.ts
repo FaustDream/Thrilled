@@ -27,7 +27,7 @@ import {
 } from '../shared/constants';
 import { collectSnapshot, restoreSnapshot } from './export';
 import { isSnapshotOlder } from './doc-version';
-import { kvGetRaw, kvRemove, kvSetRaw, loadDoc, onStorageChange, saveDoc } from './storage';
+import { kvGetRaw, kvRemove, kvSetRaw, initStorage, loadDoc, onStorageChange, saveDoc } from './storage';
 
 /** 确认弹窗选项（对应原 dialogs.ConfirmOptions） */
 export interface ConfirmOptions {
@@ -404,8 +404,9 @@ async function restoreAllData(data: Record<string, unknown>): Promise<void> {
     warn(MODULE, '同步目录中的界面文档无法解析，已忽略');
     return;
   }
-  /* 新旧保护：扩展升级后本地文档可能比目录快照新（快照是上次运行写的）。
-     快照更旧时只把当前数据写回目录，不用它覆盖内存与存储。 */
+  /* 后台恢复与首屏载入并行：先等存储就绪，否则 loadDoc 读到空缓存，
+     「快照比本机旧」的判断会失效，旧快照可能覆盖刚写入的数据。 */
+  await initStorage();
   const current = loadDoc();
   if (current !== null && isSnapshotOlder(doc, current)) {
     info(MODULE, '目录快照早于本机数据，改为把本机数据写回目录');

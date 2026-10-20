@@ -6,7 +6,7 @@
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useApp, skinTokensOf, markWelcomed, hydrate, type CtxState, type DrawerKey, type NewSiteTarget } from './store'
+import { useApp, skinTokensOf, markWelcomed, type CtxState, type DrawerKey, type NewSiteTarget } from './store'
 import { CELL, COLS, GRID_LEFT, GRID_TOP, PAGE_W, ROWS, SNAP_ALIGN_PX, STAGE_W, insetOf, itemBox, nearOnAxis, snapAxis } from '../shared/grid'
 import type { AxisSnap } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
@@ -18,6 +18,7 @@ import { ContextMenu } from './menus'
 import { IconTip } from './tip'
 import { Drawer, Modal } from './panels'
 import { Icon } from './icons'
+import { writeBootBg } from './boot-theme'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
 import { getWallpaper, type BgData } from '../core/wallpaper'
@@ -423,14 +424,11 @@ export const App = () => {
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
 
-  /* ---------- 启动：持久化恢复 + 天气 + 首次引导标记 ---------- */
+  /* ---------- 启动：天气 + 首次引导标记（配置已在挂载前载入） ---------- */
   useEffect(() => {
-    void (async () => {
-      await hydrate()
-      void useApp.getState().loadWeather()
-      /* 首次安装不弹欢迎 / 风格弹窗：空白页上直接给出添加入口，用户自己开始 */
-      if (!useApp.getState().welcomed) markWelcomed()
-    })()
+    void useApp.getState().loadWeather()
+    /* 首次安装不弹欢迎 / 风格弹窗：空白页上直接给出添加入口，用户自己开始 */
+    if (!useApp.getState().welcomed) markWelcomed()
   }, [])
 
   /* ---------- 主题令牌 → CSS 变量（皮肤 / 透明度 / 玻璃质感 / 壁纸 / 搜索框） ---------- */
@@ -461,7 +459,11 @@ export const App = () => {
     rt.setProperty('--search-width', `${settings.searchWidth}px`)
     rt.setProperty('--search-radius', `${settings.searchRadius}px`)
     rt.setProperty('--clock-color', settings.clockColor)
-    document.body.style.background = tokens['--mask-color'] ?? '#10151b'
+    const maskColor = tokens['--mask-color'] ?? '#10151b'
+    document.body.style.background = maskColor
+    document.documentElement.style.background = maskColor
+    /* 记下底色：下次打开新标签页时，配置读出来之前先用它铺底，避免先闪默认浅色 */
+    writeBootBg(maskColor)
   }, [skins, settings, toneGrid])
 
   /* ---------- 壁纸：自定义引用（IndexedDB）优先，否则内置渐变 ---------- */

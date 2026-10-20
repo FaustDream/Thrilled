@@ -16,7 +16,6 @@ import { pushHistory } from '../core/utils'
 import { initStorage, kvGetRaw, kvSetRaw, loadBackupDoc, loadDoc, saveBackupDoc, saveDoc } from '../core/storage'
 import { markActiveWallpaper } from '../core/wallpaper'
 import { needsUpgradeBackup } from '../core/doc-version'
-import { restoreFileConfigOnStartup } from '../core/file-config'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
 import { APP_VERSION, BACKUP_VERSION_KEY, ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import { DEFAULT_SHORTCUTS } from '../shared/shortcuts'
@@ -292,13 +291,10 @@ export const hydrate = (): Promise<void> => {
 
 const doHydrate = async (): Promise<void> => {
   await initStorage()
-  /* 本地目录快照恢复可能写回更新的文档：先等它结束再读，避免启动载入用旧文档覆盖它。
-     目录未配置 / 无权限时该调用很快返回，不影响首屏。 */
-  try {
-    await restoreFileConfigOnStartup()
-  } catch {
-    /* 目录同步不可用不影响本地数据 */
-  }
+  /* 本地目录快照的恢复要读磁盘、校验目录权限，耗时可达 1–2 秒——不能挡在首屏前面，
+     否则用户会先看到默认外观、再被换成自己的配置。这里只读本地文档并立刻渲染，
+     目录快照由 platform 在挂载之后后台恢复（restoreAllData 会先等存储就绪并比较写入时间，
+     旧快照不会覆盖新数据），恢复后通过 onLocalDataRestored 再刷新界面。 */
   const loaded = loadDoc()
   const toasts: string[] = []
   let doc: StoredDoc
