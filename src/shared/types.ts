@@ -265,8 +265,8 @@ export interface AppSettings {
   wallpaperRef: string | null;
   /** 壁纸自适应裁剪焦点（按视口宽高比自动算出，保证主体不被居中裁掉） */
   wallFocus: WallFocus;
-  /** 外部壁纸来源清单（用户自主添加；系统不内置任何壁纸资源） */
-  wallSources: WallpaperSource[];
+  /** 当前选中的内置壁纸来源（来源清单随代码内置，不落库） */
+  wallSource: WallSourceKind;
   /** 自定义快捷键（动作 id → 规范组合键，见 shared/shortcuts；空串 = 未设置） */
   shortcuts: Record<string, string>;
   /** 按组件类型的默认样式（新放置的实例继承；键为 WidgetKind，值为 shared/widget-style 的样式项） */
@@ -313,16 +313,15 @@ export interface WidgetStyle {
 /** 搜索触发的打开方式覆盖：inherit = 跟随设置里的全局打开方式 */
 export type SearchOpenOverride = 'inherit' | OpenMode;
 
-/** 外部壁纸来源（协议适配器 + 用户可改的 API 基址） */
+/** 壁纸来源协议（内置适配器，站点固定） */
+export type WallSourceKind = 'wallhaven' | 'picsum' | 'bing' | 'wg061129' | 'zhefeng';
+
+/** 内置壁纸来源：协议 + 固定基址；由 core/wallsource 统一定义，用户不增删改 */
 export interface WallpaperSource {
-  id: string;
-  /** 协议适配器（同构 API 可换镜像基址） */
-  kind: 'wallhaven' | 'picsum' | 'bing' | 'wg061129' | 'zhefeng';
+  kind: WallSourceKind;
   name: string;
   /** API 基址（如 https://wallhaven.cc/api/v1） */
   apiBase: string;
-  /** 启用状态：禁用的来源不在浏览面板显示 */
-  enabled: boolean;
 }
 
 /** 本地持久化文档（chrome.storage 单键整存整取；快照式备份复用同一形状，01 §5.1）

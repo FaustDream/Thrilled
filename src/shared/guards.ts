@@ -15,7 +15,7 @@ import { normalizeShortcuts } from './shortcuts';
 import { isBlankStyle, normStyle } from './widget-style';
 import { WIDGET_KINDS, fromLegacyKind, sizeAllowed } from './widget-defs';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
-import type { AppSettings, CityPick, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallpaperSource, WidgetKind, WidgetSize, WidgetStyle } from './types';
+import type { AppSettings, CityPick, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallSourceKind, WidgetKind, WidgetSize, WidgetStyle } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -136,22 +136,11 @@ const normDockApp = (v: unknown): DockApp | null => {
   return name === '' ? null : { name, url };
 };
 
-/** 外部壁纸来源归一化：kind 只认适配器协议，基址必须是 http(s) URL */
-const normWallSource = (v: unknown): WallpaperSource | null => {
-  if (typeof v !== 'object' || v === null) return null;
-  const o = v as Record<string, unknown>;
-  const kind = o['kind'];
-  const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
-  const apiBase = typeof o['apiBase'] === 'string' ? o['apiBase'].trim().replace(/\/+$/, '') : '';
-  if ((kind !== 'wallhaven' && kind !== 'picsum' && kind !== 'bing' && kind !== 'wg061129' && kind !== 'zhefeng') || name === '' || !/^https?:\/\//.test(apiBase)) return null;
-  return {
-    id: typeof o['id'] === 'string' && o['id'] !== '' ? o['id'] : `ws${Date.now().toString(36)}`,
-    kind,
-    name,
-    apiBase,
-    enabled: o['enabled'] === undefined ? true : o['enabled'] === true,
-  };
-};
+/** 壁纸来源协议白名单（内置来源只有这五种，旧数据里的其它值一律回退出厂） */
+const WALL_SOURCE_KINDS: readonly WallSourceKind[] = ['wallhaven', 'picsum', 'bing', 'wg061129', 'zhefeng'];
+
+const isWallSourceKind = (v: unknown): v is WallSourceKind =>
+  typeof v === 'string' && (WALL_SOURCE_KINDS as readonly string[]).includes(v);
 
 /** 按出厂默认的键集合归一化一组数值记录（缺项 / 坏值回退默认，限幅到 [min,max]；新增键无需改动此处） */
 const numRecord = <T extends string>(raw: unknown, def: Record<T, number>, min: number, max: number): Record<T, number> => {
@@ -237,9 +226,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
         ratio: numish(fo['ratio'], d.wallFocus.ratio, 0, 100),
       };
     })(),
-    wallSources: Array.isArray(o['wallSources'])
-      ? (o['wallSources'] as unknown[]).map(normWallSource).filter((x): x is WallpaperSource => x !== null)
-      : [...d.wallSources],
+    wallSource: isWallSourceKind(o['wallSource']) ? o['wallSource'] : d.wallSource,
     shortcuts: normalizeShortcuts(o['shortcuts']),
     styleDefaults: normStyleDefaults(o['styleDefaults']),
     sizeDefaults: normSizeDefaults(o['sizeDefaults']),

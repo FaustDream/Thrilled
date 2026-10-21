@@ -12,6 +12,7 @@ import {
 } from '../core/file-config'
 import { loadDoc } from '../core/storage'
 import { useApp } from './store'
+import { askConfirm } from './dialog'
 
 /** 文档从存储重新载入 store（本地目录快照恢复后调用；启动路径静默，提示由手动操作自带） */
 export const reloadDocIntoStore = (): void => {
@@ -30,7 +31,8 @@ export const reloadDocIntoStore = (): void => {
 /** 注入 core 层 UI 回调并绑定本地目录同步的界面事件（不发起磁盘读取） */
 export const initPlatform = (): void => {
   setFileConfigUI({
-    showConfirm: (message) => Promise.resolve(window.confirm(message)),
+    /* 本地目录相关的确认也走应用内对话框（与其它危险操作同一套外观） */
+    showConfirm: (message) => askConfirm({ title: '确认操作', message, confirmText: '继续' }),
     showToast: (message) => useApp.getState().showToast(message),
     createModal: () => () => {},
   })

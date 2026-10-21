@@ -17,6 +17,7 @@ import { siteUrlOf } from './brands'
 import { ContextMenu } from './menus'
 import { IconTip } from './tip'
 import { Drawer, Modal } from './panels'
+import { DialogHost, askInput } from './dialog'
 import { Icon } from './icons'
 import { writeBootBg } from './boot-theme'
 import { setSkinRuntime } from './skin-runtime'
@@ -92,12 +93,15 @@ const dockMenuAct = (name: string, v: string): boolean => {
     st.setSetting('dockApps', apps.map((a, i) => (i === idx ? { ...a, ...patch } : a)))
   }
   if (name === 'dock-rename') {
-    const next = window.prompt('修改名称', app?.name ?? '')?.trim() ?? ''
-    if (next !== '') { patchAt({ name: next }); st.showToast('已修改名称') }
+    void askInput({
+      title: '修改名称', label: '图标名称', value: app?.name ?? '', confirmText: '保存',
+      validate: (v) => (v === '' ? '名称不能为空' : null),
+    }).then((next) => { if (next !== null) { patchAt({ name: next }); st.showToast('已修改名称') } })
   } else if (name === 'dock-url') {
-    const next = window.prompt('修改网址（以 http(s):// 开头）', app?.url ?? '')?.trim() ?? ''
-    if (/^https?:\/\//.test(next)) { patchAt({ url: next }); st.showToast('已修改网址') }
-    else if (next !== '') st.showToast('网址需以 http(s):// 开头')
+    void askInput({
+      title: '修改网址', label: '网址', value: app?.url ?? '', placeholder: 'https://', confirmText: '保存',
+      validate: (v) => (/^https?:\/\//.test(v) ? null : '网址需以 http(s):// 开头'),
+    }).then((next) => { if (next !== null) { patchAt({ url: next }); st.showToast('已修改网址') } })
   } else if (name === 'dock-remove') {
     st.setSetting('dockApps', apps.filter((_, i) => i !== idx))
     st.showToast('已从 Dock 移除')
@@ -1272,6 +1276,7 @@ export const App = () => {
       <IconTip />
       <Drawer />
       <Modal />
+      <DialogHost />
       <div className={`toast${toastMsg ? ' show' : ''}`}>{toastMsg}</div>
     </div>
     </>

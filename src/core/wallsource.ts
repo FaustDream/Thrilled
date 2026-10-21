@@ -1,7 +1,8 @@
 /**
- * 外部壁纸来源统一适配器（v4.4）
+ * 内置壁纸来源适配器
  *
- * 系统不内置任何壁纸资源；来源由用户在「个性化 - 壁纸来源」自主添加，支持新增 / 启用 / 禁用 / 删除 / 改基址。
+ * 来源随代码内置（五个协议各一个站点），用户在壁纸页只切换来源，不增删改：
+ * 站点地址固定，避免用户填错基址导致整源不可用。
  * 每个适配器独立实现：分类获取、列表地址、分页规则、图片字段映射；buildListUrl / parseList 为纯函数（单测覆盖）。
  *
  * 线上验证记录（2026-09-30，HTTP 状态码实测）：
@@ -20,7 +21,7 @@
  * 请求统一经 core/fetch-proxy：扩展环境由 SW 代理绕过 CORS，开发预览回退直连。
  */
 
-import type { WallpaperSource } from '../shared/types';
+import type { WallpaperSource, WallSourceKind } from '../shared/types';
 import { decodeBlob } from './wallpaper061129-codec';
 import { fetchText } from './fetch-proxy';
 
@@ -45,20 +46,24 @@ export interface WallPage {
   hasMore: boolean;
 }
 
-/** 添加来源的协议模板（一键加入，基址可后续编辑为镜像地址；可用性以实测结果标注） */
-export const WALL_SOURCE_TEMPLATES: readonly { kind: WallpaperSource['kind']; name: string; apiBase: string }[] = [
-  { kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1' },
-  { kind: 'picsum', name: 'Picsum', apiBase: 'https://picsum.photos' },
+/** 出厂来源：未知协议一律回退到它（与设置里的出厂值一致） */
+const ZHEFENG_SOURCE: WallpaperSource = { kind: 'zhefeng', name: '哲风壁纸', apiBase: 'https://haowallpaper.com/link' };
+
+/** 内置来源清单（顺序即壁纸页的切换顺序；站点固定，不支持编辑） */
+export const WALL_SOURCES: readonly WallpaperSource[] = [
+  ZHEFENG_SOURCE,
+  { kind: 'wg061129', name: 'Wallpaper Gallery', apiBase: 'https://wallpaper.061129.xyz/data' },
   { kind: 'bing', name: '必应每日', apiBase: 'https://www.bing.com' },
-  { kind: 'wg061129', name: '061129 精选', apiBase: 'https://wallpaper.061129.xyz/data' },
-  { kind: 'zhefeng', name: '哲风壁纸', apiBase: 'https://haowallpaper.com/link' },
+  { kind: 'picsum', name: 'Picsum', apiBase: 'https://picsum.photos' },
+  { kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1' },
 ];
 
-/** 实测存在无法合法解决的访问限制的来源（保留为可配置源，但明确标记为当前不可用；不做破解或伪造） */
-export const WALL_SOURCE_UNAVAILABLE: Partial<Record<WallpaperSource['kind'], string>> = {};
+/** 按协议取内置来源（未知协议回退出厂来源） */
+export const wallSourceOf = (kind: WallSourceKind): WallpaperSource =>
+  WALL_SOURCES.find((w) => w.kind === kind) ?? ZHEFENG_SOURCE;
 
 /** 来源是否支持关键词搜索（由适配器声明） */
-export const sourceSearchable = (kind: WallpaperSource['kind']): boolean =>
+export const sourceSearchable = (kind: WallSourceKind): boolean =>
   kind === 'wallhaven' || kind === 'wg061129' || kind === 'zhefeng';
 
 const PICSUM_PAGE_SIZE = 30 as const;
@@ -74,12 +79,13 @@ const itemOf = (x: unknown): Record<string, unknown> => (typeof x === 'object' &
 
 /* ================= 分类 ================= */
 
-/** 各协议的静态分类（061129 之外原样返回） */
-const staticCategories = (kind: WallpaperSource['kind']): WallCategory[] => {
+/**
+ * 静态分类：只有 wallhaven 需要写死（其 API 只接受 categories 参数，不返回分类清单）；
+ * picsum / 必应 是单一信息流，没有分类，返回空数组让界面不显示分类行。
+ */
+const staticCategories = (kind: WallSourceKind): WallCategory[] => {
   if (kind === 'wallhaven') return [{ key: 'general', label: 'General' }, { key: 'anime', label: 'Anime' }, { key: 'people', label: 'People' }];
-  if (kind === 'bing') return [{ key: 'daily', label: '每日精选' }];
-  if (kind === 'zhefeng') return [{ key: '1,3,4,7', label: '综合推荐' }, { key: '1', label: '静态壁纸' }, { key: '3', label: '动态壁纸' }];
-  return [{ key: 'all', label: '全部' }];
+  return [];
 };
 
 /** 061129 分类清单缓存（key = 数据基址） */
@@ -102,17 +108,18 @@ export const parse061129Categories = (text: string): WallCategory[] => {
   }).filter((c) => c.key !== '');
 };
 
-/** 获取来源的分类清单（保持外部网站原有分类结构；061129 从数据目录拉取并缓存） */
+/** 获取来源的分类清单：能取站方分类的取站方（061129 / 哲风），其余给静态分类或空 */
 export const fetchCategories = async (src: WallpaperSource): Promise<WallCategory[]> => {
-  const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind];
-  if (unavailable) throw new Error(`当前不可用：${unavailable}`);
-  if (src.kind !== 'wg061129') return staticCategories(src.kind);
-  const base = cleanBase(src.apiBase);
-  const cached = wgCategoryCache.get(base);
-  if (cached) return cached;
-  const cats = parse061129Categories(await fetchText(`${base}/desktop/index.json`));
-  if (cats.length > 0) wgCategoryCache.set(base, cats);
-  return cats;
+  if (src.kind === 'wg061129') {
+    const base = cleanBase(src.apiBase);
+    const cached = wgCategoryCache.get(base);
+    if (cached !== undefined) return cached;
+    const cats = parse061129Categories(await fetchText(`${base}/desktop/index.json`));
+    if (cats.length > 0) wgCategoryCache.set(base, cats);
+    return cats;
+  }
+  if (src.kind === 'zhefeng') return fetchZhefengCategories(src);
+  return staticCategories(src.kind);
 };
 
 /* ================= 列表 ================= */
@@ -225,12 +232,11 @@ const pageCache = new Map<string, { at: number; page: WallPage }>();
 export const clearWallSourceCache = (): void => {
   pageCache.clear();
   wgCategoryCache.clear();
+  zfCategoryCache.clear();
 };
 
 /** 拉取一页壁纸（分类 + 页码 + 可选搜索关键词）；命中 30 分钟内缓存时直接复用，避免反复网络请求 */
 export const fetchWallPage = async (src: WallpaperSource, cat: string, page: number, query = ''): Promise<WallPage> => {
-  const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind];
-  if (unavailable) throw new Error(`当前不可用：${unavailable}`);
   const key = `${src.kind}:${cleanBase(src.apiBase)}:${cat}:${page}:${query.trim()}`;
   const hit = pageCache.get(key);
   if (hit !== undefined && Date.now() - hit.at < PAGE_CACHE_TTL) return hit.page;
@@ -249,6 +255,10 @@ const ZF_KEY = '68zhehao2O776519' as const;
 const ZF_IV = 'aa176b7519e84710' as const;
 /** 站方上限：rows > 21 直接返回 400「壁纸分页参数不正确」；取站方 PC 端默认页大小 */
 const ZF_PAGE_SIZE = 12 as const;
+/** 「综合推荐」分类键：不带 typeId，静态 + 动态一起返回（站方 PC 端默认口径） */
+const ZF_ALL_CATEGORY = 'all' as const;
+/** 站方壁纸类型位：1 静态 / 3 动态（4、7 为站方历史位，带上与站方前端一致） */
+const ZF_WP_TYPES = '1,3,4,7' as const;
 
 /** iv 显式声明为 ArrayBuffer 承载：WebCrypto 的 BufferSource 不接受 ArrayBufferLike（SharedArrayBuffer）版视图 */
 const zfKeyIv = async (): Promise<{ key: CryptoKey; iv: Uint8Array<ArrayBuffer> }> => {
@@ -278,7 +288,13 @@ export const zfDecrypt = async (b64: string): Promise<string> => {
   return nul < 0 ? text : text.slice(0, nul);
 };
 
-/** 解析哲风列表响应（纯函数：解密后的 JSON → 壁纸页） */
+/**
+ * 解析哲风列表响应（纯函数：解密后的 JSON → 壁纸页）
+ *
+ * 清晰度取站方允许的最高档：静态壁纸用 previewFileImg（约 1100px，未登录可达的最高档）；
+ * 动态壁纸的 previewFileImg 返回 mp4，不能当壁纸，仍用 getCroppingImg 的封面帧（约 890px）。
+ * 原图需登录站方账号，未在本扩展内接入。
+ */
 export const parseZhefengList = (page: number, text: string): WallPage => {
   let body: Record<string, unknown>;
   try { body = itemOf(JSON.parse(text)); } catch { return { photos: [], page, hasMore: false }; }
@@ -288,11 +304,14 @@ export const parseZhefengList = (page: number, text: string): WallPage => {
   const base = 'https://haowallpaper.com/link';
   const photos = rows.map((x) => {
     const it = itemOf(x);
+    const fileId = String(it['fileId'] ?? '');
     const title = Array.isArray(it['labelList']) ? (it['labelList'] as unknown[]).slice(0, 3).join(' · ') : '';
+    const crop = `${base}/common/file/getCroppingImg/${fileId}`;
+    const preview = `${base}/common/file/previewFileImg/${fileId}`;
     return {
       id: String(it['wtId'] ?? ''),
-      thumb: `${base}/common/file/getCroppingImg/${String(it['fileId'] ?? '')}`,
-      full: `${base}/common/file/getCroppingImg/${String(it['fileId'] ?? '')}`,
+      thumb: crop,
+      full: Number(it['type']) === 1 ? preview : crop,
       author: '',
       title,
     };
@@ -300,16 +319,36 @@ export const parseZhefengList = (page: number, text: string): WallPage => {
   return { photos, page, hasMore: (pages > 0 ? page < pages : photos.length > 0) && page * ZF_PAGE_SIZE < (total || page * ZF_PAGE_SIZE + 1) };
 };
 
-/** 列表请求体（纯函数；字段与站方 PC 端 dataForm 一致，wpType 为壁纸类型、lbId 为标签） */
+/**
+ * 列表请求体（纯函数）
+ * 字段与站方 PC 端 dataForm 一致：wpType 为壁纸类型位，typeId 为主题分类（站方 getTypeAll 的 id），lbId 为标签。
+ */
 export const buildZhefengPayload = (cat: string, page: number, query = ''): Record<string, string | number | boolean> => ({
   page,
   sortType: 3,
   rows: ZF_PAGE_SIZE,
   isFavorites: false,
-  wpType: cat,
+  wpType: ZF_WP_TYPES,
   lbId: '',
+  ...(cat !== '' && cat !== ZF_ALL_CATEGORY ? { typeId: cat } : {}),
   ...(query.trim() !== '' ? { search: query.trim() } : {}),
 });
+
+/** 解析哲风分类清单（纯函数：getTypeAll 解密后的 JSON → 综合推荐 + 站方主题分类） */
+export const parseZhefengCategories = (text: string): WallCategory[] => {
+  let body: Record<string, unknown>;
+  try { body = itemOf(JSON.parse(text)); } catch { return []; }
+  const rows = Array.isArray(body['1']) ? (body['1'] as unknown[]) : [];
+  const types = rows.map((x) => {
+    const o = itemOf(x);
+    const id = String(o['id'] ?? '');
+    return { key: id, label: String(o['typeName'] ?? id) };
+  }).filter((c) => c.key !== '');
+  return types.length > 0 ? [{ key: ZF_ALL_CATEGORY, label: '综合推荐' }, ...types] : [];
+};
+
+/** 哲风分类缓存（key = API 基址） */
+const zfCategoryCache = new Map<string, WallCategory[]>();
 
 /** 解析 JSON 对象（坏数据返回空对象，不抛错） */
 const asObject = (text: string): Record<string, unknown> => {
@@ -331,4 +370,19 @@ const fetchZhefengPage = async (src: WallpaperSource, cat: string, page: number,
   const body = asObject(raw)['data'];
   if (typeof body !== 'string' || body === '') throw new Error('响应格式异常');
   return parseZhefengList(page, await zfDecrypt(body));
+};
+
+/** 拉取哲风分类（getTypeAll → 解密）：站方返回的分类清单，取不到就让界面隐藏分类行 */
+const fetchZhefengCategories = async (src: WallpaperSource): Promise<WallCategory[]> => {
+  const base = cleanBase(src.apiBase);
+  const cached = zfCategoryCache.get(base);
+  if (cached !== undefined) return cached;
+  const res = await fetch(`${base}/pc/wallpaper/getTypeAll`, { signal: AbortSignal.timeout(20000) });
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}${zfErrorSuffix(raw)}`);
+  const data = asObject(raw)['data'];
+  if (typeof data !== 'string' || data === '') throw new Error('响应格式异常');
+  const cats = parseZhefengCategories(await zfDecrypt(data));
+  if (cats.length > 0) zfCategoryCache.set(base, cats);
+  return cats;
 };

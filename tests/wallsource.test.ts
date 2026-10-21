@@ -3,7 +3,7 @@
  * 覆盖：列表地址构造（各协议 / 分类映射 / 分页）、响应解析（wallhaven / picsum / bing / 061129 / 坏数据）
  */
 import { describe, expect, it, vi } from 'vitest'
-import { buildListUrl, buildZhefengPayload, parse061129Categories, parse061129List, parseList, parseZhefengList, fetchCategories } from '../src/core/wallsource'
+import { buildListUrl, buildZhefengPayload, parse061129Categories, parse061129List, parseList, parseZhefengCategories, parseZhefengList, fetchCategories } from '../src/core/wallsource'
 import type { WallpaperSource } from '../src/shared/types'
 
 vi.mock('../src/core/fetch-proxy', () => ({ fetchText: vi.fn(async (url: string) => {
@@ -23,10 +23,10 @@ const encodeSample = (raw: string): string => {
   return BLOB_PREFIX + b64.split('').map((c) => encMap[c] ?? c).reverse().join('')
 }
 
-const wh: WallpaperSource = { id: 'a', kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1/', enabled: true }
-const ps: WallpaperSource = { id: 'b', kind: 'picsum', name: 'Picsum', apiBase: 'https://picsum.photos', enabled: true }
-const bg: WallpaperSource = { id: 'c', kind: 'bing', name: '必应每日', apiBase: 'https://www.bing.com', enabled: true }
-const wg: WallpaperSource = { id: 'd', kind: 'wg061129', name: '061129 精选', apiBase: 'https://wallpaper.061129.xyz/data', enabled: true }
+const wh: WallpaperSource = { kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1/' }
+const ps: WallpaperSource = { kind: 'picsum', name: 'Picsum', apiBase: 'https://picsum.photos' }
+const bg: WallpaperSource = { kind: 'bing', name: '必应每日', apiBase: 'https://www.bing.com' }
+const wg: WallpaperSource = { kind: 'wg061129', name: 'Wallpaper Gallery', apiBase: 'https://wallpaper.061129.xyz/data' }
 
 describe('buildListUrl', () => {
   it('wallhaven 分类映射为原站三位开关参数', () => {
@@ -49,14 +49,33 @@ describe('fetchCategories / parse061129Categories', () => {
   it('wallhaven 保持原站三类', async () => {
     expect((await fetchCategories(wh)).map((x) => x.label)).toEqual(['General', 'Anime', 'People'])
   })
-  it('必应为单一「每日精选」', async () => {
-    expect((await fetchCategories(bg)).map((x) => x.label)).toEqual(['每日精选'])
+  it('必应 / picsum 没有分类，返回空数组由界面隐藏分类行', async () => {
+    expect(await fetchCategories(bg)).toEqual([])
+    expect(await fetchCategories(ps)).toEqual([])
   })
   it('061129 从 index.json blob 解码原站分类', async () => {
     expect((await fetchCategories(wg)).map((x) => x.key)).toEqual(['插画', '动漫'])
   })
   it('坏数据返回空分类清单', () => {
     expect(parse061129Categories('not-json')).toEqual([])
+  })
+})
+
+describe('parseZhefengCategories', () => {
+  const text = JSON.stringify({
+    1: [{ id: 'a1', typeName: '动漫｜二次元' }, { id: 'b2', typeName: '自然｜风景' }],
+    2: [{ id: '1', typeName: '1 K' }],
+  })
+  it('取站方主题分类，并在最前面补「综合推荐」', () => {
+    expect(parseZhefengCategories(text)).toEqual([
+      { key: 'all', label: '综合推荐' },
+      { key: 'a1', label: '动漫｜二次元' },
+      { key: 'b2', label: '自然｜风景' },
+    ])
+  })
+  it('没有主题分类时返回空数组（界面隐藏分类行）', () => {
+    expect(parseZhefengCategories('{}')).toEqual([])
+    expect(parseZhefengCategories('oops')).toEqual([])
   })
 })
 
@@ -106,14 +125,18 @@ describe('parseList', () => {
 
 describe('哲风壁纸请求体', () => {
   it('页大小不超过站方上限 21（22 起返回 400 壁纸分页参数不正确）', () => {
-    expect(buildZhefengPayload('1', 1).rows).toBeLessThanOrEqual(21)
+    expect(buildZhefengPayload('all', 1).rows).toBeLessThanOrEqual(21)
   })
-  it('字段与站方 PC 端一致：分类进 wpType、标签留空、排序 3', () => {
-    expect(buildZhefengPayload('1,3,4,7', 2)).toMatchObject({ page: 2, sortType: 3, wpType: '1,3,4,7', lbId: '', isFavorites: false })
+  it('综合推荐不带 typeId；选主题分类时转成 typeId', () => {
+    expect('typeId' in buildZhefengPayload('all', 1)).toBe(false)
+    expect(buildZhefengPayload('a1b2', 2)).toMatchObject({ typeId: 'a1b2', wpType: '1,3,4,7' })
+  })
+  it('字段与站方 PC 端一致：标签留空、排序 3、非收藏', () => {
+    expect(buildZhefengPayload('all', 2)).toMatchObject({ page: 2, sortType: 3, wpType: '1,3,4,7', lbId: '', isFavorites: false })
   })
   it('搜索词去空白后写入 search，空搜索不带该字段', () => {
-    expect(buildZhefengPayload('1', 1, '  原神 ')).toMatchObject({ search: '原神' })
-    expect('search' in buildZhefengPayload('1', 1, '   ')).toBe(false)
+    expect(buildZhefengPayload('all', 1, '  原神 ')).toMatchObject({ search: '原神' })
+    expect('search' in buildZhefengPayload('all', 1, '   ')).toBe(false)
   })
 })
 
@@ -123,16 +146,20 @@ describe('parseZhefengList', () => {
     pages: 2,
     total: 24,
   })
-  it('映射 wtId / 裁剪图地址与标签标题', () => {
+  it('静态壁纸取最高清晰度预览图，缩略图仍用裁剪图，标题取前三个标签', () => {
     const page = parseZhefengList(1, text)
     expect(page.photos[0]).toEqual({
       id: 'w1',
       thumb: 'https://haowallpaper.com/link/common/file/getCroppingImg/f1',
-      full: 'https://haowallpaper.com/link/common/file/getCroppingImg/f1',
+      full: 'https://haowallpaper.com/link/common/file/previewFileImg/f1',
       author: '',
       title: '五条悟 · 咒术回战 · 特写',
     })
     expect(page.hasMore).toBe(true)
+  })
+  it('动态壁纸的预览图是 mp4，回退到封面帧', () => {
+    const dyn = JSON.stringify({ list: [{ wtId: 'w2', fileId: 'f2', type: 3, labelList: [] }], pages: 1, total: 1 })
+    expect(parseZhefengList(1, dyn).photos[0]?.full).toBe('https://haowallpaper.com/link/common/file/getCroppingImg/f2')
   })
   it('末页不再 hasMore', () => {
     expect(parseZhefengList(2, text).hasMore).toBe(false)

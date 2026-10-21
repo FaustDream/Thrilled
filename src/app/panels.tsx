@@ -5,7 +5,8 @@
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp, type DrawerKey, type NewSiteTarget } from './store'
 import { placedKindsOf } from './layout'
-import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchWallPage, sourceSearchable, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
+import { WALL_SOURCES, fetchCategories, fetchWallPage, sourceSearchable, wallSourceOf, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
+import { askConfirm, askInput } from './dialog'
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
@@ -52,10 +53,15 @@ const DrawerTabs = ({ tabs, value, onChange }: { tabs: readonly string[]; value:
   </div>
 )
 
-const SwitchRow = ({ l, d, on, onToggle }: { l: string; d?: string; on: boolean; onToggle: () => void }) => (
+const SwitchRow = ({ l, d, on, onToggle, extra }: {
+  l: string; d?: string; on: boolean; onToggle: () => void; extra?: React.ReactNode
+}) => (
   <div className="switch-row">
     <div><span>{l}</span>{d ? <span className="sr-desc">{d}</span> : null}</div>
-    <div className={`switch${on ? ' on' : ''}`} onClick={onToggle}><i /></div>
+    <div className="switch-extra">
+      {extra}
+      <div className={`switch${on ? ' on' : ''}`} onClick={onToggle}><i /></div>
+    </div>
   </div>
 )
 
@@ -403,51 +409,6 @@ const MiniSkinPreview = ({ tokens }: { tokens: Record<string, string> }) => (
   </div>
 )
 
-/* ---------- 行尾溢出菜单与来源页签（添加 / 切换唯一入口） ---------- */
-
-interface MenuItem {
-  label: string;
-  onClick?: () => void;
-}
-
-/** 点击展开的下拉菜单：点外部、按 Esc 或选中后关闭；trigger 由调用方给定 */
-const OverflowMenu = ({ trigger, items, align = 'right' }: {
-  trigger: () => React.ReactNode; items: readonly MenuItem[]; align?: 'left' | 'right'
-}) => {
-  const [open, setOpen] = useState(false)
-  const box = useRef<HTMLDivElement | null>(null)
-  useEffect(() => {
-    if (!open) return
-    const away = (e: MouseEvent): void => {
-      if (box.current !== null && !box.current.contains(e.target as Node)) setOpen(false)
-    }
-    const esc = (e: KeyboardEvent): void => { if (e.key === 'Escape') setOpen(false) }
-    document.addEventListener('mousedown', away)
-    document.addEventListener('keydown', esc)
-    return () => {
-      document.removeEventListener('mousedown', away)
-      document.removeEventListener('keydown', esc)
-    }
-  }, [open])
-  return (
-    <div className={`ov-wrap ov-${align}`} ref={box}>
-      <div onClick={() => setOpen((v) => !v)}>{trigger()}</div>
-      {open && (
-        <div className="ov-menu">
-          {items.map((it) => (
-            <div key={it.label} className={`ov-item${it.onClick === undefined ? ' dis' : ''}`}
-              onClick={() => {
-                if (it.onClick === undefined) return
-                setOpen(false)
-                it.onClick()
-              }}>{it.label}</div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /** 字节数转可读体积（dataURL 长度 ×0.75 还原为原始字节，与写入侧上限算法一致） */
 const readableSize = (dataUrl: string): string => {
   const mb = (dataUrl.length * 0.75) / 1024 / 1024
@@ -456,19 +417,19 @@ const readableSize = (dataUrl: string): string => {
 
 /* ---------- 外部壁纸浏览（来源切换 + 分类 + 分页 + 一键设为壁纸） ---------- */
 
-/** 拉取来源分类清单（061129 需在线解析数据目录，其余为静态结构） */
+/** 拉取来源分类清单（061129 / 哲风在线取站方分类，其余为静态结构或空） */
 const useWallCategories = (src: WallpaperSource | undefined): { cats: WallCategory[]; state: 'loading' | 'ok' | 'error' } => {
   const [cats, setCats] = useState<WallCategory[]>([])
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
   useEffect(() => {
-    if (!src || WALL_SOURCE_UNAVAILABLE[src.kind] !== undefined) return
+    if (src === undefined) return
     let alive = true
     setState('loading')
     fetchCategories(src)
       .then((list) => { if (alive) { setCats(list); setState('ok') } })
       .catch(() => { if (alive) setState('error') })
     return () => { alive = false }
-  }, [src?.id, src?.apiBase])
+  }, [src?.kind, src?.apiBase])
   return { cats, state }
 }
 
@@ -477,7 +438,7 @@ const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number
   const [data, setData] = useState<WallPage | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
   useEffect(() => {
-    if (!src || WALL_SOURCE_UNAVAILABLE[src.kind] !== undefined) return
+    if (src === undefined) return
     let alive = true
     setState('loading')
     fetchWallPage(src, cat, page, query)
@@ -638,28 +599,19 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
   }
 
   /* 切换来源后重置分类 / 页码 / 搜索词，避免沿用上一源的浏览位置 */
-  const srcId = src?.id
+  const srcKind = src?.kind
   useEffect(() => {
     setPage(1)
     setCatKey('')
     setQuery('')
     setQInput('')
-  }, [srcId])
+  }, [srcKind])
 
   if (src === undefined) return null
 
-  const unavailable = WALL_SOURCE_UNAVAILABLE[src.kind]
-  if (unavailable !== undefined) {
-    /* 不可用来源（实测存在无法合法解决的访问限制）：只显示说明，不发起任何请求 */
-    return (
-      <div className="empty-box">
-        <div>「{src.name}」当前不可用</div>
-        <div style={{ marginTop: 6, lineHeight: 1.7 }}>{unavailable}</div>
-        <div style={{ marginTop: 6 }}>此限制与网络 / 代理无关，待站方提供公开接口后即可接入。</div>
-      </div>
-    )
-  }
   const searchable = sourceSearchable(src.kind)
+  /* 只有一档（或站方没给分类）时不占一行：必应 / picsum 的浏览区直接从网格开始 */
+  const showCats = catState === 'ok' && cats.length > 1
   return (
     <>
       {searchable && (
@@ -669,14 +621,14 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
             onKeyDown={(e) => { if (e.key === 'Enter') { setQuery(qInput.trim()); setPage(1) } }} />
         </div>
       )}
-      <div className="cats">
-        {catState === 'loading' && <div className="cat active">分类加载中…</div>}
-        {catState === 'error' && <div className="cat">分类获取失败</div>}
-        {catState === 'ok' && cats.map((c) => (
-          <div key={c.key} className={`cat${c.key === cat ? ' active' : ''}`}
-            onClick={() => { setCatKey(c.key); setPage(1) }}>{c.label}</div>
-        ))}
-      </div>
+      {showCats && (
+        <div className="cats">
+          {cats.map((c) => (
+            <div key={c.key} className={`cat${c.key === cat ? ' active' : ''}`}
+              onClick={() => { setCatKey(c.key); setPage(1) }}>{c.label}</div>
+          ))}
+        </div>
+      )}
       <div className="wall-stage">
         <WallPhotos data={data} state={state} page={page} onPage={setPage}
           onApply={(p) => { void apply(p) }} />
@@ -692,10 +644,9 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
 const EMPTY_PAGE: GridItem[] = []
 
 /**
- * 组件库：管「放什么」——已放置列表（拖拽排序、··· 配置 / 移除）+ 目录（单张清单平铺全部组件，
- * 只做两种区分：已添加 / 未添加（按钮态）、组件 / 图标（行首标签），不再按类型分组）
- *  + 底部的「组件默认大小」（尺寸设置集中在那一处，不在每类组件上摊开）。
- * 单个实例的尺寸仍在页面卡片右键菜单「修改尺寸」或这里 ··· →「配置」里调整。
+ * 组件库：管「放什么」——已放置的「页面组件」与「页面图标」分成两张卡（各自拖拽排序），
+ * 下面是目录（单张清单平铺全部小组件，按钮态区分已添加 / 未添加）与「组件默认大小」。
+ * 行尾用图标按钮直接编辑 / 移除，不再收进 ··· 二级菜单；单个实例的尺寸在编辑弹窗里改。
  */
 const ComponentLibraryTab = () => {
   const pages = useApp((st) => st.pages)
@@ -716,42 +667,49 @@ const ComponentLibraryTab = () => {
     useApp.setState({ itemId: id })
     setModal('editItem')
   }
+  const iconLike = (t: WidgetKind): boolean => t === 'icon' || t === 'folder' || t === 'group'
+  const widgets = page.filter((it) => !iconLike(it.t))
+  const icons = page.filter((it) => iconLike(it.t))
+  /** 拖到目标行之前：只在整页顺序里做一次插入，两张卡共用同一份顺序 */
+  const moveBefore = (from: string, target: string): void => {
+    if (from === target) return
+    const ids = page.map((x) => x.id).filter((x) => x !== from)
+    const at = ids.indexOf(target)
+    ids.splice(at < 0 ? ids.length : at, 0, from)
+    reorderItems(ids)
+  }
+  /** 列表行：拖动把手 → 图标 → 名称 → 编辑 / 移除（两个图标按钮，不占文字宽度） */
+  const rowOf = (it: GridItem) => {
+    const def = WIDGET_DEFS[it.t]
+    /* 名称为空（含出厂留空）时回退组件显示名：列表行不能只剩一个字形 */
+    const label = str(cfg(it)['label']).trim() === '' ? def.n : String(cfg(it)['label'])
+    return (
+      <div className="eng-row sortable" key={it.id} draggable
+        onDragStart={() => setDragId(it.id)}
+        onDragEnd={() => setDragId(null)}
+        onDragOver={(ev) => { if (dragId !== null) ev.preventDefault() }}
+        onDrop={() => { if (dragId !== null) moveBefore(dragId, it.id); setDragId(null) }}>
+        <span style={{ color: 'var(--panel-sub)', cursor: 'grab' }}>⋮⋮</span>
+        <div className="er-ico" style={{ background: def.c }}>{def.g}</div>
+        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        <span className="row-acts">
+          <span className="ov-btn" title="编辑" onClick={() => openConfig(it.id)}>{Icon.edit()}</span>
+          <span className="ov-btn" title="移除" onClick={() => remove(it.id)}>{Icon.trash()}</span>
+        </span>
+      </div>
+    )
+  }
   return (
     <>
-      <SecCard t="页面组件" info={`管理当前第 ${cur + 1} 页的组件：行首 ⋮⋮ 拖动只调整组件列表顺序（页面上的位置仍在页面里拖动）；单个组件的尺寸走页面右键菜单「修改尺寸」或这里的 ··· →「配置」。行首标签区分「组件」与「图标」——网站图标 / 图标文件夹 / 图标格容器是图标类。`}>
-        {page.length === 0 && (
-          <div className="empty-box">{Icon.plus()}<div>页面暂无组件，从下面挑一个</div></div>
-        )}
-        {page.map((it, i) => {
-          const def = WIDGET_DEFS[it.t]
-          /* 名称为空（含出厂留空）时回退组件显示名：列表行不能只剩一个字形（用户反馈：每日一言行仅显图标） */
-          const label = str(cfg(it)['label']).trim() === '' ? def.n : String(cfg(it)['label'])
-          const iconLike = it.t === 'icon' || it.t === 'folder' || it.t === 'group'
-          return (
-            <div className="eng-row sortable" key={it.id} draggable
-              onDragStart={() => setDragId(it.id)}
-              onDragEnd={() => setDragId(null)}
-              onDragOver={(ev) => { if (dragId !== null) ev.preventDefault() }}
-              onDrop={() => {
-                if (dragId === null || dragId === it.id) return
-                const ids = page.map((x) => x.id).filter((x) => x !== dragId)
-                ids.splice(i, 0, dragId)
-                reorderItems(ids)
-                setDragId(null)
-              }}>
-              <span style={{ color: 'var(--panel-sub)', cursor: 'grab' }}>⋮⋮</span>
-              <div className="er-ico" style={{ background: def.c }}>{def.g}</div>
-              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-              <span className={`row-kind${iconLike ? ' alt' : ''}`}>{iconLike ? '图标' : '组件'}</span>
-              <OverflowMenu
-                trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
-                items={[
-                  { label: '配置', onClick: () => openConfig(it.id) },
-                  { label: '移除', onClick: () => remove(it.id) },
-                ]} />
-            </div>
-          )
-        })}
+      <SecCard t="页面组件" info={`当前第 ${cur + 1} 页的小组件：行首 ⋮⋮ 拖动只调整列表顺序（页面上的位置仍在页面里拖动）；行尾铅笔直接编辑（尺寸也在编辑弹窗里改），垃圾桶移除。`}>
+        {widgets.length === 0
+          ? <div className="empty-box">{Icon.plus()}<div>页面暂无小组件，从下面挑一个</div></div>
+          : widgets.map(rowOf)}
+      </SecCard>
+      <SecCard t="页面图标" info="网站图标 / 图标文件夹 / 图标格容器：拖动调整顺序，铅笔改名称与网址，垃圾桶移除。新增在页面空白处右键。">
+        {icons.length === 0
+          ? <div className="empty-box">{Icon.plus()}<div>暂无图标，到页面空白处右键添加</div></div>
+          : icons.map(rowOf)}
       </SecCard>
       <SecCard t="组件库" info="全部小组件放在同一张清单里，不再按类型分组；已在页面上的显示「已添加」，移除后可再次添加。图标类（网站图标 / 图标文件夹 / 图标格容器）不是小组件，从空白处右键添加。">
         {LIBRARY_LIST.map((w) => {
@@ -839,16 +797,12 @@ const PersonalPanel = () => {
   const applySkin = useApp((st) => st.applySkin)
   const skins = useApp((st) => st.skins)
   const setWallpaperRef = useApp((st) => st.setWallpaperRef)
-  const addWallSource = useApp((st) => st.addWallSource)
-  const removeWallSource = useApp((st) => st.removeWallSource)
-  const toggleWallSource = useApp((st) => st.toggleWallSource)
-  const updateWallSource = useApp((st) => st.updateWallSource)
+  const setWallSource = useApp((st) => st.setWallSource)
   const showToast = useApp((st) => st.showToast)
   /* 页签状态放 store：首次引导与外部入口需要先切页签再开抽屉 */
   const tab = useApp((st) => st.personalTab)
   const setTab = useApp((st) => st.setPersonalTab)
   const [prevWallRef, setPrevWallRef] = useState<string | null>(null)
-  const [previewId, setPreviewId] = useState('')
   const [wall, setWall] = useState<BgData | null>(null)
   const wallFile = useRef<HTMLInputElement | null>(null)
   /* 透明度 11 项：前六项是玻璃底色，后五项是元素显隐强度（说明即各自的作用范围） */
@@ -891,27 +845,18 @@ const PersonalPanel = () => {
     }
   }
 
+  /** 外链上传：先问地址（应用内输入框 + 行内校验），再拉取并落地 */
   const useLinkWall = (): void => {
-    const u = window.prompt('请输入图片或视频地址')
-    if (u === null || u === '') return
-    void fetch(u)
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob() })
-      .then((b) => upload(new File([b], 'link', { type: b.type })))
-      .catch(() => showToast('外链获取失败，请检查地址是否允许跨域'))
-  }
-
-  /** 行尾「···」→ 改名称 / 改地址：名称任意，地址仅接受 http(s) 基址（可指向镜像服务） */
-  const editWallSource = (ws: WallpaperSource): void => {
-    const next = window.prompt('修改 API 基址（镜像地址）', ws.apiBase)?.trim() ?? ''
-    if (next === '') return
-    if (/^https?:\/\//.test(next)) updateWallSource(ws.id, { apiBase: next })
-    else showToast('地址需以 http(s):// 开头')
-  }
-
-  const renameWallSource = (ws: WallpaperSource): void => {
-    const next = window.prompt('修改来源名称', ws.name)?.trim() ?? ''
-    if (next === '') return
-    updateWallSource(ws.id, { name: next })
+    void askInput({
+      title: '外链上传壁纸', label: '图片或视频地址', placeholder: 'https://', confirmText: '获取',
+      validate: (v) => (/^https?:\/\//.test(v) ? null : '地址需以 http(s):// 开头'),
+    }).then((u) => {
+      if (u === null) return
+      void fetch(u)
+        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.blob() })
+        .then((b) => upload(new File([b], 'link', { type: b.type })))
+        .catch(() => showToast('外链获取失败，请检查地址是否允许跨域'))
+    })
   }
 
   /* 当前壁纸的缩略图与体积（仅读取引用对应的那份数据，不写入） */
@@ -933,11 +878,8 @@ const PersonalPanel = () => {
     return () => { alive = false }
   }, [wallRef])
 
-  /* 预览对象：列表行点击切换；来源被禁用后自动落到首个启用来源 */
-  const enabledSources = s.wallSources.filter((ws) => ws.enabled)
-  const preview = enabledSources.find((x) => x.id === previewId) ?? enabledSources[0]
-  /* 新增来源不限次数：同一协议可加多个（分别指向不同镜像 / 不同名称），模板始终可选 */
-  const sourceTemplates = WALL_SOURCE_TEMPLATES
+  /* 当前浏览的来源：内置五选一，随设置持久化（没有启用 / 禁用与自定义） */
+  const preview = wallSourceOf(s.wallSource)
 
   /* 可清理的历史 = 除当前使用中那张以外的全部记录（当前壁纸不参与清理） */
   const otherWallCount = history.filter((h) => h.ref !== s.wallpaperRef).length
@@ -945,37 +887,22 @@ const PersonalPanel = () => {
   /** 一键清空历史壁纸记录：保留当前使用中的那张，删除本机已下载的其余图片 */
   const clearWallHistory = async (): Promise<void> => {
     if (otherWallCount === 0) return
-    if (!window.confirm(`将清空 ${otherWallCount} 张历史壁纸记录（当前壁纸保留），已下载的图片会从本机删除，且不可撤销。确定继续？`)) return
+    const ok = await askConfirm({
+      title: '清空历史壁纸',
+      message: `将清空 ${otherWallCount} 张历史壁纸记录（当前壁纸保留），已下载的图片会从本机删除，且不可撤销。`,
+      confirmText: '清空', danger: true,
+    })
+    if (!ok) return
     const removed = await clearWallpaperHistory()
     setHistory(await listWallpapers())
     showToast(removed === 0 ? '没有可清理的历史壁纸' : `已清空历史壁纸（${removed} 张）`)
-  }
-
-  /** 点行名预览该来源；禁用态不发起请求，仅提示 */
-  const previewSource = (ws: WallpaperSource): void => {
-    if (!ws.enabled) { showToast(`「${ws.name}」已禁用，请先打开右侧开关`); return }
-    setPreviewId(ws.id)
-  }
-
-  /** 列表末尾「+ 添加来源」：按协议模板新增，名称与基址都可当场改（同一协议可重复添加） */
-  const addSource = (t: (typeof WALL_SOURCE_TEMPLATES)[number]): void => {
-    const same = s.wallSources.filter((ws) => ws.kind === t.kind).length
-    const defaultName = same === 0 ? t.name : `${t.name} ${same + 1}`
-    const name = window.prompt('来源名称', defaultName)?.trim() ?? ''
-    if (name === '') return
-    const base = window.prompt('API 基址（可填镜像地址）', t.apiBase)?.trim() ?? ''
-    if (base === '') return
-    if (!/^https?:\/\//.test(base)) { showToast('地址需以 http(s):// 开头'); return }
-    const src = { id: `ws${Date.now().toString(36)}${same}`, kind: t.kind, name, apiBase: base, enabled: true }
-    addWallSource(src)
-    setPreviewId(src.id)
   }
 
   return (
     <>
       <DrawerTabs tabs={PANEL_TABS} value={tab} onChange={setTab} />
       {tab === 0 && (
-      <SecCard t="壁纸" info="图片最大 5MB（视频同限）；外部网站壁纸在下方来源中获取。开关控制来源是否参与浏览，点行名可预览该来源，行尾「···」可改 API 基址（可指向镜像服务，扩展环境自动走系统代理）或移除。">
+      <SecCard t="壁纸" info="图片最大 5MB（视频同限）。下方是在线壁纸来源（全部内置、无需添加）：点来源名切换，再点分类筛选；带搜索框的来源可直接输关键词。">
         <div className="wall-now">
           <div className="wall-thumb-now">
             {wall !== null && wall.type === 'image'
@@ -1021,32 +948,12 @@ const PersonalPanel = () => {
             )}
           </>
         )}
-        <div className="wall-src-list">
-          {s.wallSources.map((ws) => (
-            <div className="wall-source-row" key={ws.id}>
-              <span className={`ws-name${preview?.id === ws.id ? ' on' : ''}`} onClick={() => previewSource(ws)}>
-                {ws.name}
-                {preview?.id === ws.id && <span className="tb-tag" style={{ marginLeft: 6 }}>预览中</span>}
-                {WALL_SOURCE_UNAVAILABLE[ws.kind] !== undefined
-                  && <span className="tb-tag" style={{ marginLeft: 6 }} title={WALL_SOURCE_UNAVAILABLE[ws.kind]}>当前不可用</span>}
-              </span>
-              <div className={`switch${ws.enabled ? ' on' : ''}`} title={ws.enabled ? '已启用，点击禁用' : '已禁用，点击启用'}
-                onClick={() => toggleWallSource(ws.id)}><i /></div>
-              <OverflowMenu
-                trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
-                items={[
-                  { label: '改名称', onClick: () => renameWallSource(ws) },
-                  { label: '改地址', onClick: () => editWallSource(ws) },
-                  { label: '移除', onClick: () => removeWallSource(ws.id) },
-                ]} />
-            </div>
+        <div className="cats" style={{ marginTop: 12 }}>
+          {WALL_SOURCES.map((ws) => (
+            <div key={ws.kind} className={`cat${ws.kind === s.wallSource ? ' active' : ''}`}
+              title={`切换到「${ws.name}」`}
+              onClick={() => setWallSource(ws.kind)}>{ws.name}</div>
           ))}
-          <div className="ws-add-row">
-            <OverflowMenu
-              align="left"
-              trigger={() => <span className="ws-add">{Icon.plus()}添加来源</span>}
-              items={sourceTemplates.map((t) => ({ label: t.name, onClick: () => addSource(t) }))} />
-          </div>
         </div>
         <WallBrowser src={preview} />
       </SecCard>
@@ -1303,7 +1210,13 @@ const SettingSearchTab = () => {
         <SwitchRow l="自动聚焦" d="打开新标签时自动聚焦搜索框" on={s.autoFocus} onToggle={() => toggle('autoFocus')} />
         <SwitchRow l="保留搜索内容" d="搜索后不清空输入框内容" on={s.searchKeep} onToggle={() => toggle('searchKeep')} />
         <SwitchRow l="隐藏搜索按钮" d="仅通过 Enter 键触发搜索" on={s.hideBtn} onToggle={() => toggle('hideBtn')} />
-        <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')} />
+        {/* 一键清空贴着「搜索历史」放：开关旁边就是清理入口，不必滚到卡片底部 */}
+        <SwitchRow l="搜索历史" d="关闭后搜索框不再弹出任何下拉" on={s.searchHistory} onToggle={() => toggle('searchHistory')}
+          extra={(
+            <button className="btn sm ghost" disabled={history.length === 0} onClick={clearHistory}>
+              清空{history.length > 0 ? `（${history.length} 条）` : ''}
+            </button>
+          )} />
         <NumberRow l="历史保留条数" min={4} max={20} value={s.historyLimit} unit="条"
           onInput={setHistoryLimit} />
         <SwitchRow l="显示单条删除" d="历史面板每行右侧的 × 按钮" on={s.historyItemDel} onToggle={() => toggle('historyItemDel')} />
@@ -1327,12 +1240,6 @@ const SettingSearchTab = () => {
             <div className={`cat${s.searchBtnMode === 'tab' ? ' active' : ''}`} onClick={() => setSetting('searchBtnMode', 'tab')}>新标签页</div>
             <div className={`cat${s.searchBtnMode === 'search' ? ' active' : ''}`} onClick={() => setSetting('searchBtnMode', 'search')}>本窗口搜索</div>
           </div>
-        </div>
-        {/* 一键清空：历史为空时不可点（与搜索框下拉里逐条删除同一份数据） */}
-        <div className="btn-row" style={{ marginTop: 12 }}>
-          <button className="btn sm ghost" disabled={history.length === 0} onClick={clearHistory}>
-            清空搜索历史{history.length > 0 ? `（${history.length} 条）` : ''}
-          </button>
         </div>
       </SecCard>
     </>
@@ -1425,7 +1332,12 @@ const SettingBackupCard = () => {
 const SettingResetCard = () => {
   const setModal = useApp((st) => st.setModal)
   const clearLocal = async (): Promise<void> => {
-    if (!window.confirm('将彻底删除本地数据（图标、布局、皮肤、壁纸配置），且不可撤销。确定继续？')) return
+    const ok = await askConfirm({
+      title: '清除本地数据',
+      message: '将彻底删除本地数据（图标、布局、皮肤、壁纸配置），且不可撤销。',
+      confirmText: '彻底删除', danger: true,
+    })
+    if (!ok) return
     await resetAllData()
   }
   return (
@@ -1476,7 +1388,7 @@ interface LogVersion {
 const CHANGELOG: readonly LogVersion[] = [
   {
     v: '4.99', d: '2026-10-21', items: [
-      { k: '修复', s: '哲风壁纸恢复取图', d: '站方收紧了分页校验（单页超过 21 条直接拒绝），取图请求改用站方默认的 12 条/页：综合推荐、静态 / 动态分类、翻页与关键词搜索全部恢复。取图失败时提示里会带上站方给出的原因，不再只有 HTTP 状态码。' },
+      { k: '优化', s: '哲风壁纸恢复取图', d: '站方收紧了分页校验（单页超过 21 条直接拒绝），取图请求改用站方默认的 12 条/页：综合推荐、静态 / 动态分类、翻页与关键词搜索全部恢复。取图失败时提示里会带上站方给出的原因，不再只有 HTTP 状态码。' },
     ],
   },
   {

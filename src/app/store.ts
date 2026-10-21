@@ -35,7 +35,7 @@ import type {
   StoredDoc,
   ViewMode,
   WallFocus,
-  WallpaperSource,
+  WallSourceKind,
   WidgetKind,
   WidgetSize,
 } from '../shared/types'
@@ -52,6 +52,27 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
 export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'kindSizes' | 'backup' | 'restore' | 'reset' | 'newSite'
+
+/**
+ * 应用内通用对话框（替代 window.confirm / window.prompt）
+ * confirm：单段说明 + 确认；input：一段输入 + 行内校验
+ */
+export interface DialogRequest {
+  kind: 'confirm' | 'input'
+  title: string
+  /** 说明文字（confirm 必填，input 可省） */
+  message?: string
+  /** input：字段名 */
+  label?: string
+  value?: string
+  placeholder?: string
+  confirmText?: string
+  cancelText?: string
+  /** 危险操作：确认按钮走 danger 语义色，默认焦点落在取消 */
+  danger?: boolean
+  /** input：返回错误文案即拦截确认，返回 null 放行 */
+  validate?: (v: string) => string | null
+}
 
 /** 空白处右键「新建站点」的落点 */
 export type NewSiteTarget = 'page' | 'dock' | 'both'
@@ -96,6 +117,8 @@ interface AppState {
   itemId: string | null
   drawer: DrawerKey | null
   modal: ModalKey | null
+  /** 通用对话框（确认 / 输入）；同一时刻只开一个 */
+  dialog: DialogRequest | null
   ctx: CtxState | null
   /** 多选集合（Ctrl/Cmd 单击切换、Shift 范围选中）：跨页有效——可以选好第 2、3 页的图标一次搬到第 1 页；
    *  纯界面态、不落盘（buildDoc 只取设置 / 布局 / 引擎 / 皮肤 / 历史等字段） */
@@ -146,12 +169,9 @@ interface AppState {
   setWallpaperRef: (ref: string | null) => void
   /** 写入壁纸自适应裁剪焦点（由 app 层按视口比例算出） */
   setWallFocus: (f: WallFocus) => void
-  /** 添加外部壁纸来源（协议适配器 + 用户可改基址） */
-  addWallSource: (src: WallpaperSource) => void
-  removeWallSource: (id: string) => void
-  toggleWallSource: (id: string) => void
-  /** 修改来源名称 / API 基址（镜像地址） */
-  updateWallSource: (id: string, patch: Partial<Pick<WallpaperSource, 'name' | 'apiBase'>>) => void  /** 放置组件；at 给定时优先落在该网格格附近（被占则就近），返回是否放置成功 */
+  /** 切换当前浏览的内置壁纸来源 */
+  setWallSource: (kind: WallSourceKind) => void
+  /** 放置组件；at 给定时优先落在该网格格附近（被占则就近），返回是否放置成功 */
   place: (kind: WidgetKind, config?: Record<string, unknown>, at?: { c: number; r: number }) => boolean
   /** 组件库：整体设置各类组件的默认大小（键 = 组件类型，缺键 = 用定义表出厂尺寸；只影响之后新增的实例） */
   setSizeDefaults: (next: Record<string, WidgetSize>) => void
@@ -205,6 +225,8 @@ interface AppState {
   setPersonalTab: (i: number) => void
   setAddTab: (i: number) => void
   setModal: (k: ModalKey | null) => void
+  /** 写入 / 关闭通用对话框（由 app/dialog 的 askConfirm / askInput 驱动） */
+  setDialog: (d: DialogRequest | null) => void
   /** 打开新建站点弹窗：一次性写入预置并收起抽屉 / 菜单（弹窗层级低于抽屉，必须先收抽屉） */
   openNewSite: (draft: NewSiteDraft) => void
   openCtx: (ctx: CtxState | null) => void
@@ -397,6 +419,7 @@ export const useApp = create<AppState>()((set, get) => ({
   itemId: null,
   drawer: null,
   modal: null,
+  dialog: null,
   ctx: null,
   picked: [],
   newSite: null,
@@ -531,10 +554,7 @@ export const useApp = create<AppState>()((set, get) => ({
   applySkin: (id) => set((s) => ({ settings: { ...s.settings, skinId: BUILTIN_SKINS.some((x) => x.id === id) ? id : s.settings.skinId } })),
   setWallpaperRef: (ref) => set((s) => ({ settings: { ...s.settings, wallpaperRef: ref }, toast: ref === null ? '已移除壁纸' : '自定义壁纸已应用' })),
   setWallFocus: (f) => set((s) => ({ settings: { ...s.settings, wallFocus: f } })),
-  addWallSource: (src) => set((s) => ({ settings: { ...s.settings, wallSources: [...s.settings.wallSources, src] }, toast: `已添加壁纸来源：${src.name}` })),
-  removeWallSource: (id) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.filter((x) => x.id !== id) }, toast: '已移除壁纸来源' })),
-  toggleWallSource: (id) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.map((x) => (x.id === id ? { ...x, enabled: !x.enabled } : x)) } })),
-  updateWallSource: (id, patch) => set((s) => ({ settings: { ...s.settings, wallSources: s.settings.wallSources.map((x) => (x.id === id ? { ...x, ...patch } : x)) }, toast: '来源配置已更新' })),
+  setWallSource: (kind) => set((s) => ({ settings: { ...s.settings, wallSource: kind } })),
 
   place: (kind, config = {}, at) => {
     let ok = false
@@ -889,6 +909,7 @@ export const useApp = create<AppState>()((set, get) => ({
   setAddTab: (i) => set({ addTab: i }),
   /* 打开弹窗时收起抽屉：弹窗层级（50）低于抽屉（60），否则被盖住 */
   setModal: (k) => set({ modal: k, ctx: null, enginePanel: false, drawer: k !== null ? null : get().drawer }),
+  setDialog: (d) => set({ dialog: d }),
   openNewSite: (draft) => set({ modal: 'newSite', newSite: draft, ctx: null, enginePanel: false, drawer: null }),
   openCtx: (ctx) => set({ ctx, enginePanel: false }),
   setEnginePanel: (open) => set({ enginePanel: open }),

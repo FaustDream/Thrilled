@@ -61,18 +61,10 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(s.blur).toEqual(DEFAULT_SETTINGS.blur)
   })
 
-  it('wallSources 保留合法来源清单，坏项丢弃；缺失回退空清单', () => {
-    const s = normalizeSettings({
-      wallSources: [
-        { id: 'a', kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1' },
-        { id: 'b', kind: 'ftp', name: 'bad', apiBase: 'https://x.com' },
-        { id: 'c', kind: 'picsum', name: '', apiBase: 'https://picsum.photos' },
-        { id: 'd', kind: 'picsum', name: 'Picsum', apiBase: 'not-a-url' },
-        'bad',
-      ],
-    })
-    expect(s.wallSources).toEqual([{ id: 'a', kind: 'wallhaven', name: 'Wallhaven', apiBase: 'https://wallhaven.cc/api/v1', enabled: true }])
-    expect(normalizeSettings({}).wallSources).toEqual(DEFAULT_SETTINGS.wallSources)
+  it('wallSource 只认内置协议，未知值回退出厂来源', () => {
+    expect(normalizeSettings({ wallSource: 'picsum' }).wallSource).toBe('picsum')
+    expect(normalizeSettings({ wallSource: 'ftp' }).wallSource).toBe(DEFAULT_SETTINGS.wallSource)
+    expect(normalizeSettings({}).wallSource).toBe(DEFAULT_SETTINGS.wallSource)
   })
 
   it('内置皮肤不再携带配套壁纸字段（内置壁纸已移除）', () => {

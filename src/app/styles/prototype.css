@@ -466,7 +466,6 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 .f-row.inline{display:flex;align-items:center;gap:10px}
 .f-row.inline .f-label{margin-bottom:0;flex:0 0 auto}
 .f-row.inline .f-input{flex:1;min-width:0}
-.f-row.inline .ov-wrap{flex:0 0 auto}
 .f-label{display:block;font-size:var(--fs-md);font-weight:400;color:var(--panel-text);margin-bottom:6px}
 .f-input{width:100%;height:38px;border-radius:var(--r-md);border:1px solid var(--line);background:transparent;
   color:var(--panel-text);padding:0 12px;font-size:var(--fs-md);outline:none;font-family:inherit}
@@ -1222,33 +1221,19 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .wp-hitem.on{border-color:var(--accent)}
 .wp-hitem img{width:100%;height:100%;object-fit:cover;display:block}
 .wp-hph{font-size:var(--fs-2xs);color:var(--panel-sub)}
-/* 来源列表：单行 44px（行名可点预览 / 开关 / 溢出菜单），末行为文字添加入口 */
-.wall-src-list{margin-top:14px;border-top:1px solid var(--line)}
-.wall-source-row{display:flex;align-items:center;gap:10px;height:44px;border-bottom:1px solid var(--line)}
-.wall-source-row .ws-name{flex:1;min-width:0;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;
-  text-overflow:ellipsis;cursor:pointer}
-.wall-source-row .ws-name:hover{color:var(--accent)}
-.wall-source-row .ws-name.on{font-weight:500}
-.ws-add-row{height:38px;display:flex;align-items:center}
-.ws-add{display:flex;align-items:center;gap:5px;font-size:var(--fs-sm);color:var(--panel-sub);cursor:pointer;
-  padding:4px 6px;border-radius:var(--r-sm)}
-.ws-add:hover{color:var(--accent);background:var(--line)}
-.ws-add svg{width:12px;height:12px}
-/* 行尾「···」溢出菜单与列表末尾「+ 添加来源」共用的下拉容器 */
-.ov-wrap{position:relative;flex:0 0 auto}
+/* 列表行尾的图标按钮（编辑 / 移除）：与卡片的悬浮按钮同一套 26px 方形容器，常显但降为次要色 */
+.row-acts{display:flex;align-items:center;gap:2px;flex:0 0 auto}
 .ov-btn{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:var(--r-sm);
   color:var(--panel-sub);cursor:pointer}
-.ov-btn:hover{background:var(--line)}
-.ov-btn svg{width:16px;height:16px}
-.ov-menu{position:absolute;top:calc(100% + 4px);z-index:20;min-width:132px;padding:4px;
-  border-radius:var(--r-md);background:var(--card-bg);border:0.5px solid var(--line);
-  box-shadow:0 6px 20px rgba(15,23,42,.14)}
-.ov-right .ov-menu{right:0}
-.ov-left .ov-menu{left:0}
-.ov-item{padding:7px 10px;border-radius:var(--r-sm);font-size:var(--fs-sm);color:var(--text);cursor:pointer;white-space:nowrap}
-.ov-item:hover{background:var(--menu-hover)}
-.ov-item.dis{color:var(--panel-sub);cursor:default}
-.ov-item.dis:hover{background:none}
+.ov-btn:hover{background:var(--line);color:var(--panel-text)}
+.ov-btn svg{width:15px;height:15px}
+/* 开关行右侧的附加控件（如「搜索历史」旁的清空按钮）：与开关同排并保留 8px 间距 */
+.switch-extra{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+/* 通用对话框：入口常在抽屉里（清空历史 / 清除数据），层级必须高于抽屉（60）才不会被盖住 */
+.dlg-mask{z-index:calc(var(--z-drawer) + 10);align-items:center;padding-bottom:0}
+/* 通用对话框的行内校验提示（紧贴输入框，用危险语义色） */
+.dlg-err{font-size:var(--fs-xs);color:var(--bad,#b91c1c);margin-top:6px}
+.f-input.bad{border-color:var(--bad,#b91c1c)}
 /* 标题右侧 ⓘ 与滑块名称右侧共用 .sl-info（见第 22 节），说明文案不再常驻占位 */
 .sec-card .sec-title{display:flex;align-items:center;gap:6px}
 
@@ -1256,7 +1241,7 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 /* 界面主体是 div + 事件委托，键盘用户原本看不到焦点在哪。只在键盘导航时出环
    （:focus-visible 不会在鼠标点击后亮起），环用强调色 + 2px 偏移，与多选描边同语言。
    input 自己已有 border-color 反馈，这里只补 outline 兜底，避免双重描边太重 */
-:where(button,.btn,.cat,.pill-btn,.dw-tab,.sub-tab,.pg,.switch,.kbd-btn,.ov-btn,.ws-add,
+:where(button,.btn,.cat,.pill-btn,.dw-tab,.sub-tab,.pg,.switch,.kbd-btn,.ov-btn,
   .ctx-item,.ctx-sub-item,.ov-item,.dt-row,.nv-item,.wall-thumb,.wp-hitem,.theme-btn,
   .sp-row,.eng-row,.ia,.dw-close,.dt-cal-cell,.sl-info,.page-dot,.search-go-btn):focus-visible{
   outline:2px solid var(--accent);outline-offset:2px}
