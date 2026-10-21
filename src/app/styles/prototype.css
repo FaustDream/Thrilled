@@ -575,6 +575,12 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .dock-chip i{font-style:normal;cursor:pointer;color:var(--panel-sub)}
 .dock-chip i:hover{color:var(--bad,#b91c1c)}
 .dock-chip-count{font-size:var(--fs-xs);color:var(--panel-sub)}
+/* chips 行里的「管理」入口：集中改名 / 改网址，比逐条右键省事 */
+.dock-chip-edit{font-size:var(--fs-xs);color:var(--accent);cursor:pointer;padding:3px 6px;border-radius:var(--r-sm)}
+.dock-chip-edit:hover{background:var(--line)}
+/* Dock 管理弹窗：一行两栏（名称 / 网址）+ 移除 */
+.dock-edit-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.dock-edit-row .f-input{flex:1;min-width:0}
 .cats{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
 /* 卡片详情弹窗：各组件的核心内容视图（天气 / 时钟 / 月历 / 待办 / 书签列表 / 大数字） */
 .dt-now{display:flex;align-items:baseline;gap:12px;margin:4px 0 10px}
@@ -1049,6 +1055,7 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .wl-head{display:flex;align-items:center;gap:10px;min-width:0}
 .wl-thumb{width:48px;height:30px;flex:0 0 auto;border-radius:var(--r-xs);object-fit:cover;background:var(--line)}
 .wl-foot{display:flex;align-items:center;gap:10px}
+.wl-cancel{margin-left:auto;flex:0 0 auto}
 .wl-ring{width:20px;height:20px;flex:0 0 auto;border-radius:50%;
   border:2px solid color-mix(in srgb,var(--accent) 24%,transparent);
   border-top-color:var(--accent);animation:wl-spin .78s linear infinite}

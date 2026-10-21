@@ -6,7 +6,7 @@
  * 仅支持 http(s)；json 返回响应文本，dataurl 返回二进制 dataURL。
  */
 
-import { MESSAGE_TYPE } from '../shared/constants';
+import { MESSAGE_TYPE, WALLPAPER_EXT_MAX_BYTES } from '../shared/constants';
 import type { ExtensionResponse, FetchResourceData } from '../shared/messages';
 
 const backgroundAvailable = (): boolean =>
@@ -71,14 +71,32 @@ export async function fetchText(url: string): Promise<string> {
   return res.text();
 }
 
-/** GET 二进制并转 dataURL（壁纸图片落地用）；直连时按字节回报下载进度 */
-export async function fetchDataUrl(url: string, onProgress?: ProgressFn): Promise<string> {
+/** GET 二进制并转 dataURL（壁纸图片落地用）；直连时按字节回报下载进度，可传 signal 取消 */
+export async function fetchDataUrl(url: string, onProgress?: ProgressFn, signal?: AbortSignal): Promise<string> {
   const viaBg = await sendToBackground({ url, kind: 'dataurl' });
   if (viaBg !== null) {
     onProgress?.(0, 0);
     return viaBg;
   }
-  const res = await fetch(url);
+  const res = await fetch(url, { signal: signal ?? null });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return blobToDataUrl(await readBlobWithProgress(res, onProgress ?? (() => {})));
+}
+
+/**
+ * 下载前轻量探测：体积超上限或不是图片时提前失败，避免白下几十 MB。
+ * HEAD 不被支持（405 / 预检失败）时直接放行，由正式下载后的校验兜底。
+ */
+export async function probeRemoteImage(url: string, signal?: AbortSignal): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'HEAD', signal: signal ?? null });
+  } catch {
+    return;
+  }
+  if (!res.ok) return;
+  const bytes = Number(res.headers.get('content-length') ?? 0);
+  if (bytes > WALLPAPER_EXT_MAX_BYTES) throw new Error('原图超过 20MB 上限，已跳过下载');
+  const type = (res.headers.get('content-type') ?? '').toLowerCase();
+  if (type !== '' && !type.startsWith('image/')) throw new Error('该地址不是图片');
 }

@@ -4,12 +4,11 @@
  */
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useApp, type DrawerKey, type NewSiteTarget } from './store'
-import { placedKindsOf } from './layout'
 import { WALL_SOURCES, fetchCategories, fetchWallPage, sourceSearchable, wallSourceOf, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
 import { askConfirm, askInput } from './dialog'
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
-import { fetchDataUrl } from '../core/fetch-proxy'
-import type { WallpaperSource } from '../shared/types'
+import { fetchDataUrl, probeRemoteImage } from '../core/fetch-proxy'
+import type { WallpaperSource, WallSourceKind } from '../shared/types'
 import { WIDGET_DEFS, LIBRARY_LIST, maxSizeOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
@@ -156,6 +155,7 @@ const AddPanel = () => {
   const setSetting = useApp((s) => s.setSetting)
   const showToast = useApp((s) => s.showToast)
   const setDrawer = useApp((s) => s.setDrawer)
+  const setModal = useApp((s) => s.setModal)
   /* 页签状态放 store：Dock 右键「配置快捷方式」等入口需要先切页签再开抽屉 */
   const tab = useApp((s) => s.addTab)
   const setTab = useApp((s) => s.setAddTab)
@@ -319,6 +319,7 @@ const AddPanel = () => {
           {/* 已添加的 Dock 快捷方式：紧凑 chips 行（点击 × 移除），不占内容区主空间 */}
           <div className="dock-chips">
             <span className="dock-chip-count">已添加 {settings.dockApps.length}/{settings.dockCount}</span>
+            <span className="dock-chip-edit" title="集中改名 / 改网址 / 移除" onClick={() => setModal('dockEdit')}>管理</span>
             {settings.dockApps.map((a, i) => (
               <span className="dock-chip" key={`${a.url}-${i}`} title={a.url}>
                 <span>{a.name}</span>
@@ -433,19 +434,19 @@ const useWallCategories = (src: WallpaperSource | undefined): { cats: WallCatego
   return { cats, state }
 }
 
-/** 拉取一页外部壁纸（源 / 分类 / 页码变化时刷新） */
-const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number, query: string): { data: WallPage | null; state: 'loading' | 'ok' | 'error' } => {
+/** 拉取一页外部壁纸（源 / 分类 / 页码 / 重试次数变化时刷新；重试跳过 30 分钟缓存） */
+const useWallPage = (src: WallpaperSource | undefined, cat: string, page: number, query: string, retry: number): { data: WallPage | null; state: 'loading' | 'ok' | 'error' } => {
   const [data, setData] = useState<WallPage | null>(null)
   const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading')
   useEffect(() => {
     if (src === undefined) return
     let alive = true
     setState('loading')
-    fetchWallPage(src, cat, page, query)
+    fetchWallPage(src, cat, page, query, retry > 0)
       .then((res) => { if (alive) { setData(res); setState('ok') } })
       .catch(() => { if (alive) setState('error') })
     return () => { alive = false }
-  }, [src, cat, page, query])
+  }, [src, cat, page, query, retry])
   return { data, state }
 }
 
@@ -498,7 +499,7 @@ const stageDetail = (t: ApplyTask, srcName: string, pct: number | null): string 
  * 循环等待环 + 三段步骤条。进度确定时按字节百分比推进，总量不可知时退化为 indeterminate 扫光。
  * 底色比常规玻璃更实一档，保证下面的缩略图不会透出来干扰阅读。
  */
-const WallTaskOverlay = ({ t, srcName }: { t: ApplyTask; srcName: string }) => {
+const WallTaskOverlay = ({ t, srcName, onCancel }: { t: ApplyTask; srcName: string; onCancel: () => void }) => {
   const pct = t.total > 0 ? Math.min(100, Math.round((t.loaded / t.total) * 100)) : null
   const cur = WALL_STAGES[t.stage] ?? WALL_STAGES[0]
   return (
@@ -520,35 +521,54 @@ const WallTaskOverlay = ({ t, srcName }: { t: ApplyTask; srcName: string }) => {
             </span>
           ))}
         </div>
+        {/* 大图下载可能要几十秒：给一个明确的出口 */}
+        {t.stage === 0 && t.reused === false && (
+          <button className="btn sm ghost wl-cancel" onClick={onCancel}>取消</button>
+        )}
       </div>
     </div>
   )
 }
 
 /** 壁纸网格 + 分页（缩略图 <img> 直连加载；点击原图下载落地后应用） */
-const WallPhotos = ({ data, state, page, onPage, onApply }: {
+const WallPhotos = ({ data, state, page, onPage, onApply, onRetry }: {
   data: WallPage | null; state: 'loading' | 'ok' | 'error'; page: number
-  onPage: (p: number) => void; onApply: (p: WallPhoto) => void
-}) => (
-  <>
-    <div className="wall-grid">
-      {state === 'loading' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>加载中…</div>}
-      {state === 'error' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>获取失败：来源地址不可达，或当前环境直连受跨域限制（扩展环境会自动经后台代理）</div>}
-      {(state === 'ok' ? (data?.photos ?? []) : []).map((p) => (
-        <div key={p.id} className="wall-thumb" title={p.title || p.author} onClick={() => onApply(p)}>
-          <img src={p.thumb} alt={p.id} loading="lazy" />
-        </div>
-      ))}
-    </div>
-    {state === 'ok' && (
-      <div className="pager-row">
-        <div className={`pg${page > 1 ? '' : ' active'}`} onClick={() => page > 1 && onPage(page - 1)}>上一页</div>
-        <span>第 {page} 页{data?.hasMore ? '' : ' · 末页'}</span>
-        <div className={`pg${data?.hasMore ? '' : ' active'}`} onClick={() => data?.hasMore && onPage(page + 1)}>下一页</div>
+  onPage: (p: number) => void; onApply: (p: WallPhoto) => void; onRetry: () => void
+}) => {
+  /* 缩略图直连失败（防盗链 / 域名被墙）时做占位，不留一格空白 */
+  const [broken, setBroken] = useState<ReadonlySet<string>>(new Set())
+  const markBroken = (id: string): void => setBroken((prev) => new Set(prev).add(id))
+  return (
+    <>
+      <div className="wall-grid">
+        {state === 'loading' && <div className="empty-box" style={{ gridColumn: '1 / -1' }}>加载中…</div>}
+        {state === 'error' && (
+          <div className="empty-box" style={{ gridColumn: '1 / -1' }}>
+            <div>获取失败：来源地址不可达，或当前环境直连受跨域限制</div>
+            <button className="btn sm ghost" style={{ marginTop: 10 }} onClick={onRetry}>重试</button>
+          </div>
+        )}
+        {(state === 'ok' ? (data?.photos ?? []) : []).map((p) => (
+          <div key={p.id} className="wall-thumb" title={p.title || p.author} onClick={() => onApply(p)}>
+            {broken.has(p.id)
+              ? <span className="wall-thumb-ph">缩略图加载失败</span>
+              : <img src={p.thumb} alt={p.id} loading="lazy" onError={() => markBroken(p.id)} />}
+          </div>
+        ))}
       </div>
-    )}
-  </>
-)
+      {state === 'ok' && (
+        <div className="pager-row">
+          <div className={`pg${page > 1 ? '' : ' active'}`} onClick={() => page > 1 && onPage(page - 1)}>上一页</div>
+          <span>第 {page} 页{data?.hasMore ? '' : ' · 末页'}</span>
+          <div className={`pg${data?.hasMore ? '' : ' active'}`} onClick={() => data?.hasMore && onPage(page + 1)}>下一页</div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/** 每个来源记住自己的浏览位置（分类 / 页码 / 搜索词），切回来接着看 */
+const browseMemory = new Map<WallSourceKind, { cat: string; page: number; query: string }>()
 
 /** 来源浏览区：分类筛选 → 壁纸网格（预览对象由外部来源列表驱动，无启用来源时不渲染） */
 const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
@@ -558,14 +578,16 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
   const [catKey, setCatKey] = useState('')
   const cat = cats.some((c) => c.key === catKey) ? catKey : (cats[0]?.key ?? 'all')
   const [page, setPage] = useState(1)
+  const [retry, setRetry] = useState(0)
   const [busy, setBusy] = useState('')
   const [task, setTask] = useState<ApplyTask | null>(null)
   const startedAt = useRef(0)
+  const abortRef = useRef<AbortController | null>(null)
   const [query, setQuery] = useState('')
   const [qInput, setQInput] = useState('')
-  const { data, state } = useWallPage(src, cat, page, query)
+  const { data, state } = useWallPage(src, cat, page, query, retry)
 
-  /** 三段式应用：下载（带字节进度）→ 处理（校验 + 入库）→ 应用（写设置并渲染），全程由浮层反馈 */
+  /** 三段式应用：下载（带字节进度、可取消）→ 处理（校验 + 入库）→ 应用（写设置并渲染） */
   const apply = async (p: WallPhoto): Promise<void> => {
     if (busy !== '') return
     setBusy(p.full)
@@ -574,6 +596,8 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
     const move = (patch: Partial<ApplyTask>): void => {
       setTask((t) => (t === null ? null : { ...t, ...patch }))
     }
+    const ac = new AbortController()
+    abortRef.current = ac
     try {
       /* 同一张图下过就跳过整段下载：键是源地址哈希，命中即复用已有记录 */
       const hit = await findWallpaperBySource(p.full)
@@ -583,28 +607,41 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
         await sleep(APPLY_STAGE_HOLD_MS)
         return
       }
-      const dataUrl = await fetchDataUrl(p.full, (loaded, total) => move({ loaded, total }))
+      /* 先探体积与类型：几千像素的原图动辄几十 MB，白下完再拒绝体验太差 */
+      await probeRemoteImage(p.full, ac.signal)
+      if (ac.signal.aborted) throw new Error('已取消下载')
+      const dataUrl = await fetchDataUrl(p.full, (loaded, total) => move({ loaded, total }), ac.signal)
+      /* 扩展环境经后台代理下载时无法中途断流，这里再判一次，取消后不再入库 */
+      if (ac.signal.aborted) throw new Error('已取消下载')
       move({ stage: 1 })
-      const ref = await storeRemoteWallpaper(p.full, dataUrl, src?.name ?? '外部来源')
+      const stored = await storeRemoteWallpaper(p.full, dataUrl, src?.name ?? '外部来源')
       move({ stage: 2 })
-      setWallpaperRef(ref)
+      setWallpaperRef(stored.ref)
+      if (stored.pruned > 0) showToast(`已替换最旧的 ${stored.pruned} 张历史壁纸`)
       await sleep(APPLY_STAGE_HOLD_MS)
     } catch (e) {
-      showToast(`设为壁纸失败：${(e as Error).message}`)
+      showToast(ac.signal.aborted ? '已取消下载' : `设为壁纸失败：${(e as Error).message}`)
     } finally {
+      abortRef.current = null
       await sleep(Math.max(0, FEEDBACK_MIN_MS - (Date.now() - startedAt.current)))
       setTask(null)
       setBusy('')
     }
   }
 
-  /* 切换来源后重置分类 / 页码 / 搜索词，避免沿用上一源的浏览位置 */
+  /* 切换来源：先存下当前来源的浏览位置，再恢复目标来源上次停的位置 */
   const srcKind = src?.kind
+  const lastKind = useRef(srcKind)
   useEffect(() => {
-    setPage(1)
-    setCatKey('')
-    setQuery('')
-    setQInput('')
+    const prev = lastKind.current
+    if (prev !== undefined && prev !== srcKind) browseMemory.set(prev, { cat: catKey, page, query })
+    const mem = srcKind === undefined ? undefined : browseMemory.get(srcKind)
+    setCatKey(mem?.cat ?? '')
+    setPage(mem?.page ?? 1)
+    setQuery(mem?.query ?? '')
+    setQInput(mem?.query ?? '')
+    setRetry(0)
+    lastKind.current = srcKind
   }, [srcKind])
 
   if (src === undefined) return null
@@ -631,8 +668,11 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
       )}
       <div className="wall-stage">
         <WallPhotos data={data} state={state} page={page} onPage={setPage}
-          onApply={(p) => { void apply(p) }} />
-        {task !== null && <WallTaskOverlay t={task} srcName={src.name} />}
+          onApply={(p) => { void apply(p) }}
+          onRetry={() => setRetry((n) => n + 1)} />
+        {task !== null && (
+          <WallTaskOverlay t={task} srcName={src.name} onCancel={() => abortRef.current?.abort()} />
+        )}
       </div>
     </>
   )
@@ -656,12 +696,16 @@ const ComponentLibraryTab = () => {
   const reorderItems = useApp((st) => st.reorderItems)
   const setModal = useApp((st) => st.setModal)
   const setDrawer = useApp((st) => st.setDrawer)
+  const goPage = useApp((st) => st.goPage)
   /* 已单独设置过默认大小的类型数（只用于摘要，不暴露具体尺寸） */
   const sized = useApp((st) => Object.keys(st.settings.sizeDefaults).length)
   const [dragId, setDragId] = useState<string | null>(null)
   const page = pages[cur] ?? EMPTY_PAGE
-  /* 已添加判定跨页：任意页存在该类型即「已添加」（组件库添加按钮的唯一口径） */
-  const added = placedKindsOf(pages)
+  /* 该类型落在哪一页：任意页存在即算已添加；在别页的给一个「第 N 页」入口，而不是让人自己翻 */
+  const pageOfKind = new Map<WidgetKind, number>()
+  pages.forEach((pg, i) => {
+    for (const it of pg) if (!pageOfKind.has(it.t)) pageOfKind.set(it.t, i)
+  })
   /** 配置：复用编辑弹窗（打开弹窗前先定位到该实例） */
   const openConfig = (id: string): void => {
     useApp.setState({ itemId: id })
@@ -711,9 +755,10 @@ const ComponentLibraryTab = () => {
           ? <div className="empty-box">{Icon.plus()}<div>暂无图标，到页面空白处右键添加</div></div>
           : icons.map(rowOf)}
       </SecCard>
-      <SecCard t="组件库" info="全部小组件放在同一张清单里，不再按类型分组；已在页面上的显示「已添加」，移除后可再次添加。图标类（网站图标 / 图标文件夹 / 图标格容器）不是小组件，从空白处右键添加。">
+      <SecCard t="组件库" info="全部小组件放在同一张清单里，不再按类型分组；已在本页的显示「已添加」，在其它页的显示所在页并可直接跳过去。图标类（网站图标 / 图标文件夹 / 图标格容器）不是小组件，从空白处右键添加。">
         {LIBRARY_LIST.map((w) => {
-          const isAdded = added.has(w.t)
+          const at = pageOfKind.get(w.t)
+          const here = at === cur
           return (
             <div className="eng-row" key={w.t}>
               <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
@@ -721,9 +766,16 @@ const ComponentLibraryTab = () => {
                 <div>{w.n}</div>
                 <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
               </div>
-              <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
-                title={isAdded ? '该组件已在页面上；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
-                onClick={() => { place(w.t); setDrawer(null) }}>{isAdded ? '已添加' : '添加'}</button>
+              {at !== undefined && !here
+                ? (
+                  <button className="btn sm ghost" title={`「${w.n}」在第 ${at + 1} 页，点击跳过去`}
+                    onClick={() => { goPage(at); setDrawer(null) }}>第 {at + 1} 页</button>
+                )
+                : (
+                  <button className={`btn sm${here ? ' ghost' : ''}`} disabled={here}
+                    title={here ? '该组件已在当前页；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
+                    onClick={() => { place(w.t); setDrawer(null) }}>{here ? '已添加' : '添加'}</button>
+                )}
             </div>
           )
         })}
@@ -776,6 +828,46 @@ const KindSizeModal = () => {
       <div className="btn-row end">
         <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
         <button className="btn" onClick={() => { setSizeDefaults(draft); setModal(null) }}>确认设置</button>
+      </div>
+    </>
+  )
+}
+
+/**
+ * Dock 快捷方式集中管理：逐行改名称 / 网址 / 移除
+ * 原先只能回页面右键一条条改；草稿态，点「保存」才写入，网址不合法的行按删除处理。
+ */
+const DockEditModal = () => {
+  const setModal = useApp((s) => s.setModal)
+  const setSetting = useApp((s) => s.setSetting)
+  const showToast = useApp((s) => s.showToast)
+  const apps = useApp((s) => s.settings.dockApps)
+  const [draft, setDraft] = useState<{ name: string; url: string }[]>(() => apps.map((a) => ({ ...a })))
+  const patch = (i: number, p: Partial<{ name: string; url: string }>): void =>
+    setDraft((d) => d.map((a, j) => (j === i ? { ...a, ...p } : a)))
+  const save = (): void => {
+    const next = draft
+      .map((a) => ({ name: a.name.trim(), url: a.url.trim() }))
+      .filter((a) => /^https?:\/\//.test(a.url))
+    setSetting('dockApps', next)
+    setModal(null)
+    showToast(`已保存 ${next.length} 个 Dock 快捷方式`)
+  }
+  return (
+    <>
+      <h2>管理 Dock 快捷方式</h2>
+      <p className="sub">逐行改名称与网址；网址留空或不是 http(s) 开头的行会被丢掉。数量上限由「快捷方式数量」设置决定。</p>
+      {draft.length === 0 && <div className="empty-box">Dock 里还没有快捷方式，去「快捷方式」页签挑一个</div>}
+      {draft.map((a, i) => (
+        <div className="dock-edit-row" key={`${a.url}-${i}`}>
+          <input className="f-input" value={a.name} placeholder="名称" onChange={(e) => patch(i, { name: e.target.value })} />
+          <input className="f-input" value={a.url} placeholder="https://" onChange={(e) => patch(i, { url: e.target.value })} />
+          <span className="ov-btn" title="移除" onClick={() => setDraft((d) => d.filter((_, j) => j !== i))}>{Icon.trash()}</span>
+        </div>
+      ))}
+      <div className="btn-row end">
+        <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
+        <button className="btn" onClick={save}>保存</button>
       </div>
     </>
   )
@@ -835,10 +927,11 @@ const PersonalPanel = () => {
   const upload = async (f: File | undefined): Promise<void> => {
     if (!f) return
     try {
-      const ref = await uploadWallpaper(f)
-      if (ref !== null) {
+      const stored = await uploadWallpaper(f)
+      if (stored.ref !== null) {
         setPrevWallRef(s.wallpaperRef)
-        setWallpaperRef(ref)
+        setWallpaperRef(stored.ref)
+        if (stored.pruned > 0) showToast(`已替换最旧的 ${stored.pruned} 张历史壁纸`)
       }
     } catch (e) {
       showToast((e as Error).message)
@@ -2748,6 +2841,8 @@ export const Modal = () => {
         return <KindSizeModal />
       case 'newSite':
         return <NewSiteModal />
+      case 'dockEdit':
+        return <DockEditModal />
       case 'editItem':
         return item !== null ? <EditCardModal item={item} /> : <h2>编辑卡片</h2>
       case 'itemDetail':

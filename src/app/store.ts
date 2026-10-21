@@ -51,7 +51,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'kindSizes' | 'backup' | 'restore' | 'reset' | 'newSite'
+export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'kindSizes' | 'backup' | 'restore' | 'reset' | 'newSite' | 'dockEdit'
 
 /**
  * 应用内通用对话框（替代 window.confirm / window.prompt）

@@ -69,6 +69,11 @@ export const sourceSearchable = (kind: WallSourceKind): boolean =>
 const PICSUM_PAGE_SIZE = 30 as const;
 const WG061129_PAGE_SIZE = 30 as const;
 const BING_PAGE_SIZE = 8 as const;
+/**
+ * 必应归档只有最近一周多：idx 超界后站方把最老的 8 张再返回一遍
+ * （实测 idx=80 与 idx=8 首图完全一致），所以翻到第 2 页就到底。
+ */
+const BING_MAX_PAGE = 2 as const;
 /** 061129 图片 CDN（与数据域分离，前端 bundle 与浏览器实测确认） */
 const WG061129_IMG_BASE = 'https://img.061129.xyz';
 /** wallhaven categories 参数：General/Anime/People 三位开关（原站协议） */
@@ -190,7 +195,7 @@ const parseBing = (base: string, page: number, text: string): WallPage => {
       title: String(it['title'] ?? ''),
     };
   });
-  return { photos, page, hasMore: rows.length >= BING_PAGE_SIZE };
+  return { photos, page, hasMore: page < BING_MAX_PAGE && rows.length >= BING_PAGE_SIZE };
 };
 
 /** 解析 061129 分类清单响应（纯函数；全量数组按关键词过滤后 30/页切片分页） */
@@ -235,10 +240,13 @@ export const clearWallSourceCache = (): void => {
   zfCategoryCache.clear();
 };
 
-/** 拉取一页壁纸（分类 + 页码 + 可选搜索关键词）；命中 30 分钟内缓存时直接复用，避免反复网络请求 */
-export const fetchWallPage = async (src: WallpaperSource, cat: string, page: number, query = ''): Promise<WallPage> => {
+/**
+ * 拉取一页壁纸（分类 + 页码 + 可选搜索关键词）
+ * @param fresh 跳过读缓存（界面上的「重试 / 刷新」用它拿站方最新结果）；写缓存照旧
+ */
+export const fetchWallPage = async (src: WallpaperSource, cat: string, page: number, query = '', fresh = false): Promise<WallPage> => {
   const key = `${src.kind}:${cleanBase(src.apiBase)}:${cat}:${page}:${query.trim()}`;
-  const hit = pageCache.get(key);
+  const hit = fresh ? undefined : pageCache.get(key);
   if (hit !== undefined && Date.now() - hit.at < PAGE_CACHE_TTL) return hit.page;
   const res =
     src.kind === 'zhefeng'

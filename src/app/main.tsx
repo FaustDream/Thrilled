@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { App } from './App'
 import { ErrorBoundary } from './ErrorBoundary'
 import { initPlatform, startFileConfigRestore } from './platform'
+import { startCrossTabSync } from './cross-tab'
 import { hydrate } from './store'
 import { applyBootBg } from './boot-theme'
 import './styles/prototype.css'
@@ -39,6 +40,8 @@ const boot = async (): Promise<void> => {
       </ErrorBoundary>
     </StrictMode>,
   )
+  /* 多标签页同步：别的标签页改了配置，本页跟着刷新（内容相同则忽略） */
+  startCrossTabSync()
   /* 界面已按本地配置渲染：目录快照的磁盘读取放到挂载之后，不占首屏时间 */
   startFileConfigRestore()
 }

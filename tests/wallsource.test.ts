@@ -103,6 +103,12 @@ describe('parseList', () => {
     })
     expect(page.hasMore).toBe(true)
   })
+  it('必应翻到第 2 页就到底（站方 idx 越界会重发最老的 8 张）', () => {
+    const rows = Array.from({ length: 8 }, () => ({ url: '/th?id=OHR.X_1920x1080.jpg', title: 't', copyright: 'c', date: '20261001' }))
+    const text = JSON.stringify({ images: rows })
+    expect(parseList(bg, 1, text).hasMore).toBe(true)
+    expect(parseList(bg, 2, text).hasMore).toBe(false)
+  })
   it('061129 分类清单解码后按 30/页切片分页', () => {
     const rows = Array.from({ length: 35 }, (_, i) => ({ id: 'd' + i, path: '/wallpaper/desktop/' + i + '.jpg', thumbnailPath: '/thumbnail/desktop/' + i + '.webp', displayTitle: '图' + i }))
     const text = JSON.stringify({ blob: encodeSample(JSON.stringify(rows)) })

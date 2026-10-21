@@ -158,6 +158,15 @@ export const saveDoc = (doc: StoredDoc): void => {
   kvSet(DOC_KEY, doc);
 };
 
+/**
+ * 采纳其它标签页写入的文档：只更新内存缓存并返回解析结果，不落盘、不触发变更通知。
+ * 跨标签同步用它，否则本页缓存在别人写入后仍是旧值（回读会拿到自己这份旧数据）。
+ */
+export const adoptExternalDoc = (raw: unknown): StoredDoc | null => {
+  cache.set(DOC_KEY, raw);
+  return parseStoredDoc(raw, WIDGET_KINDS);
+};
+
 /** 更新前备份的文档（没有备份返回 null） */
 export const loadBackupDoc = (): StoredDoc | null => {
   const raw = cache.get(BACKUP_DOC_KEY);

@@ -10,7 +10,7 @@
  * 环境为 node，无 DOM：FileReader 与 fetch 用最小桩件替代。
  */
 import { describe, expect, it, vi } from 'vitest'
-import { fetchDataUrl } from '../src/core/fetch-proxy'
+import { fetchDataUrl, probeRemoteImage } from '../src/core/fetch-proxy'
 import { findWallpaperBySource, storeRemoteWallpaper, wallpapersToClear, wallpaperRefOf, WALLPAPER_REF_PREFIX } from '../src/core/wallpaper'
 
 /* ---------- 环境桩件 ---------- */
@@ -93,6 +93,27 @@ describe('storeRemoteWallpaper 入库校验', () => {
   it('node 环境无 indexedDB 时抛出存储失败（不静默成功）', async () => {
     await expect(storeRemoteWallpaper('https://x.test/small.jpg', 'data:image/jpeg;base64,AAAA', 'Test'))
       .rejects.toThrow('壁纸保存失败');
+  });
+});
+
+/* ---------- probeRemoteImage：下载前先看体积与类型 ---------- */
+
+describe('probeRemoteImage 下载前探测', () => {
+  it('体积超上限时提前拒绝，不白下', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, {
+      headers: { 'content-length': String(30 * 1024 * 1024), 'content-type': 'image/jpeg' },
+    })));
+    await expect(probeRemoteImage('https://x.test/big.jpg')).rejects.toThrow('超过 20MB');
+  });
+
+  it('不是图片时提前拒绝', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { headers: { 'content-type': 'text/html' } })));
+    await expect(probeRemoteImage('https://x.test/a.html')).rejects.toThrow('不是图片');
+  });
+
+  it('HEAD 不可用（被限制）时放行，交给正式下载兜底', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('blocked'); }));
+    await expect(probeRemoteImage('https://x.test/a.jpg')).resolves.toBeUndefined();
   });
 });
 

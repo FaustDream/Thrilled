@@ -216,14 +216,18 @@ export const markActiveWallpaper = (ref: string | null): void => {
   activeRef = ref;
 };
 
-/** 入库后淘汰超额历史：总数保持 WALLPAPER_HISTORY_LIMIT，刚入库的与当前使用中的两项豁免 */
-async function pruneWallpapers(justStored: string): Promise<void> {
+/**
+ * 入库后淘汰超额历史：总数保持 WALLPAPER_HISTORY_LIMIT，刚入库的与当前使用中的两项豁免
+ * @returns 被淘汰的条数（界面据此提示「最旧的 N 张已被替换」）
+ */
+async function pruneWallpapers(justStored: string): Promise<number> {
   const all = await listWallpapers();
   const spared = new Set([justStored, ...(activeRef === null ? [] : [activeRef])]);
   const sparedCount = all.filter((x) => spared.has(x.ref)).length;
   const extra = all.filter((x) => !spared.has(x.ref)).slice(Math.max(0, WALLPAPER_HISTORY_LIMIT - sparedCount));
   for (const x of extra) await idbRemove(x.ref);
   if (extra.length > 0) info(MODULE, '历史壁纸已淘汰', { count: extra.length });
+  return extra.length;
 }
 
 /** 删除背景数据（换壁纸 / 重置时调用；旧文件不清理会占空间） */
@@ -294,11 +298,35 @@ export function compressImage(rawDataUrl: string): Promise<string> {
   });
 }
 
+/** 只在宽度超过上限时才重编码（缩略档位不动，避免把小图放大再压糊） */
+export function maybeCompressImage(rawDataUrl: string): Promise<string> {
+  /* 非浏览器环境（单测 / 后台脚本）没有 Image：原样返回，由调用方继续 */
+  if (typeof Image === 'undefined') return Promise.resolve(rawDataUrl)
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      if (img.width <= WALLPAPER_MAX_WIDTH) {
+        resolve(rawDataUrl);
+        return;
+      }
+      resolve(compressImage(rawDataUrl));
+    };
+    img.onerror = () => resolve(rawDataUrl);
+    img.src = rawDataUrl;
+  });
+}
+
+/** 壁纸入库结果：引用 id + 本次被淘汰的历史条数（0 = 没顶到上限） */
+export interface WallStoreResult {
+  ref: string | null;
+  pruned: number;
+}
+
 /**
  * 上传壁纸文件：校验类型与体积 → 保存 IndexedDB
- * @returns 引用 id；校验失败或保存失败返回 null（错误原因经 reject message 区分）
+ * @returns 引用 id（失败为 null，错误原因经 reject message 区分）与淘汰条数
  */
-export async function uploadWallpaper(file: File): Promise<string | null> {
+export async function uploadWallpaper(file: File): Promise<WallStoreResult> {
   if (file.size > WALLPAPER_MAX_BYTES) {
     throw new Error('文件过大，最大支持 5MB');
   }
@@ -311,27 +339,27 @@ export async function uploadWallpaper(file: File): Promise<string | null> {
   const data = isVideo ? raw : await compressImage(raw);
   const ref = await saveWallpaper({ type: isVideo ? 'video' : 'image', data, src: '', from: '本地上传' });
   if (ref === null) throw new Error('壁纸保存失败，可能是存储空间不足');
-  await pruneWallpapers(ref);
-  return ref;
+  return { ref, pruned: await pruneWallpapers(ref) };
 }
 
 /**
- * 外部壁纸原图入库：按来源地址去重（命中直接复用既有记录）→ 校验体积 → 写入 IndexedDB，
- * 返回引用 id；入库后淘汰超额历史。
+ * 外部壁纸原图入库：按来源地址去重（命中直接复用既有记录）→ 校验体积 → 超过 1920 宽先压缩
+ * → 写入 IndexedDB，入库后淘汰超额历史。
  * 与下载（core/fetch-proxy 的 fetchDataUrl）分开，便于 UI 在两步之间展示阶段反馈。
  */
-export async function storeRemoteWallpaper(src: string, dataUrl: string, from: string): Promise<string> {
+export async function storeRemoteWallpaper(src: string, dataUrl: string, from: string): Promise<WallStoreResult> {
   const hit = await findWallpaperBySource(src);
   if (hit !== null) {
     info(MODULE, '同一来源已落地，跳过重复写入', { ref: hit.ref });
-    return hit.ref;
+    return { ref: hit.ref, pruned: 0 };
   }
   if (dataUrl.length * 0.75 > WALLPAPER_EXT_MAX_BYTES) throw new Error('图片过大，超过 20MB 上限');
-  const ref = await saveWallpaper({ type: 'image', data: dataUrl, src, from });
+  /* 在线来源常见 4K 原图：与本地壁纸同一套宽度上限，避免整张 base64 长期占库 */
+  const data = await maybeCompressImage(dataUrl);
+  const ref = await saveWallpaper({ type: 'image', data, src, from });
   if (ref === null) throw new Error('壁纸保存失败，可能是存储空间不足');
-  info(MODULE, '外部壁纸已落地', { bytes: Math.round(dataUrl.length * 0.75) });
-  await pruneWallpapers(ref);
-  return ref;
+  info(MODULE, '外部壁纸已落地', { bytes: Math.round(data.length * 0.75) });
+  return { ref, pruned: await pruneWallpapers(ref) };
 }
 
 /** 诊断日志（保留 v3 的错误上下文习惯） */
