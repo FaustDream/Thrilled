@@ -244,6 +244,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     styleDefaults: normStyleDefaults(o['styleDefaults']),
     sizeDefaults: normSizeDefaults(o['sizeDefaults']),
     weatherCity: normCityPick(o['weatherCity']),
+    weatherCities: normCityPickList(o['weatherCities']),
   };
 };
 
@@ -257,6 +258,18 @@ const normCityPick = (v: unknown): CityPick | null => {
   if (name === '' || Number.isNaN(lat) || Number.isNaN(lon)) return null;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
   return { name, lat, lon };
+};
+
+/** 「其他城市」清单归一化：逐项走 normCityPick，坏项丢弃；上限 8 条防脏数据撑爆设置 */
+const normCityPickList = (v: unknown): CityPick[] => {
+  if (!Array.isArray(v)) return [];
+  const out: CityPick[] = [];
+  for (const raw of v) {
+    const c = normCityPick(raw);
+    if (c !== null) out.push(c);
+    if (out.length >= 8) break;
+  }
+  return out;
 };
 
 /**

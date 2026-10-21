@@ -364,7 +364,12 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 @keyframes ctx-out{from{opacity:1;transform:none}to{opacity:0;transform:scale(.99)}}
 .ctx-item{height:40px;display:flex;align-items:center;justify-content:space-between;gap:10px;
   padding:0 14px;font-size:var(--fs-lg);cursor:pointer;position:relative;transition:background .12s linear}
-.ctx-item:hover{background:var(--menu-hover)}
+/* 悬停指示条（用户反馈：目前选中哪一项不清楚）：左缘强调色短条以缩放动画出现，无布局位移 */
+.ctx-item::before{content:'';position:absolute;left:6px;top:50%;width:3px;height:16px;border-radius:2px;
+  background:var(--accent);transform:translateY(-50%) scaleY(0);opacity:0;
+  transition:transform .16s var(--ease),opacity .16s var(--ease)}
+.ctx-item:hover{background:color-mix(in srgb,var(--accent) 9%,var(--menu-hover))}
+.ctx-item:hover::before{transform:translateY(-50%) scaleY(1);opacity:1}
 .ctx-arrow{width:0;height:0;border-left:6px solid var(--panel-sub);border-top:5px solid transparent;
   border-bottom:5px solid transparent;opacity:.6;transition:border-left-color .12s,opacity .12s,transform .12s}
 .ctx-item:hover .ctx-arrow{border-left-color:var(--accent);opacity:1;transform:translateX(2px)}
@@ -380,17 +385,24 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 @keyframes ctx-sub-in-flip{from{opacity:0;transform:translateX(5px)}to{opacity:1;transform:none}}
 .ctx-sub-item{height:36px;display:flex;align-items:center;gap:8px;padding:0 14px;font-size:var(--fs-md);
   cursor:pointer;position:relative;transition:background .12s linear}
-.ctx-sub-item:hover{background:var(--menu-hover)}
+/* 二级条目同一套悬停语言：更细的强调条 + 淡强调底色 */
+.ctx-sub-item::before{content:'';position:absolute;left:6px;top:50%;width:2px;height:12px;border-radius:2px;
+  background:var(--accent);transform:translateY(-50%) scaleY(0);opacity:0;
+  transition:transform .16s var(--ease),opacity .16s var(--ease)}
+.ctx-sub-item:hover{background:color-mix(in srgb,var(--accent) 9%,var(--menu-hover))}
+.ctx-sub-item:hover::before{transform:translateY(-50%) scaleY(1);opacity:1}
 .ctx-check{width:14px;height:14px;flex:0 0 auto;color:var(--accent);visibility:hidden}
 .ctx-sub-item.on .ctx-check{visibility:visible}
 /* 菜单分组分隔线（空白处菜单：新建 3 项 / 打开 3 项）：比正文线更淡，上下留白 */
 .ctx-sep{height:1px;margin:7px 12px;background:color-mix(in srgb,var(--panel-text) 10%,transparent)}
-/* 禁用项：置灰且不参与 hover 反馈；点击由 App.onAct 的 ctx-blocked 给出原因 */
+/* 禁用项：置灰且不参与 hover 反馈（强调条也不出现）；点击由 App.onAct 的 ctx-blocked 给出原因 */
 .ctx-item.dis{opacity:.4;cursor:default}
 .ctx-item.dis:hover{background:transparent}
-/* 二级置灰项（「添加组件」里已在页面上的类型）：右侧标「已添加」，同样不可点 */
+.ctx-item.dis::before{display:none}
+/* 二级置灰项（「更换小组件」里当前的类型带勾选）：同样不可点 */
 .ctx-sub-item.dis{opacity:.4;cursor:default}
 .ctx-sub-item.dis:hover{background:transparent}
+.ctx-sub-item.dis::before{display:none}
 .ctx-sub-tag{margin-left:auto;font-size:var(--fs-xs);color:var(--panel-sub);flex:0 0 auto}
 
 /* ============ 9.1 图标提示气泡 ============ */
@@ -470,6 +482,11 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .btn:disabled{opacity:.45;cursor:default;filter:none;transform:none}
 .btn-row{display:flex;gap:10px;flex-wrap:wrap}
 .btn-row.end{justify-content:flex-end}
+/* 弹窗内按钮行的垂直边距统一（原先 8 / 10 / 14 / 16 混用）：与上文的间距一律 16px，
+   连续两行按钮组收紧为 8px（同一组的两行），表单字段里的按钮行不额外加边距 */
+.modal .btn-row{margin-top:16px}
+.modal .btn-row+.btn-row{margin-top:8px}
+.modal .f-row .btn-row{margin-top:0}
 /* 3 列等宽按钮网格：每行 3 个、右边缘对齐，不再出现按钮按文字宽度流式换行；
    两张卡共用同一网格，因此「重置与清理」的两颗与上卡第一、二列严格对齐 */
 .btn-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;align-items:start}
@@ -563,6 +580,9 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 /* 卡片详情弹窗：各组件的核心内容视图（天气 / 时钟 / 月历 / 待办 / 书签列表 / 大数字） */
 .dt-now{display:flex;align-items:baseline;gap:12px;margin:4px 0 10px}
 .dt-temp{font-size:42px;font-weight:700}
+/* 天气实况主行：温度是重点（大字），天气现象次之（加重），地名最弱（辅助色） */
+.dt-now-main{display:flex;flex-direction:column;gap:2px}
+.dt-cond{font-size:var(--fs-xl);font-weight:600}
 .dt-clock{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 0 4px}
 .dt-time{font-size:46px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
 .dt-unit{font-size:var(--fs-lg);font-weight:400;margin-left:6px;color:var(--panel-sub)}
@@ -571,12 +591,44 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .dt-day{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;
   border:0.5px solid var(--line);border-radius:var(--r-md);font-size:var(--fs-sm);color:var(--panel-sub)}
 .dt-day span:first-child{color:var(--panel-text,var(--card-text));font-weight:600}
-.dt-cal-top{display:flex;align-items:center;gap:6px;margin-bottom:8px}
+.dt-day span:last-child{font-variant-numeric:tabular-nums}
+/* 三日预报里今天一档：淡强调底 + 强调描边（今天才是用户对照的基准） */
+.dt-day.today{background:color-mix(in srgb,var(--accent) 8%,transparent);
+  border-color:color-mix(in srgb,var(--accent) 32%,transparent)}
+.dt-cal-top{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
 .dt-cal-nav{width:28px;height:28px;border-radius:var(--r-sm);border:1px solid var(--line);
   background:transparent;color:var(--panel-text);font-size:var(--fs-xl);line-height:1;
-  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
-.dt-cal-nav:hover{background:var(--menu-hover)}
+  display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;transition:background .14s,border-color .14s}
+.dt-cal-nav:hover{background:var(--menu-hover);border-color:color-mix(in srgb,var(--panel-text) 20%,transparent)}
 .dt-cal-head{font-size:var(--fs-lg);font-weight:600;margin-bottom:8px}
+/* 视图切换（月 / 周 / 年）：胶囊组贴右，粒度即步进档位 */
+.dt-cal-seg{display:flex;gap:4px;margin-left:auto}
+.dt-cal-seg .cat{padding:4px 10px}
+/* 周视图：一行 7 格放宽一点，别照搬月历的紧凑行高 */
+.dt-cal-week .dt-cal-cell{padding:12px 0}
+/* 年视图：12 个迷你月（公历日 + 周表头），点月份标题进月视图，点日期直接选中 */
+.dt-cal-year{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.dtc-ym{border:0.5px solid var(--line);border-radius:var(--r-md);padding:8px 6px}
+.dtc-ym-title{border:none;background:transparent;font:inherit;font-size:var(--fs-sm);font-weight:600;
+  color:var(--panel-text);cursor:pointer;padding:0 4px 4px;border-radius:var(--r-xs)}
+.dtc-ym-title:hover{color:var(--accent)}
+.dtc-ym-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;text-align:center}
+.dtc-ym-wd{font-style:normal;font-size:var(--fs-2xs);color:var(--panel-sub);padding:1px 0}
+.dtc-ym-d{border:none;background:transparent;font:inherit;font-size:var(--fs-2xs);padding:2px 0;
+  border-radius:4px;cursor:pointer;color:inherit}
+.dtc-ym-d:hover{background:var(--menu-hover)}
+.dtc-ym-d.out{visibility:hidden}
+.dtc-ym-d.today{box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent);font-weight:600}
+.dtc-ym-d.sel{background:var(--accent);color:#fff;font-weight:600}
+/* 选中日期信息：公历日期与星期是重点（大字重），农历 / 干支次之（辅助色），宜忌用语义色标签 */
+.dt-cal-info{margin-top:12px;display:flex;flex-direction:column;gap:8px}
+.dt-cal-sel{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.dcs-date{font-size:var(--fs-2xl);font-weight:600;line-height:1.2}
+.dcs-sub{font-size:var(--fs-sm);color:var(--panel-sub)}
+.dcs-chips{display:flex;flex-wrap:wrap;gap:6px}
+/* 宜 / 忌标签：语义色只做底色淡化，文字本身仍可读（颜色不单独承担信息） */
+.dt-tag.yi{background:color-mix(in srgb,var(--ok,#15803d) 14%,transparent);color:var(--ok,#15803d)}
+.dt-tag.ji{background:color-mix(in srgb,var(--bad,#b91c1c) 12%,transparent);color:var(--bad,#b91c1c)}
 .dt-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:var(--fs-sm)}
 .dt-cal-wd{color:var(--panel-sub);padding:4px 0}
 .dt-cal-wd.end{color:var(--bad,#b91c1c)}
@@ -602,10 +654,23 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .dt-list{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
 .dt-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--r-md);cursor:pointer}
 .dt-row:hover{background:var(--line)}
+/* 其他城市行：整行可点（设为主定位），删除键与待办行同一套悬停显现 */
+.dt-row.city .dt-row-del{opacity:0}
+.dt-row.city:hover .dt-row-del{opacity:1}
 .dt-ico{width:30px;height:30px;border-radius:var(--r-md);flex:0 0 auto}
 .dt-name{font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dt-host{margin-left:auto;font-size:var(--fs-xs);color:var(--panel-sub);flex:0 0 auto}
-.dt-todo-head{font-size:var(--fs-md);font-weight:600;margin-bottom:6px}
+/* 其他城市的实况温度：整行里仅次于城市名的信息，加重并等宽数字 */
+.dt-row.city .dt-name{flex:1;min-width:0}
+.wc-temp{margin-left:auto;font-size:var(--fs-lg);font-weight:600;font-variant-numeric:tabular-nums}
+.wc-temp+.dt-host{margin-left:0}
+/* 「页面组件」列表的行首类型标签：组件 = 强调色淡底，图标 = 中性灰（文字本身已表意，颜色只作辅助） */
+.row-kind{flex:0 0 auto;font-size:var(--fs-2xs);line-height:16px;padding:0 6px;border-radius:var(--r-xs);
+  background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:500}
+.row-kind.alt{background:var(--line);color:var(--panel-sub);font-weight:400}
+/* 小节标题：与上文统一留 12px（原先 10px 内联值散落各处）；弹窗说明行紧跟着的标题不再叠加空白 */
+.dt-todo-head{font-size:var(--fs-md);font-weight:600;margin:12px 0 6px}
+.modal p.sub+.dt-todo-head{margin-top:2px}
 .dt-todo-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:var(--r-md)}
 .dt-todo-row input[type='checkbox']{accent-color:var(--accent)}
 .dt-todo-txt{font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

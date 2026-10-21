@@ -170,3 +170,29 @@ export function daysUntil(date: string, now: Date = new Date()): number | null {
   const b = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   return Math.round((a - b) / 86400000);
 }
+
+/** 平移若干天（本地时区；跨月 / 跨年由 Date 自动进位），返回新日期不改原值 */
+export function addDays(d: Date, n: number): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+}
+
+/** 所在周的第一天（周日，与月历网格「日一二三四五六」的列序一致），时间部分清零 */
+export function startOfWeek(d: Date): Date {
+  return addDays(d, -d.getDay());
+}
+
+/**
+ * ISO 周号（周一为一周之始、含第一个周四的那周是第 1 周）：日历详情「第 N 周」标注用。
+ * 返回值带所属 ISO 年（12 月末的日期可能属于下一年的第 1 周）。
+ */
+export function isoWeekOf(d: Date): { year: number; week: number } {
+  const t = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  /* ISO：周四所在的那一周定归属——把日期移到本周四再取年 */
+  const day = (t.getDay() + 6) % 7;
+  const thursday = addDays(t, 3 - day);
+  const year = thursday.getFullYear();
+  const first = new Date(year, 0, 1);
+  const firstDay = (first.getDay() + 6) % 7;
+  const firstThursday = addDays(first, (firstDay <= 3 ? 3 - firstDay : 10 - firstDay));
+  return { year, week: Math.round((thursday.getTime() - firstThursday.getTime()) / (7 * 86400000)) + 1 };
+}

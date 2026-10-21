@@ -11,7 +11,7 @@ import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../sha
 import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
-import { getWeather, type GeoStatus, type WeatherData } from '../core/weather'
+import { getCityWeather, getWeather, cityKeyOf, type GeoStatus, type WeatherData } from '../core/weather'
 import { pushHistory } from '../core/utils'
 import { initStorage, kvGetRaw, kvSetRaw, loadBackupDoc, loadDoc, saveBackupDoc, saveDoc } from '../core/storage'
 import { markActiveWallpaper } from '../core/wallpaper'
@@ -23,6 +23,7 @@ import { withGlobalBlur, withGlobalGlass } from '../shared/visual'
 import { isBlankStyle, styleSliceOf, withoutStyle, withoutStyleDefault } from '../shared/widget-style'
 import type {
   AppSettings,
+  CityPick,
   EngineDef,
   BlurKey,
   GlassKey,
@@ -85,6 +86,8 @@ interface AppState {
   skins: SkinPack[]
   history: string[]
   weather: WeatherData | null
+  /** 天气详情「其他城市」的实况：键为城市坐标键（cityKeyOf），未加载完成 / 失败的城市无键 */
+  cityWeathers: Record<string, WeatherData>
   /** 天气定位状态：ok = 已定位；denied / unavailable = 需要用户允许定位 */
   geoStatus: GeoStatus
   /** 上次备份时间 */
@@ -184,6 +187,12 @@ interface AppState {
    * force = true 时跳过缓存并重新请求定位权限（用户点「允许定位」后走这里）。
    */
   loadWeather: (force?: boolean) => Promise<void>
+  /** 拉取「其他城市」清单的实况（各自带缓存；主定位不动） */
+  loadCityWeathers: () => Promise<void>
+  /** 天气详情：添加一个其他城市（同名 / 同坐标去重，上限 8 个） */
+  addWeatherCity: (city: CityPick) => void
+  /** 天气详情：移除一个其他城市（下标对应 settings.weatherCities） */
+  removeWeatherCity: (i: number) => void
   markBackedUp: () => void
   resetParts: (parts: { layout: boolean; skins: boolean; wallpaper: boolean }) => void
   addHistory: (term: string) => void
@@ -382,6 +391,7 @@ export const useApp = create<AppState>()((set, get) => ({
   skins: cloneSkins(BUILTIN_SKINS),
   history: [],
   weather: null,
+  cityWeathers: {},
   geoStatus: 'unavailable',
   backupTime: null,
   itemId: null,
@@ -800,7 +810,49 @@ export const useApp = create<AppState>()((set, get) => ({
     const data = await getWeather(get().settings.weatherCity)
     set({ weather: data, geoStatus: data === null ? 'denied' : 'ok' })
     if (force && data === null) set({ toast: '未获得定位权限：请在浏览器允许定位，或在天气卡配置里手选城市' })
+    /* 其他城市的实况顺带刷新（各自有 30min 缓存，重复调用开销可忽略） */
+    void get().loadCityWeathers()
   },
+
+  loadCityWeathers: async () => {
+    const cities = get().settings.weatherCities
+    if (cities.length === 0) {
+      if (Object.keys(get().cityWeathers).length > 0) set({ cityWeathers: {} })
+      return
+    }
+    const rows = await Promise.all(cities.map(async (ct) => {
+      const w = await getCityWeather(ct)
+      return [cityKeyOf(ct), ...(w === null ? [] : [w])] as const
+    }))
+    /* 失败的城市不出现在结果里（列表行显示「暂无数据」而不是拿旧值冒充） */
+    const next: Record<string, WeatherData> = {}
+    for (const [k, w] of rows) if (w !== undefined) next[k] = w
+    set({ cityWeathers: next })
+  },
+
+  addWeatherCity: (city) => {
+    const s = get()
+    const prev = s.settings.weatherCities
+    /* 去重：同名或同坐标（四舍五入到 0.1°）只保留一个 */
+    const dup = prev.some((x) => x.name === city.name || cityKeyOf(x) === cityKeyOf(city))
+    if (dup) { set({ toast: `「${city.name}」已在其他城市里` }); return }
+    if (prev.length >= 8) { set({ toast: '其他城市最多 8 个，请先移除一些' }); return }
+    set({ settings: { ...s.settings, weatherCities: [...prev, city] }, toast: `已添加 ${city.name}` })
+    /* 添加后立刻拉取该城实况（不等下一次天气刷新） */
+    void get().loadCityWeathers()
+  },
+
+  removeWeatherCity: (i) => set((s) => {
+    const city = s.settings.weatherCities[i]
+    if (city === undefined) return {}
+    const nextWeathers: Record<string, WeatherData> = {}
+    for (const [k, v] of Object.entries(s.cityWeathers)) if (k !== cityKeyOf(city)) nextWeathers[k] = v
+    return {
+      settings: { ...s.settings, weatherCities: s.settings.weatherCities.filter((_, j) => j !== i) },
+      cityWeathers: nextWeathers,
+      toast: `已移除 ${city.name}`,
+    }
+  }),
 
   markBackedUp: () => set({ backupTime: new Date().toLocaleString('zh-CN'), toast: '备份成功' }),
 

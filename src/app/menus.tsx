@@ -1,17 +1,18 @@
 /**
- * 右键菜单（空白处 8 项 + 卡片 6 项 / 图标类 7 项 + Dock 图标 5 项）
+ * 右键菜单（空白处 9 项 + 卡片 6 项 / 图标类 7 项 + Dock 图标 5 项）
  *
- * 空白处分三组：添加网站图标 / 添加图标文件夹 / 添加图标格容器 / 添加到 Dock 快捷方式 /
- *  添加组件（二级，只列组件库里的类型）为「新建」，打开添加面板 / 个性化 / 设置为「打开」，
- *  末尾单独一组是「整理图标」。前三项直接落位（不弹表单）——生成后由卡片的落位提示指出位置，
- *  编辑走卡片右键「编辑信息」。图标文件夹与图标格容器不是小组件，只从这里添加。
+ * 空白处分三组：添加网站图标 / 添加图标文件夹 / 添加图标格容器 / 添加到 Dock 快捷方式 为「新建」，
+ *  打开添加面板 / 个性化 / 设置为「打开」，末尾单独一组是「整理图标」。
+ *  前三项直接落位（不弹表单）——生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」。
+ *  小组件不再从右键添加（「添加组件」已移除，入口统一在个性化 → 组件库）；
+ *  图标文件夹与图标格容器不是小组件，只从这里添加。
  * 卡片与 Dock 图标各有自己的菜单；输入框、抽屉、弹窗、引擎面板里的右键仍交给浏览器原生菜单
  * （见 App 的 contextmenu 处理）。二级菜单按 UiTab 实测复刻。
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type CtxState } from './store'
-import { ARRANGE_KINDS, placedKindsOf } from './layout'
-import { LIBRARY_LIST, WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
+import { ARRANGE_KINDS } from './layout'
+import { WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
 import { MAX_PAGES, SIZES, findSlot } from '../shared/grid'
 import { stage } from './stage'
 import { CheckIcon } from './icons'
@@ -89,9 +90,10 @@ const DockMenu = ({ idx }: { idx: number }) => {
 }
 
 /**
- * 空白处右键菜单（固定 6 项：3 个新建 + 3 个打开；动作在 App.onAct）。
- * 置灰只覆盖可判定的情形：Dock 满额、到 5 页上限且本页放不下默认尺寸的图标；
- * 「添加组件」尺寸随类型而异，不预判，交给 store.place 的 toast 兜底。
+ * 空白处右键菜单（固定 9 项：4 个新建 + 3 个打开 + 整理图标；动作在 App.onAct）。
+ * 小组件的添加入口在个性化 → 组件库（「添加组件」二级菜单已按用户要求移除）；
+ * 网站图标 / 图标文件夹 / 图标格容器不是小组件，新建入口只在这里。
+ * 置灰只覆盖可判定的情形：Dock 满额、到 5 页上限且本页放不下默认尺寸的图标。
  */
 const BlankMenu = () => {
   const pages = useApp((s) => s.pages)
@@ -102,8 +104,6 @@ const BlankMenu = () => {
   const icon = placeSizeOf('icon', {}, sizeDefaults)
   const noRoom = pages.length >= MAX_PAGES && findSlot(pages[cur] ?? [], icon.w, icon.h) === null
   const dockFull = apps.length >= dockCount
-  /* 已添加类型（跨页判定，与组件库同一口径 placedKindsOf）：二级里置灰并标「已添加」 */
-  const added = placedKindsOf(pages)
   const roomTip = '最多 5 页，已没有位置可放'
   const dockTip = `Dock 最多 ${dockCount} 个快捷方式，请先移除一些`
   return (
@@ -121,22 +121,6 @@ const BlankMenu = () => {
       </div>
       <div className={`ctx-item${dockFull ? ' dis' : ''}`} data-act={dockFull ? 'ctx-blocked' : 'newsite'} data-v={dockFull ? dockTip : 'dock'}>
         <span>添加到 Dock 快捷方式</span>
-      </div>
-      <div className="ctx-item"><span>添加组件</span><span className="ctx-arrow" />
-        <div className="ctx-sub" style={{ maxHeight: 560, overflow: 'auto' }}>
-          {LIBRARY_LIST.map((w) => {
-            /* 该类型已在任意页存在 → 置灰 + 「已添加」标记，点击只给原因（不落位） */
-            const isAdded = added.has(w.t)
-            return (
-              <div key={w.t} className={`ctx-sub-item${isAdded ? ' dis' : ''}`}
-                data-act={isAdded ? 'ctx-blocked' : 'place-kind'}
-                data-v={isAdded ? `「${w.n}」已在页面上，删除后可再次添加` : w.t}>
-                <span>{w.n}</span>
-                {isAdded && <span className="ctx-sub-tag">已添加</span>}
-              </div>
-            )
-          })}
-        </div>
       </div>
       <div className="ctx-sep" />
       <div className="ctx-item" data-act="drawer-open" data-v="add"><span>打开添加面板</span></div>

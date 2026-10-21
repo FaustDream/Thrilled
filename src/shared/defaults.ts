@@ -76,6 +76,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   sizeDefaults: {},
   /* 天气默认用真实定位（浏览器定位权限）；手选城市是定位不可用时的替代方案 */
   weatherCity: null,
+  weatherCities: [],
 };
 
 /** 内置主题只有两套：经典（浅色）与暗黑（深色）；配色不再提供编辑器 */

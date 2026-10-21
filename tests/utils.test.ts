@@ -3,7 +3,7 @@
  * + 月历网格（日历详情弹窗）+ 待办条目归一化（待办详情弹窗）
  */
 import { describe, expect, it } from 'vitest'
-import { daysUntil, hostOf, monthCells, normalizeSiteUrl, normTodoItems, pushHistory } from '../src/core/utils'
+import { addDays, daysUntil, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, pushHistory, startOfWeek } from '../src/core/utils'
 
 const NOW = new Date(2026, 9, 10) // 2026-10-10
 
@@ -139,5 +139,38 @@ describe('hostOf：展示用主机名（图标提示气泡第二行 / 书签列�
     expect(hostOf('baidu.com')).toBe('baidu.com')
     expect(hostOf('不是网址')).toBe('不是网址')
     expect(hostOf('')).toBe('')
+  })
+})
+
+describe('addDays / startOfWeek：日历详情周视图的日期定位', () => {
+  it('addDays 平移跨月与跨年，且不修改原日期', () => {
+    const d = new Date(2026, 9, 31)
+    const next = addDays(d, 1)
+    expect(next.getFullYear()).toBe(2026)
+    expect(next.getMonth()).toBe(10)
+    expect(next.getDate()).toBe(1)
+    expect(d.getDate()).toBe(31)
+    expect(addDays(d, -31).getDate()).toBe(30)
+  })
+
+  it('startOfWeek 落到所在周的周日（与月历列序一致），时间部分清零', () => {
+    /* 2026-10-10 是周六 → 本周周日是 10-04；2026-10-11 是周日 → 原地 */
+    expect(startOfWeek(new Date(2026, 9, 10)).getDate()).toBe(4)
+    expect(startOfWeek(new Date(2026, 9, 11)).getDate()).toBe(11)
+    expect(startOfWeek(new Date(2026, 9, 10, 15, 30)).getHours()).toBe(0)
+  })
+})
+
+describe('isoWeekOf：日历详情的「第 N 周」标注', () => {
+  it('常规日期落在正确的 ISO 周号', () => {
+    /* 2026-01-01 是周四，属于 2026 年第 1 周 */
+    expect(isoWeekOf(new Date(2026, 0, 1))).toEqual({ year: 2026, week: 1 })
+    /* 2026-10-10（周六）属于第 41 周 */
+    expect(isoWeekOf(new Date(2026, 9, 10)).week).toBe(41)
+  })
+
+  it('年末日期可以属于下一年的第 1 周', () => {
+    /* 2029-12-31（周一）属于 2030 年第 1 周 */
+    expect(isoWeekOf(new Date(2029, 11, 31))).toEqual({ year: 2030, week: 1 })
   })
 })

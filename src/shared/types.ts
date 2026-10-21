@@ -281,6 +281,8 @@ export interface AppSettings {
    * 定位被拒绝时界面提示「允许定位」，用户也可在天气卡配置里手选城市作为替代。
    */
   weatherCity: CityPick | null;
+  /** 天气详情里的「其他城市」清单（每行显示当地实况；主定位仍是 weatherCity） */
+  weatherCities: CityPick[];
 }
 
 /** 组件尺寸（网格单位数，取值见 shared/grid 的 SIZES 六档） */

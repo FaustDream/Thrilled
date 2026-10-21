@@ -6,8 +6,8 @@ import { describe, expect, it } from 'vitest'
 import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, REPEATABLE_KINDS, arrangePages, crossPlan, dropPlan, isIconOnlyPage, mergeIconPages, normPages, packPage, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, ICON_INSET, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, insetOf, isLegalSize, itemBox, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
-  COMMON_KINDS, LIBRARY_EXCLUDED, LIBRARY_LIST, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, inLibrary,
-  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup,
+  LIBRARY_EXCLUDED, LIBRARY_LIST, WIDGET_DEFS, WIDGET_LIST, inLibrary,
+  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor,
 } from '../src/shared/widget-defs'
 import type { GridItem, WidgetKind } from '../src/shared/types'
 
@@ -237,43 +237,31 @@ describe('图标页合并（v4.1 迁移「一分组一页」存量修正）', ()
   })
 })
 
-describe('组件库数据（分组 / 默认大小 / 配置项上限）', () => {
-  it('每类小组件都归入唯一的类型分组，三个类型组都非空且覆盖全部类型', () => {
-    const kinds = Object.keys(WIDGET_DEFS)
-    const groups: Record<string, string | undefined> = WIDGET_GROUPS
-    expect(kinds.filter((k) => groups[k] === undefined)).toEqual([])
-    for (const g of ['时间', '信息', '图标'] as const) {
-      expect(WIDGET_LIST.filter((w) => WIDGET_GROUPS[w.t] === g).length, `${g} 组为空`).toBeGreaterThan(0)
-    }
-    /* 分组按组件类型重排（时间 / 信息 / 图标），并新增置顶的「常用」 */
-    expect(WIDGET_GROUPS_ORDER).toEqual(['常用', '时间', '信息', '图标'])
-    for (const w of WIDGET_LIST) expect(groups[w.t], `${w.n} 缺少类型分组`).not.toBeUndefined()
+describe('组件库数据（平铺清单 / 默认大小 / 配置项上限）', () => {
+  it('组件库清单与排除清单合起来覆盖全部类型，且互不重叠', () => {
+    const kinds = Object.keys(WIDGET_DEFS).sort()
+    const covered = [...LIBRARY_LIST.map((w) => w.t), ...LIBRARY_EXCLUDED].sort()
+    expect(covered).toEqual(kinds)
+    for (const w of LIBRARY_LIST) expect(LIBRARY_EXCLUDED.has(w.t), `${w.n} 同时在清单与排除集`).toBe(false)
   })
 
-  it('「常用」是置顶快捷组：按内置高频清单给出，成员仍保留自己的类型分组', () => {
-    expect(COMMON_KINDS.length).toBeGreaterThan(0)
-    expect(widgetsInGroup('常用').map((w) => w.t)).toEqual([...COMMON_KINDS])
-    for (const k of COMMON_KINDS) {
-      expect(WIDGET_DEFS[k], `${k} 不是已知组件`).toBeDefined()
-      expect(WIDGET_GROUPS[k], `${k} 缺少类型分组`).not.toBeUndefined()
+  it('图标类（网站图标 / 图标文件夹 / 图标格容器）不在组件库：从空白处右键添加', () => {
+    for (const t of ['icon', 'folder', 'group'] as const) {
+      expect(LIBRARY_LIST.some((w) => w.t === t), `${t} 不应出现在组件库`).toBe(false)
+      expect(inLibrary(t)).toBe(false)
     }
   })
 
-  it('类型分组取件拼起来覆盖组件库清单（无遗漏、无重复）', () => {
-    const grouped = WIDGET_GROUPS_ORDER.filter((g) => g !== '常用').flatMap((g) => widgetsInGroup(g).map((w) => w.t))
-    expect([...grouped].sort()).toEqual(LIBRARY_LIST.map((w) => w.t).sort())
-  })
-
-  it('组件库排除待办 / 收藏夹 / 图标文件夹 / 图标格容器，但它们仍是合法卡片类型', () => {
+  it('组件库排除待办 / 收藏夹 / 图标文件夹 / 图标格容器 / 网站图标，但它们仍是合法卡片类型', () => {
     for (const t of LIBRARY_EXCLUDED) {
       expect(LIBRARY_LIST.some((w) => w.t === t), `${t} 不应出现在组件库`).toBe(false)
-      expect(widgetsInGroup('常用').some((w) => w.t === t), `${t} 不应出现在常用组`).toBe(false)
       /* 仍在定义表里：已放好的卡片照常渲染 / 编辑 */
       expect(WIDGET_DEFS[t]).toBeDefined()
     }
-    expect([...LIBRARY_EXCLUDED].sort()).toEqual(['fav', 'folder', 'group', 'todo'])
+    expect([...LIBRARY_EXCLUDED].sort()).toEqual(['fav', 'folder', 'group', 'icon', 'todo'])
     expect(inLibrary('clock')).toBe(true)
     expect(inLibrary('todo')).toBe(false)
+    expect(inLibrary('icon')).toBe(false)
   })
 
   it('新放置实例的尺寸：优先用该类设置的默认大小，坏值 / 内容装不下时回退出厂尺寸', () => {

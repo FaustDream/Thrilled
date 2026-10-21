@@ -61,6 +61,8 @@ export interface GeoHit {
   country: string;
   lat: number;
   lon: number;
+  /** 人口（同名字点排序用；数据源缺失时为 0） */
+  population?: number;
 }
 
 /** 定位（返回状态，不再静默降级） */
@@ -106,24 +108,66 @@ export async function searchCities(keyword: string): Promise<GeoHit[]> {
   if (q === '') return [];
   try {
     const resp = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=8&language=zh&format=json`,
+      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=10&language=zh&format=json`,
       { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) },
     );
     if (!resp.ok) return [];
     const data = (await resp.json()) as {
-      results?: Array<{ name?: string; admin1?: string; country?: string; latitude?: number; longitude?: number }>;
+      results?: Array<{ name?: string; admin1?: string; country?: string; latitude?: number; longitude?: number; population?: number }>;
     };
-    return (data.results ?? [])
+    const hits = (data.results ?? [])
       .map((r) => ({
         name: (r.name ?? '').trim(),
         admin1: (r.admin1 ?? '').trim(),
         country: (r.country ?? '').trim(),
         lat: r.latitude ?? 0,
         lon: r.longitude ?? 0,
+        population: typeof r.population === 'number' ? r.population : 0,
       }))
       .filter((r) => r.name !== '' && Number.isFinite(r.lat) && Number.isFinite(r.lon));
+    /* 同名地点混排是手选结果「看起来不对」的主因：大城小镇同 rank 时按人口降序，
+       让真正的城市排前面（乡镇级同名点沉底）；候选展示仍保留省 / 国家供辨认 */
+    return dedupeHits(hits).sort((a, b) => (b.population ?? 0) - (a.population ?? 0));
   } catch {
     return [];
+  }
+}
+
+/** 候选去重：坐标四舍五入到 0.1° 后相同的只留第一条（不同数据源的同地重复） */
+export function dedupeHits(hits: GeoHit[]): GeoHit[] {
+  const seen = new Set<string>();
+  return hits.filter((h) => {
+    const key = `${h.lat.toFixed(1)},${h.lon.toFixed(1)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** 城市缓存的稳定键：坐标保留 3 位小数（约百米级，同一城市不会因微小差异重复请求） */
+export function cityKeyOf(c: { lat: number; lon: number }): string {
+  return `${c.lat.toFixed(3)},${c.lon.toFixed(3)}`;
+}
+
+/** 单城市缓存键（多城市天气详情用；与主定位的 WEATHER_CACHE_KEY 分开，互不覆盖） */
+const cityCacheKey = (c: CityPick): string => `${WEATHER_CACHE_KEY}:city:${cityKeyOf(c)}`;
+
+/**
+ * 取单个城市的天气（天气详情的「其他城市」）：带 30min TTL 的独立缓存。
+ * 请求失败返回 null（列表行显示占位），不影响主定位的天气。
+ */
+export async function getCityWeather(city: CityPick): Promise<WeatherData | null> {
+  const key = cityCacheKey(city);
+  const cached = kvGet<WeatherData | null>(key, null);
+  if (cached !== null && Date.now() - cached.ts < WEATHER_CACHE_TTL_MS) return cached;
+  try {
+    const data = await fetchWeather(city.lat, city.lon);
+    const out: WeatherData = { ...data, place: city.name, source: 'city', geo: 'ok' };
+    kvSet(key, out);
+    return out;
+  } catch (e) {
+    warn(MODULE, `城市天气请求失败：${e instanceof Error ? e.message : String(e)}`);
+    return cached;
   }
 }
 

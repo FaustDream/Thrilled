@@ -9,7 +9,7 @@ import { WALL_SOURCE_TEMPLATES, WALL_SOURCE_UNAVAILABLE, fetchCategories, fetchW
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
 import { fetchDataUrl } from '../core/fetch-proxy'
 import type { WallpaperSource } from '../shared/types'
-import { WIDGET_GROUPS_ORDER, WIDGET_DEFS, maxSizeOf, minSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup } from '../shared/widget-defs'
+import { WIDGET_DEFS, LIBRARY_LIST, maxSizeOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { SIZES } from '../shared/grid'
 import { BLUR_MAX_PX, WALLPAPER_HISTORY_LIMIT } from '../shared/constants'
 import { BLUR_KEYS, GLASS_KEYS } from '../shared/visual'
@@ -20,10 +20,10 @@ import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
-import { daysUntil, getGreetingByHour, hostOf, monthCells, normalizeSiteUrl, normTodoItems, type MonthCell, type TodoEntry } from '../core/utils'
+import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, startOfWeek, type TodoEntry } from '../core/utils'
 import { dockAppsWith, dockFailText, type DockAddResult } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
-import { searchCities, weatherText, type GeoHit } from '../core/weather'
+import { cityKeyOf, searchCities, weatherText, type GeoHit } from '../core/weather'
 import { dayKey, normScheduleEvents, upcomingEvents, type ScheduleEvent } from '../core/schedule'
 import { almanacOf, festivalsOf, solarToLunar } from '../core/lunar'
 import { normModes } from '../core/countdown'
@@ -692,7 +692,8 @@ const WallBrowser = ({ src }: { src: WallpaperSource | undefined }) => {
 const EMPTY_PAGE: GridItem[] = []
 
 /**
- * 组件库：管「放什么」——已放置列表（拖拽排序、··· 配置 / 移除）+ 目录（常用置顶 + 按组件类型分组、已添加显示灰态）
+ * 组件库：管「放什么」——已放置列表（拖拽排序、··· 配置 / 移除）+ 目录（单张清单平铺全部组件，
+ * 只做两种区分：已添加 / 未添加（按钮态）、组件 / 图标（行首标签），不再按类型分组）
  *  + 底部的「组件默认大小」（尺寸设置集中在那一处，不在每类组件上摊开）。
  * 单个实例的尺寸仍在页面卡片右键菜单「修改尺寸」或这里 ··· →「配置」里调整。
  */
@@ -708,7 +709,7 @@ const ComponentLibraryTab = () => {
   const sized = useApp((st) => Object.keys(st.settings.sizeDefaults).length)
   const [dragId, setDragId] = useState<string | null>(null)
   const page = pages[cur] ?? EMPTY_PAGE
-  /* 已添加判定跨页：任意页存在该类型即「已添加」（与空白处右键「添加组件」共用 placedKindsOf） */
+  /* 已添加判定跨页：任意页存在该类型即「已添加」（组件库添加按钮的唯一口径） */
   const added = placedKindsOf(pages)
   /** 配置：复用编辑弹窗（打开弹窗前先定位到该实例） */
   const openConfig = (id: string): void => {
@@ -717,7 +718,7 @@ const ComponentLibraryTab = () => {
   }
   return (
     <>
-      <SecCard t="页面组件" info={`管理当前第 ${cur + 1} 页的组件：行首 ⋮⋮ 拖动只调整组件列表顺序（页面上的位置仍在页面里拖动）；单个组件的尺寸走页面右键菜单「修改尺寸」或这里的 ··· →「配置」。`}>
+      <SecCard t="页面组件" info={`管理当前第 ${cur + 1} 页的组件：行首 ⋮⋮ 拖动只调整组件列表顺序（页面上的位置仍在页面里拖动）；单个组件的尺寸走页面右键菜单「修改尺寸」或这里的 ··· →「配置」。行首标签区分「组件」与「图标」——网站图标 / 图标文件夹 / 图标格容器是图标类。`}>
         {page.length === 0 && (
           <div className="empty-box">{Icon.plus()}<div>页面暂无组件，从下面挑一个</div></div>
         )}
@@ -725,6 +726,7 @@ const ComponentLibraryTab = () => {
           const def = WIDGET_DEFS[it.t]
           /* 名称为空（含出厂留空）时回退组件显示名：列表行不能只剩一个字形（用户反馈：每日一言行仅显图标） */
           const label = str(cfg(it)['label']).trim() === '' ? def.n : String(cfg(it)['label'])
+          const iconLike = it.t === 'icon' || it.t === 'folder' || it.t === 'group'
           return (
             <div className="eng-row sortable" key={it.id} draggable
               onDragStart={() => setDragId(it.id)}
@@ -740,6 +742,7 @@ const ComponentLibraryTab = () => {
               <span style={{ color: 'var(--panel-sub)', cursor: 'grab' }}>⋮⋮</span>
               <div className="er-ico" style={{ background: def.c }}>{def.g}</div>
               <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+              <span className={`row-kind${iconLike ? ' alt' : ''}`}>{iconLike ? '图标' : '组件'}</span>
               <OverflowMenu
                 trigger={() => <span className="ov-btn" title="更多操作">{Icon.more()}</span>}
                 items={[
@@ -750,25 +753,23 @@ const ComponentLibraryTab = () => {
           )
         })}
       </SecCard>
-      {WIDGET_GROUPS_ORDER.map((g) => (
-        <SecCard key={g} t={g} info={g === '常用' ? '出厂固定的高频组件，置顶方便快速添加（与其类型分组里是同一个组件）。' : undefined}>
-          {widgetsInGroup(g).map((w) => {
-            const isAdded = added.has(w.t)
-            return (
-              <div className="eng-row" key={w.t}>
-                <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div>{w.n}</div>
-                  <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
-                </div>
-                <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
-                  title={isAdded ? '该组件已在页面上；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
-                  onClick={() => { place(w.t); setDrawer(null) }}>{isAdded ? '已添加' : '添加'}</button>
+      <SecCard t="组件库" info="全部小组件放在同一张清单里，不再按类型分组；已在页面上的显示「已添加」，移除后可再次添加。图标类（网站图标 / 图标文件夹 / 图标格容器）不是小组件，从空白处右键添加。">
+        {LIBRARY_LIST.map((w) => {
+          const isAdded = added.has(w.t)
+          return (
+            <div className="eng-row" key={w.t}>
+              <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div>{w.n}</div>
+                <div className="sr-desc" style={{ color: 'var(--panel-sub)', fontSize: 11 }}>{w.s}</div>
               </div>
-            )
-          })}
-        </SecCard>
-      ))}
+              <button className={`btn sm${isAdded ? ' ghost' : ''}`} disabled={isAdded}
+                title={isAdded ? '该组件已在页面上；在上方「页面组件」列表移除后可再次添加' : '添加到当前页'}
+                onClick={() => { place(w.t); setDrawer(null) }}>{isAdded ? '已添加' : '添加'}</button>
+            </div>
+          )
+        })}
+      </SecCard>
       <SecCard t="组件默认大小" info="设置每类组件新放置时的默认大小，只影响之后新增的实例（页面已有实例不变）；单个实例的尺寸在页面右键菜单「修改尺寸」或上面「页面组件」列表的 ··· →「配置」里调。">
         <div className="ks-entry">
           <span className="ks-summary">{sized === 0 ? '全部组件使用出厂大小' : `已单独设置 ${sized} 类组件，其余使用出厂大小`}</span>
@@ -780,7 +781,7 @@ const ComponentLibraryTab = () => {
 }
 
 /**
- * 组件库 →「组件默认大小」弹窗：按分组列出各类组件，选好档位后点「确认设置」才写入（二次确认）。
+ * 组件库 →「组件默认大小」弹窗：单张清单列出组件库里的各类组件，选好档位后点「确认设置」才写入（二次确认）。
  * 「出厂」= 不单独设置、用定义表尺寸；只影响之后新增的实例。
  */
 const KindSizeModal = () => {
@@ -797,29 +798,24 @@ const KindSizeModal = () => {
     <>
       <h2>组件默认大小</h2>
       <p className="sub">设置每类组件新放置时的默认大小；点「确认设置」才生效，只影响之后新增的实例，页面已有实例保持不变。「出厂」= 用定义表尺寸。</p>
-      {WIDGET_GROUPS_ORDER.filter((g) => g !== '常用').map((g) => (
-        <div className="ks-group" key={g}>
-          <div className="sec-title">{g}</div>
-          {widgetsInGroup(g).map((w) => {
-            const cur = draft[w.t]
-            return (
-              <div className="ks-row" key={w.t}>
-                <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
-                <span className="ks-name">{w.n}</span>
-                <div className="cats">
-                  <div className={`cat${cur === undefined ? ' active' : ''}`} onClick={() => pick(w.t, null)}>出厂</div>
-                  {SIZES.filter((sz) => sizeAllowed(w.t, sz.w, sz.h)).map((sz) => (
-                    <div key={`${sz.w}x${sz.h}`}
-                      className={`cat${cur !== undefined && cur.w === sz.w && cur.h === sz.h ? ' active' : ''}`}
-                      onClick={() => pick(w.t, { w: sz.w, h: sz.h })}>{sz.w}×{sz.h}</div>
-                  ))}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      ))}
-      <div className="btn-row end" style={{ marginTop: 18 }}>
+      {LIBRARY_LIST.map((w) => {
+        const cur = draft[w.t]
+        return (
+          <div className="ks-row" key={w.t}>
+            <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
+            <span className="ks-name">{w.n}</span>
+            <div className="cats">
+              <div className={`cat${cur === undefined ? ' active' : ''}`} onClick={() => pick(w.t, null)}>出厂</div>
+              {SIZES.filter((sz) => sizeAllowed(w.t, sz.w, sz.h)).map((sz) => (
+                <div key={`${sz.w}x${sz.h}`}
+                  className={`cat${cur !== undefined && cur.w === sz.w && cur.h === sz.h ? ' active' : ''}`}
+                  onClick={() => pick(w.t, { w: sz.w, h: sz.h })}>{sz.w}×{sz.h}</div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+      <div className="btn-row end">
         <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
         <button className="btn" onClick={() => { setSizeDefaults(draft); setModal(null) }}>确认设置</button>
       </div>
@@ -1479,6 +1475,20 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '4.98', d: '2026-10-21', items: [
+      { k: '调整', s: '组件库平铺为一整张清单', d: '原「常用 / 时间 / 信息 / 图标」四个分组卡收进同一张清单，只保留两种区分——已添加 / 未添加（按钮态）与组件 / 图标（「页面组件」列表行首标签），不再按类型分组。' },
+      { k: '调整', s: '网站图标不再是小组件：改由右键添加', d: '组件库与「组件默认大小」不再列出网站图标；添加入口仍是空白处右键第一项「添加网站图标」。「组件默认大小」弹窗同步改为单张清单。' },
+      { k: '调整', s: '右键菜单去掉「添加组件」', d: '小组件的添加入口统一在个性化 → 组件库；空白处右键保留 添加网站图标 / 图标文件夹 / 图标格容器 / Dock 快捷方式 与三个打开入口、整理图标。' },
+      { k: '优化', s: '右键菜单悬停项更醒目', d: '悬停条目时左缘出现强调色短条（缩放动画浮现）+ 淡强调底色，二级菜单同一套；禁用项不参与，一眼能看清当前停在哪一项。' },
+      { k: '新增', s: '日历详情支持月 / 周 / 年快速定位', d: '详情弹窗顶部新增 月 | 周 | 年 视图切换：‹ › 按当前粒度步进（±1 月 / ±7 天 / ±1 年），周视图标注「第 N 周 · 日期区间」，年视图 12 个迷你月（点月份进月视图、点日期直接选中并回到月视图）；「今天」一键回当日。' },
+      { k: '优化', s: '日历详情的信息层级与说明精简', d: '选中日期改为 公历日期与星期（大字重点）> 农历 / 干支 / 建除（辅助色）> 宜 / 忌（绿 / 红语义标签，节日同作标签）；去掉底部「点月历任意一天切换」的操作说明。' },
+      { k: '新增', s: '天气详情可看多个城市', d: '新增「其他城市」清单（最多 8 个）：每行显示当地实况温度 / 天气 / 今日区间（30 分钟缓存）；点击城市行把它设为主定位，行尾可移除。' },
+      { k: '优化', s: '手选城市的搜索结果更靠谱', d: '同名候选按人口降序排（真城市在前、同名乡镇沉底）并按坐标去重，搜索结果最多 10 条。' },
+      { k: '优化', s: '弹窗按钮的上下边距统一', d: '详情 / 编辑弹窗里按钮行与上文的间距统一为 16px，连续两行按钮组收紧为 8px，表单字段内的按钮行不再叠加空白；原先散落的 8 / 10 / 14 / 16px 内联值全部收编。' },
+      { k: '优化', s: '天气详情的层级与今日档', d: '温度大字为焦点、天气现象加重、地名降为辅助色；三日预报今天一档加淡强调底与描边，日期列显示「今天」。' },
+    ],
+  },
+  {
     v: '4.97', d: '2026-10-21', items: [
       { k: '优化', s: '浅色主题的极简模式不再白字白底', d: '极简模式整屏没有卡片托底，大时钟与搜索框原先固定用白字白描边，在经典主题的白底上等于隐形。改为按主题底色自动挑墨色：浅底用深墨配深描边，深底仍是白字白描边。' },
       { k: '优化', s: '暗黑主题下深色品牌图标不再消失', d: 'Notion、GitHub、抖音、DeepSeek 这类近黑色的品牌字形，放在暗黑主题的深色图标底上几乎看不见。现在按图标底色的明暗自动提亮或压暗字形，只调明度、保留色相与饱和度，所有主题下都跨过 3:1 对比度。' },
@@ -1836,12 +1846,12 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
         value={/^#[0-9a-f]{6}$/i.test(String(c['textColor'] ?? '')) ? String(c['textColor']) : '#1f2937'}
         onAuto={() => updateConfig(item.id, { textColor: '' })} onChange={(x) => updateConfig(item.id, { textColor: x })} />
       {/* 一键预设 + 默认样式：预设先清空四个样式键再写入，避免上一份残留 */}
-      <div className="btn-row" style={{ marginTop: 12 }}>
+      <div className="btn-row">
         {STYLE_PRESETS.map(([label, patch]) => (
           <button key={label} className="btn sm ghost" onClick={() => applyStyle(item.id, patch)}>{label}</button>
         ))}
       </div>
-      <div className="btn-row" style={{ marginTop: 8 }}>
+      <div className="btn-row">
         <button className="btn sm ghost" onClick={() => saveStyleDefault(item.id)}>设为该组件默认</button>
         {styleDefault !== undefined && !isBlankStyle(styleDefault) && (
           <button className="btn sm ghost" onClick={() => clearStyleDefault(item.t)}>取消默认</button>
@@ -1868,7 +1878,7 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
         引用的小组件：{def.s}。尺寸能力 {minSizeOf(item.t).w}×{minSizeOf(item.t).h} – {maxSizeOf(item.t).w}×{maxSizeOf(item.t).h}，
         内容按当前尺寸等比缩放（自然尺寸 {def.units.w}×{def.units.h} 下与设计稿一致）；想要别的类型，可在卡片右键菜单里「更换小组件」。
       </Hint>
-      <div className="btn-row end" style={{ marginTop: 16 }}>
+      <div className="btn-row end">
         <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
         <button className="btn" onClick={() => { setModal(null); showToast('修改成功') }}>确认修改</button>
       </div>
@@ -1921,11 +1931,12 @@ const TodoDetail = ({ item }: { item: GridItem }) => {
   )
 }
 
-/** 城市手选：搜索地理编码（Open-Meteo），选中后写入设置并立即按该坐标取天气 */
-const CityPicker = () => {
-  const setSetting = useApp((s) => s.setSetting)
+/**
+ * 城市搜索：地理编码（Open-Meteo），候选按人口降序排（真正的城市排前，同名乡镇沉底）。
+ * 选中交给 onPick —— 主定位写 weatherCity，其他城市进 weatherCities，由调用方落点。
+ */
+const CitySearch = ({ onPick }: { onPick: (h: GeoHit) => void }) => {
   const showToast = useApp((s) => s.showToast)
-  const city = useApp((s) => s.settings.weatherCity)
   const [kw, setKw] = useState('')
   const [hits, setHits] = useState<GeoHit[]>([])
   const [busy, setBusy] = useState(false)
@@ -1938,17 +1949,12 @@ const CityPicker = () => {
     if (list.length === 0) showToast('没有找到匹配的城市')
   }
   const pick = (h: GeoHit): void => {
-    setSetting('weatherCity', { name: h.admin1 !== '' ? `${h.name} · ${h.admin1}` : h.name, lat: h.lat, lon: h.lon })
-    void useApp.getState().loadWeather()
-    showToast(`已切换到 ${h.name}`)
+    onPick(h)
+    setHits([])
+    setKw('')
   }
   return (
     <>
-      <div className="sec-title">定位</div>
-      <Hint>
-        默认使用浏览器定位（首次会询问是否允许）。拒绝授权时可以在这里搜索城市作为替代：
-        当前{city === null ? '按真实定位' : `手选 ${city.name}`}。
-      </Hint>
       <div className="f-row">
         <input className="f-input" placeholder="搜索城市，如 杭州 / Tokyo" value={kw}
           onChange={(e) => setKw(e.target.value)}
@@ -1970,19 +1976,138 @@ const CityPicker = () => {
   )
 }
 
-/** 日历日程：按月列出当天可写的日程 / 待办（存卡片 config.events，可勾选与删除） */
+/** 日历格（月视图 / 周视图共用）：公历日 + 农历（初一显月名）+ 日程点；节日有虚线下划线提示 */
+const CalCell = ({ t, sel, todayKey, hasEv, onPick }: {
+  t: { y: number; m: number; d: number; out?: boolean }
+  sel: string
+  todayKey: string
+  hasEv: boolean
+  onPick: (t: { y: number; m: number; d: number }) => void
+}) => {
+  const key = dayKey(t.y, t.m, t.d)
+  const lunar = solarToLunar(t.y, t.m, t.d)
+  const fest = festivalsOf(t.y, t.m, t.d)
+  const tip = `${t.y}-${p2(t.m)}-${p2(t.d)} ${lunar.monthCn}${lunar.dayCn}${fest.length > 0 ? ` · ${fest.join(' · ')}` : ''}`
+  return (
+    <button type="button" data-tip={tip}
+      className={`dt-cal-cell${t.out === true ? ' out' : ''}${key === sel ? ' sel' : ''}${key === todayKey ? ' today' : ''}${fest.length > 0 ? ' fest' : ''}`}
+      onClick={() => onPick(t)}>
+      <span className="dt-cal-d">{t.d}</span>
+      <span className="dt-cal-l">{lunar.day === 1 ? lunar.monthCn : lunar.dayCn}</span>
+      {hasEv && <i className="dt-cal-dot" />}
+    </button>
+  )
+}
+
+/** 星期表头（月 / 周视图共用，周日起头） */
+const CalWeekdayRow = () => (
+  <>
+    {'日一二三四五六'.split('').map((w, i) => (
+      <div key={w} className={`dt-cal-wd${i === 0 || i === 6 ? ' end' : ''}`}>{w}</div>
+    ))}
+  </>
+)
+
+/** 月视图：6 行 × 7 列月历（补齐格给出真实日期，点中上 / 下月格会顺手翻月） */
+const CalMonthView = ({ y, m, sel, todayKey, events, onPick }: {
+  y: number; m: number; sel: string; todayKey: string
+  events: ScheduleEvent[]
+  onPick: (t: { y: number; m: number; d: number }) => void
+}) => (
+  <div className="dt-cal">
+    <CalWeekdayRow />
+    {monthCells(y, m).flat().map((cell) => (
+      <CalCell key={dayKey(cell.year, cell.month, cell.day)}
+        t={{ y: cell.year, m: cell.month, d: cell.day, out: !cell.inMonth }}
+        sel={sel} todayKey={todayKey} hasEv={events.some((e) => e.date === dayKey(cell.year, cell.month, cell.day))}
+        onPick={onPick} />
+    ))}
+  </div>
+)
+
+/** 周视图：选中日期所在一周（周日开始），快速在周与周之间定位 */
+const CalWeekView = ({ anchor, sel, todayKey, events, onPick }: {
+  anchor: Date; sel: string; todayKey: string
+  events: ScheduleEvent[]
+  onPick: (t: { y: number; m: number; d: number }) => void
+}) => {
+  const start = startOfWeek(anchor)
+  return (
+    <div className="dt-cal dt-cal-week">
+      <CalWeekdayRow />
+      {Array.from({ length: 7 }, (_, i) => addDays(start, i)).map((d) => (
+        <CalCell key={dayKey(d.getFullYear(), d.getMonth() + 1, d.getDate())}
+          t={{ y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }}
+          sel={sel} todayKey={todayKey}
+          hasEv={events.some((e) => e.date === dayKey(d.getFullYear(), d.getMonth() + 1, d.getDate()))}
+          onPick={onPick} />
+      ))}
+    </div>
+  )
+}
+
+/** 年视图：12 个迷你月（只显示公历日），点月份标题进月视图，点具体日期直接选中并回到月视图 */
+const CalYearView = ({ y, sel, todayKey, onMonth, onPick }: {
+  y: number; sel: string; todayKey: string
+  onMonth: (m: number) => void
+  onPick: (t: { y: number; m: number; d: number }) => void
+}) => (
+  <div className="dt-cal-year">
+    {Array.from({ length: 12 }, (_, mi) => (
+      <div className="dtc-ym" key={mi}>
+        <button type="button" className="dtc-ym-title" onClick={() => onMonth(mi)}>{mi + 1}月</button>
+        <div className="dtc-ym-grid">
+          {'日一二三四五六'.split('').map((w) => <i key={w} className="dtc-ym-wd">{w}</i>)}
+          {monthCells(y, mi).flat().map((cell) => {
+            const key = dayKey(cell.year, cell.month, cell.day)
+            if (!cell.inMonth) return <i key={key} className="dtc-ym-d out" />
+            return (
+              <button type="button" key={key}
+                className={`dtc-ym-d${key === sel ? ' sel' : ''}${key === todayKey ? ' today' : ''}`}
+                onClick={() => onPick({ y: cell.year, m: cell.month, d: cell.day })}>
+                {cell.day}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    ))}
+  </div>
+)
+
+/** 选中日期信息（颜色层级：公历日期与星期是重点，农历 / 干支次之，节日 / 宜忌用语义色标签） */
+const CalSelInfo = ({ selDate, selLunar, selFests, selAlmanac }: {
+  selDate: { y: number; m: number; d: number }
+  selLunar: ReturnType<typeof solarToLunar>
+  selFests: string[]
+  selAlmanac: ReturnType<typeof almanacOf>
+}) => (
+  <div className="dt-cal-info">
+    <div className="dt-cal-sel">
+      <span className="dcs-date">{selDate.m}月{selDate.d}日 周{'日一二三四五六'[new Date(selDate.y, selDate.m - 1, selDate.d).getDay()]}</span>
+      <span className="dcs-sub">农历 {selLunar.monthCn}{selLunar.dayCn} · {selLunar.ganZhiYear}{selLunar.zodiac}年 · {selAlmanac.officer}日</span>
+    </div>
+    <div className="dcs-chips">
+      {selFests.map((f) => <span className="dt-tag fest" key={f}>{f}</span>)}
+      {selAlmanac.good.length > 0 && <span className="dt-tag yi">宜 {selAlmanac.good.join('、')}</span>}
+      {selAlmanac.bad.length > 0 && <span className="dt-tag ji">忌 {selAlmanac.bad.join('、')}</span>}
+    </div>
+  </div>
+)
+
 /**
- * 日历详情：月历 + 选中日期的日程。
+ * 日历详情：月 / 周 / 年三视图快速定位 + 选中日期的日程。
  *
- * 月历每格显示公历日 + 农历日（初一显示月名），有日程的日子带点、有节日的日子高亮；
- * 点任意一格即选中（含上 / 下月的补齐格，点中会顺手翻到那个月），头顶显示该日的农历、干支、节日与宜忌。
- * 日程仍按「选中日期」写入，勾选 / 删除即时保存。
+ * 视图由页签切换（月 | 周 | 年），‹ › 按当前视图的粒度步进（月 ±1 月、周 ±7 天、年 ±1 年），
+ * 「今天」一键回到当日；日程仍按「选中日期」写入，勾选 / 删除即时保存。
+ * 月历每格显示公历日 + 农历日（初一显示月名），有日程的日子带点、有节日的日子高亮。
  */
 const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
   const updateConfig = useApp((s) => s.updateConfig)
   const c = cfg(item)
   const [events, setEvents] = useState<ScheduleEvent[]>(() => normScheduleEvents(c['events']))
   const [draft, setDraft] = useState('')
+  const [gran, setGran] = useState<'month' | 'week' | 'year'>('month')
   const [view, setView] = useState(() => ({ y: now.getFullYear(), m: now.getMonth() }))
   const [sel, setSel] = useState(() => dayKey(now.getFullYear(), now.getMonth() + 1, now.getDate()))
   const commit = (next: ScheduleEvent[]): void => {
@@ -1990,68 +2115,72 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
     updateConfig(item.id, { events: next })
   }
   const todayKey = dayKey(now.getFullYear(), now.getMonth() + 1, now.getDate())
-  const rows = monthCells(view.y, view.m)
   const selDate = ((): { y: number; m: number; d: number } => {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sel)
     return m === null
       ? { y: now.getFullYear(), m: now.getMonth() + 1, d: now.getDate() }
       : { y: Number(m[1]), m: Number(m[2]), d: Number(m[3]) }
   })()
+  const selTime = new Date(selDate.y, selDate.m - 1, selDate.d)
   const selLunar = solarToLunar(selDate.y, selDate.m, selDate.d)
   const selFests = festivalsOf(selDate.y, selDate.m, selDate.d)
   const selAlmanac = almanacOf(selDate.y, selDate.m, selDate.d)
   const dayList = events.filter((e) => e.date === sel)
   const upcoming = upcomingEvents(events, now, 6)
-  const shiftMonth = (delta: number): void => {
-    const d = new Date(view.y, view.m + delta, 1)
-    setView({ y: d.getFullYear(), m: d.getMonth() })
+  /** 选中某天并让月视图跟着落到该天所在月（周视图跨月步进后切回月视图不跳变） */
+  const applyDay = (t: { y: number; m: number; d: number }): void => {
+    setSel(dayKey(t.y, t.m, t.d))
+    setView({ y: t.y, m: t.m - 1 })
   }
-  const pick = (cell: MonthCell): void => {
-    setSel(dayKey(cell.year, cell.month, cell.day))
-    if (!cell.inMonth) setView({ y: cell.year, m: cell.month - 1 })
+  const step = (delta: number): void => {
+    if (gran === 'month') {
+      const d = new Date(view.y, view.m + delta, 1)
+      setView({ y: d.getFullYear(), m: d.getMonth() })
+    } else if (gran === 'week') {
+      applyDay({ y: addDays(selTime, delta * 7).getFullYear(), m: addDays(selTime, delta * 7).getMonth() + 1, d: addDays(selTime, delta * 7).getDate() })
+    } else {
+      setView({ y: view.y + delta, m: view.m })
+    }
   }
+  const ws = startOfWeek(selTime)
+  const we = addDays(ws, 6)
+  const head = gran === 'month'
+    ? `${view.y} 年 ${view.m + 1} 月`
+    : gran === 'week'
+      ? `${ws.getFullYear()} 年 第 ${isoWeekOf(selTime).week} 周 · ${ws.getMonth() + 1}/${ws.getDate()} – ${we.getMonth() + 1}/${we.getDate()}`
+      : `${view.y} 年`
   return (
     <>
       <div className="dt-cal-top">
-        <button className="dt-cal-nav" onClick={() => shiftMonth(-1)} aria-label="上个月">‹</button>
-        <span className="dt-cal-head" style={{ margin: 0 }}>{`${view.y} 年 ${view.m + 1} 月`}</span>
-        <button className="dt-cal-nav" onClick={() => shiftMonth(1)} aria-label="下个月">›</button>
-        <button className="btn sm ghost" style={{ marginLeft: 'auto' }}
-          onClick={() => { setView({ y: now.getFullYear(), m: now.getMonth() }); setSel(todayKey) }}>今天</button>
+        <button className="dt-cal-nav" onClick={() => step(-1)}
+          aria-label={gran === 'month' ? '上个月' : gran === 'week' ? '上一周' : '上一年'}>‹</button>
+        <span className="dt-cal-head" style={{ margin: 0 }}>{head}</span>
+        <button className="dt-cal-nav" onClick={() => step(1)}
+          aria-label={gran === 'month' ? '下个月' : gran === 'week' ? '下一周' : '下一年'}>›</button>
+        <div className="dt-cal-seg">
+          {([['month', '月'], ['week', '周'], ['year', '年']] as const).map(([k, label]) => (
+            <div key={k} className={`cat${gran === k ? ' active' : ''}`} onClick={() => setGran(k)}>{label}</div>
+          ))}
+        </div>
+        <button className="btn sm ghost" onClick={() => { setView({ y: now.getFullYear(), m: now.getMonth() }); setSel(todayKey) }}>今天</button>
       </div>
-      <div className="dt-cal">
-        {'日一二三四五六'.split('').map((w, i) => (
-          <div key={w} className={`dt-cal-wd${i === 0 || i === 6 ? ' end' : ''}`}>{w}</div>
-        ))}
-        {rows.flat().map((cell) => {
-          const key = dayKey(cell.year, cell.month, cell.day)
-          const hasEv = events.some((e) => e.date === key)
-          const fest = festivalsOf(cell.year, cell.month, cell.day)
-          const lunar = solarToLunar(cell.year, cell.month, cell.day)
-          const tip = `${cell.year}-${String(cell.month).padStart(2, '0')}-${String(cell.day).padStart(2, '0')} ${lunar.monthCn}${lunar.dayCn}${fest.length > 0 ? ` · ${fest.join(' · ')}` : ''}`
-          return (
-            <button type="button" key={key}
-              data-tip={tip}
-              className={`dt-cal-cell${cell.inMonth ? '' : ' out'}${key === sel ? ' sel' : ''}${key === todayKey ? ' today' : ''}${fest.length > 0 ? ' fest' : ''}`}
-              onClick={() => pick(cell)}>
-              <span className="dt-cal-d">{cell.day}</span>
-              <span className="dt-cal-l">{lunar.day === 1 ? lunar.monthCn : lunar.dayCn}</span>
-              {hasEv && <i className="dt-cal-dot" />}
-            </button>
-          )
-        })}
-      </div>
-      <div className="dt-now" style={{ gap: 10, flexWrap: 'wrap' }}>
-        <span className="dt-host">{selDate.y}-{p2(selDate.m)}-{p2(selDate.d)}</span>
-        <span className="dt-host">农历 {selLunar.monthCn}{selLunar.dayCn}</span>
-        <span className="dt-host">{selLunar.ganZhiYear}{selLunar.zodiac}年 · {selAlmanac.officer}日</span>
-      </div>
-      {selFests.length > 0 && <Hint>当日节日：{selFests.join(' · ')}</Hint>}
-      <Hint>
-        宜 {selAlmanac.good.join('、')}；忌 {selAlmanac.bad.join('、')}
-        （{selAlmanac.ganZhiDay}日 · {selAlmanac.ganZhiMonth}月）。
-      </Hint>
-      <div className="dt-todo-head" style={{ marginTop: 10 }}>当天日程 · {sel}</div>
+      {gran === 'month' && (
+        <CalMonthView y={view.y} m={view.m} sel={sel} todayKey={todayKey} events={events}
+          onPick={(t) => {
+            setSel(dayKey(t.y, t.m, t.d))
+            if (t.m !== view.m + 1 || t.y !== view.y) setView({ y: t.y, m: t.m - 1 })
+          }} />
+      )}
+      {gran === 'week' && (
+        <CalWeekView anchor={selTime} sel={sel} todayKey={todayKey} events={events} onPick={applyDay} />
+      )}
+      {gran === 'year' && (
+        <CalYearView y={view.y} sel={sel} todayKey={todayKey}
+          onMonth={(m) => { setView({ y: view.y, m }); setGran('month') }}
+          onPick={(t) => { applyDay(t); setGran('month') }} />
+      )}
+      <CalSelInfo selDate={selDate} selLunar={selLunar} selFests={selFests} selAlmanac={selAlmanac} />
+      <div className="dt-todo-head">当天日程 · {sel}</div>
       <div className="f-row">
         <input className="f-input" placeholder="写下日程或待办，回车添加" value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -2073,7 +2202,7 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
       </div>
       {upcoming.length > 0 && (
         <>
-          <div className="dt-todo-head" style={{ marginTop: 10 }}>接下来</div>
+          <div className="dt-todo-head">接下来</div>
           <div className="dt-list" style={{ maxHeight: 130 }}>
             {upcoming.map((e, i) => (
               <div className="dt-todo-row" key={`u${i}-${e.text}`} style={{ cursor: 'pointer' }}
@@ -2089,7 +2218,6 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
           </div>
         </>
       )}
-      <Hint>点月历上任意一天即可切换；日程存在这张日历卡的配置里，可勾选完成、按日期查看。</Hint>
     </>
   )
 }
@@ -2181,7 +2309,7 @@ const CountdownEntries = ({ item }: { item: GridItem }) => {
         ))}
         {rows.length === 0 && <Hint>列表为空：打开「显示节日倒数」，或在下面添加自定义倒数日。</Hint>}
       </div>
-      <div className="dt-todo-head" style={{ marginTop: 10 }}>自定义倒数日 / 农历纪念日</div>
+      <div className="dt-todo-head">自定义倒数日 / 农历纪念日</div>
       {items.map((e, i) => (
         <div className="cd-edit" key={i}>
           <input className="f-input" style={{ flex: 1.2 }} value={e.name} placeholder="名称"
@@ -2204,7 +2332,7 @@ const CountdownEntries = ({ item }: { item: GridItem }) => {
           <div className="dt-row-del" title="删除" onClick={() => commit(items.filter((_, j) => j !== i))}>{Icon.trash()}</div>
         </div>
       ))}
-      <div className="btn-row" style={{ marginTop: 8 }}>
+      <div className="btn-row">
         <button className="btn sm ghost"
           onClick={() => commit([...items, { name: '新的倒数日', date: `${new Date().getFullYear() + 1}-01-01`, created: Date.now() }])}>
           + 添加倒数日
@@ -2232,6 +2360,11 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
   const updateConfig = useApp((s) => s.updateConfig)
   const weather = useApp((s) => s.weather)
   const setSetting = useApp((s) => s.setSetting)
+  /* 天气详情的多城市：清单 + 各城实况（键为城市坐标键） */
+  const weatherCities = useApp((s) => s.settings.weatherCities)
+  const cityWeathers = useApp((s) => s.cityWeathers)
+  const addWeatherCity = useApp((s) => s.addWeatherCity)
+  const removeWeatherCity = useApp((s) => s.removeWeatherCity)
   const c = cfg(item)
   const def = WIDGET_DEFS[item.t]
   /* 时钟 / 倒计时详情需要每秒走字；其他类型不受影响（effect 内按类型决定是否启动定时器） */
@@ -2261,13 +2394,15 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
             <>
               <div className="dt-now">
                 <span className="dt-temp">{d.currentTemp}°</span>
-                <span>{weatherText(d.currentCode)}</span>
-                <span className="dt-host">{d.place !== '' ? d.place : '当前位置'}</span>
+                <div className="dt-now-main">
+                  <span className="dt-cond">{weatherText(d.currentCode)}</span>
+                  <span className="dt-host">{d.place !== '' ? d.place : '当前位置'}</span>
+                </div>
               </div>
               <div className="dt-days">
-                {d.daily.map((x) => (
-                  <div className="dt-day" key={x.date}>
-                    <span>{wdOf(x.date)}</span>
+                {d.daily.map((x, i) => (
+                  <div className={`dt-day${i === 0 ? ' today' : ''}`} key={x.date}>
+                    <span>{i === 0 ? '今天' : wdOf(x.date)}</span>
                     <span>{weatherText(x.code)}</span>
                     <span>{x.min}° / {x.max}°</span>
                   </div>
@@ -2279,14 +2414,52 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
               </Hint>
             </>
           )}
-          <div className="btn-row" style={{ marginTop: 10 }}>
+          <div className="btn-row">
             <button className="btn sm ghost" onClick={() => { void useApp.getState().loadWeather(true); showToast('正在请求定位并刷新天气') }}>允许定位</button>
             <button className="btn sm ghost" onClick={() => { void useApp.getState().loadWeather(); showToast('正在刷新天气') }}>刷新天气</button>
             {city !== null && (
               <button className="btn sm ghost" onClick={() => { setSetting('weatherCity', null); void useApp.getState().loadWeather(true) }}>改回定位</button>
             )}
           </div>
-          <CityPicker />
+          {/* 定位方式（主城市）与其他城市分开：主城市决定天气卡，其他城市只在详情里看实况 */}
+          <div className="sec-title">定位</div>
+          <Hint>
+            默认使用浏览器定位（首次会询问是否允许）。拒绝授权时可以在这里搜索城市作为替代：
+            当前{city === null ? '按真实定位' : `手选 ${city.name}`}。
+          </Hint>
+          <CitySearch onPick={(h) => {
+            setSetting('weatherCity', { name: h.admin1 !== '' ? `${h.name} · ${h.admin1}` : h.name, lat: h.lat, lon: h.lon })
+            void useApp.getState().loadWeather()
+            showToast(`已切换到 ${h.name}`)
+          }} />
+          <div className="dt-todo-head">其他城市</div>
+          <div className="dt-list">
+            {weatherCities.length === 0 && <Hint>还没有其他城市：在下面搜索添加，点击城市行可把它设为主定位。</Hint>}
+            {weatherCities.map((ct, i) => {
+              const w = cityWeathers[cityKeyOf(ct)]
+              return (
+                <div className="dt-row city" key={`${ct.name}-${i}`} title="点击设为主定位城市"
+                  onClick={() => {
+                    setSetting('weatherCity', { ...ct })
+                    void useApp.getState().loadWeather()
+                    showToast(`已切换到 ${ct.name}`)
+                  }}>
+                  <span className="dt-name">{ct.name}</span>
+                  {w === undefined ? (
+                    <span className="dt-host">暂无数据</span>
+                  ) : (
+                    <>
+                      <span className="wc-temp">{w.currentTemp}°</span>
+                      <span className="dt-host">{weatherText(w.currentCode)}</span>
+                      <span className="dt-host">{w.daily[0]?.min ?? '--'}° / {w.daily[0]?.max ?? '--'}°</span>
+                    </>
+                  )}
+                  <div className="dt-row-del" title="移除" onClick={(e) => { e.stopPropagation(); removeWeatherCity(i) }}>{Icon.trash()}</div>
+                </div>
+              )
+            })}
+          </div>
+          <CitySearch onPick={(h) => addWeatherCity({ name: h.admin1 !== '' ? `${h.name} · ${h.admin1}` : h.name, lat: h.lat, lon: h.lon })} />
         </>
       )
       break
@@ -2325,7 +2498,7 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
           <h2>待办清单 · 详情</h2>
           <p className="sub">勾选进度与清单内容会保存在本机。</p>
           <TodoDetail item={item} />
-          <div className="btn-row end" style={{ marginTop: 16 }}>
+          <div className="btn-row end">
             <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
             <button className="btn" onClick={() => setModal(null)}>关闭</button>
           </div>
@@ -2337,7 +2510,7 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
           <h2>收藏夹 · 详情</h2>
           <p className="sub">{str(c['folder'], '收藏夹')} · 点击任意书签按「打开方式」设置跳转</p>
           <FavDetail />
-          <div className="btn-row end" style={{ marginTop: 16 }}>
+          <div className="btn-row end">
             <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
             <button className="btn" onClick={() => setModal(null)}>关闭</button>
           </div>
@@ -2465,7 +2638,7 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
       <h2>{def.n} · 详情</h2>
       <p className="sub">{def.s}</p>
       {body}
-      <div className="btn-row end" style={{ marginTop: 16 }}>
+      <div className="btn-row end">
         <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
         <button className="btn" onClick={() => setModal(null)}>关闭</button>
       </div>
@@ -2534,7 +2707,7 @@ const NewSiteModal = () => {
           ))}
         </div>
       </div>
-      <div className="btn-row end" style={{ marginTop: 16 }}>
+      <div className="btn-row end">
         <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
         <button className="btn" onClick={submit}>确认添加</button>
       </div>
@@ -2610,7 +2783,7 @@ export const Modal = () => {
             <h2>备份当前界面</h2>
             <p className="sub">立即备份当前界面，备份数据包含布局、图标、小组件与皮肤配置。</p>
             <div className="eng-row"><span style={{ flex: 1 }}>上次备份时间</span><span style={{ color: '#9aa4b2' }}>{backupTime ?? '暂无记录'}</span></div>
-            <div className="btn-row end" style={{ marginTop: 16 }}>
+            <div className="btn-row end">
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
               <button className="btn" onClick={() => { markBackedUp(); setModal(null) }}>立即备份当前界面</button>
             </div>
@@ -2624,7 +2797,7 @@ export const Modal = () => {
             <p className="sub">清空当前页面，回到空白页；设置、皮肤与 Dock 保留。需要现成编排时可载入示例布局。</p>
 
             <SwitchRow l="保留我的网址图标" d="恢复后把现有网址图标重新放到新页" on={keepIcons} onToggle={() => setKeepIcons(!keepIcons)} />
-            <div className="btn-row end" style={{ marginTop: 16 }}>
+            <div className="btn-row end">
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
               <button className="btn ghost" onClick={() => {
                 restoreDefault({ keepIcons, sample: true })
@@ -2645,7 +2818,7 @@ export const Modal = () => {
             <SwitchRow l="图标与布局" on={resetSel.layout} onToggle={() => setResetSel({ ...resetSel, layout: !resetSel.layout })} />
             <SwitchRow l="皮肤与主题" on={resetSel.skins} onToggle={() => setResetSel({ ...resetSel, skins: !resetSel.skins })} />
             <SwitchRow l="壁纸与缓存" on={resetSel.wallpaper} onToggle={() => setResetSel({ ...resetSel, wallpaper: !resetSel.wallpaper })} />
-            <div className="btn-row end" style={{ marginTop: 16 }}>
+            <div className="btn-row end">
               <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
               <button className="btn danger" onClick={() => {
                 resetParts(resetSel)
