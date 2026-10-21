@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { HALO_MAX, HALO_MIN, TONE_TARGET, contrast, coverFix, fixForInk, hexLum, overLum, pickInk, relLum } from '../src/shared/luma'
+import { HALO_MAX, HALO_MIN, TONE_TARGET, contrast, coverFix, fixForInk, hexLum, hexRgb, overLum, pickInk, readableInk, relLum, rgbHex } from '../src/shared/luma'
 import { boxUv, gridTone, toneAt, visibleWindow, type ToneGrid } from '../src/core/walltone'
 
 const WHITE = 1
@@ -190,5 +190,49 @@ describe('walltone：cover 窗口与局部取样', () => {
     const t = toneAt(g, { u0: 0.5, v0: 0.5, u1: 0.5, v1: 0.5 })
     expect(t.avg).toBeCloseTo(0.5, 5)
     expect(Number.isFinite(t.avg)).toBe(true)
+  })
+})
+
+describe('luma：品牌色可读性（readableInk）', () => {
+  const lumOf = (hex: string): number => hexLum(hex) ?? 0
+
+  it('hexRgb / rgbHex 往返一致，非法写法返回 null', () => {
+    expect(hexRgb('#1f2937')).toEqual([31, 41, 55])
+    expect(hexRgb('#fff')).toEqual([255, 255, 255])
+    expect(hexRgb('rgba(0,0,0,.5)')).toBeNull()
+    expect(rgbHex([31, 41, 55])).toBe('#1f2937')
+    expect(rgbHex([300, -5, 12.4])).toBe('#ff000c')
+  })
+
+  it('已经达标时原样返回，不做任何调整', () => {
+    /* #2932E1（百度蓝）在白底上的对比度远高于 3.2 */
+    expect(readableInk('#2932E1', lumOf('#ffffff'))).toBe('#2932E1')
+  })
+
+  it('深墨压在深底上被提亮到达标', () => {
+    /* Notion #1F1F1F 在暗黑主题的容器底色上原本几乎不可见 */
+    const bg = '#2a3247'
+    const out = readableInk('#1F1F1F', lumOf(bg))
+    expect(contrast(lumOf(out), lumOf(bg))).toBeGreaterThanOrEqual(TONE_TARGET)
+    expect(hexLum(out)).toBeGreaterThan(hexLum('#1F1F1F') ?? 0)
+  })
+
+  it('浅墨压在浅底上被压暗到达标', () => {
+    /* 闲鱼 #E8C400 在白底上对比度不足 */
+    const bg = '#ffffff'
+    const out = readableInk('#E8C400', lumOf(bg))
+    expect(contrast(lumOf(out), lumOf(bg))).toBeGreaterThanOrEqual(TONE_TARGET)
+    expect(hexLum(out)).toBeLessThan(hexLum('#E8C400') ?? 1)
+  })
+
+  it('保留色相：调整后各通道的相对大小不变（仍是同一族颜色）', () => {
+    const out = hexRgb(readableInk('#FF2442', lumOf('#ffffff')))
+    expect(out).not.toBeNull()
+    const [r, , b] = out as [number, number, number]
+    expect(r).toBeGreaterThan(b)
+  })
+
+  it('非法输入原样返回，不抛异常', () => {
+    expect(readableInk('rgba(0,0,0,.5)', 0.9)).toBe('rgba(0,0,0,.5)')
   })
 })

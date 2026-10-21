@@ -19,6 +19,7 @@ import { IconTip } from './tip'
 import { Drawer, Modal } from './panels'
 import { Icon } from './icons'
 import { writeBootBg } from './boot-theme'
+import { setSkinRuntime } from './skin-runtime'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
 import { getWallpaper, type BgData } from '../core/wallpaper'
@@ -458,8 +459,22 @@ export const App = () => {
     rt.setProperty('--label-color', settings.fontColor !== '' ? settings.fontColor : (tokens['--label-color'] ?? '#ffffff'))
     rt.setProperty('--search-width', `${settings.searchWidth}px`)
     rt.setProperty('--search-radius', `${settings.searchRadius}px`)
-    rt.setProperty('--clock-color', settings.clockColor)
+    /* 时间颜色：空串 = 跟随主题（用皮肤令牌里的 --clock-color）。
+       原先出厂值写死 #1f2937，切到暗黑主题后时钟等于隐形（4.97 修） */
+    if (settings.clockColor !== '') rt.setProperty('--clock-color', settings.clockColor)
     const maskColor = tokens['--mask-color'] ?? '#10151b'
+    const maskLum = hexLum(maskColor) ?? 0
+    /* 极简模式整屏压在壁纸 / 底色上，没有卡片托底，故墨色必须按底色明暗自己挑：
+       经典主题的底色是白的，沿用「白字 + 黑投影」会直接消失（4.97 修）。
+       浅底用主题正文色 + 深色描边，深底才用白字 + 白色描边 */
+    const minimalLight = maskLum > 0.5
+    rt.setProperty('--minimal-ink', minimalLight ? (tokens['--panel-text'] ?? '#1f2937') : '#ffffff')
+    rt.setProperty('--minimal-anti', minimalLight ? '255,255,255' : '0,0,0')
+    /* 搜索框描边与悬停底：跟墨色同侧（浅底深边、深底白边），否则描边自己也看不见 */
+    rt.setProperty('--minimal-veil', minimalLight ? 'rgba(15,23,42,.32)' : 'rgba(255,255,255,.75)')
+    rt.setProperty('--minimal-fill', minimalLight ? 'rgba(15,23,42,.05)' : 'rgba(0,0,0,.06)')
+    /* 品牌色字形的落点底色：写入 runtime，供 TileGlyph 在渲染期同步挑墨色（见 app/skin-runtime） */
+    setSkinRuntime({ tileBg: tokens['--tile-bg'] ?? '#ffffff', cardBg: tokens['--card-bg'] ?? '#ffffff' })
     document.body.style.background = maskColor
     document.documentElement.style.background = maskColor
     /* 记下底色：下次打开新标签页时，配置读出来之前先用它铺底，避免先闪默认浅色 */
@@ -534,6 +549,10 @@ export const App = () => {
       stage.w = window.innerWidth / s
       stage.h = window.innerHeight / s
       stage.scale = s
+      /* 舞台宽写进 CSS 变量：抽屉 / 弹窗的宽度上限要用它兜底（100% 指舞台宽，不是窗口宽） */
+      document.documentElement.style.setProperty('--stage-w', `${stage.w}px`)
+      /* 抽屉宽度：窄窗口下占满整个舞台（否则 440 设计像素缩到手机上只剩一条窄缝） */
+      document.documentElement.style.setProperty('--dw-w', window.innerWidth < 720 ? '100%' : '440px')
       /* 舞台尺寸变了：缓存的屏幕 rect 作废（拖拽中每帧都要用它换算格坐标） */
       stageBoxRef.current = null
       /* 缩放 / 视口变了：壁纸取样点的换算比例跟着变（值与上次相同则不触发重渲染） */

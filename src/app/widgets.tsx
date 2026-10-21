@@ -6,7 +6,8 @@
  */
 import { useEffect, useState } from 'react'
 import { CheckIcon, Icon } from './icons'
-import { brandOf } from './brands'
+import { brandOn } from './brands'
+import { skinRuntime } from './skin-runtime'
 import { WIDGET_DEFS } from '../shared/widget-defs'
 import { GROUP_GAP, GROUP_PAD, groupBoxOf, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
@@ -47,13 +48,19 @@ export const styleVarsOf = (c: Record<string, unknown>): Record<string, string> 
 /**
  * 统一图标容器：底色取容器令牌，品牌色只用于字形（全站唯一一种图标语言）。
  * fs / size 均可省略——省略时尺寸交给 CSS（卡内图标按 --u 随卡片等比缩放，Dock 与导航仍显式传入）。
+ *
+ * 字形颜色按**实际落点底色**校正（brandOn）：同一套品牌色不可能在浅色与深色皮肤上都可读，
+ * 深墨（Notion / GitHub / 抖音）在暗黑主题的深色容器上会直接消失（4.97 修）。
+ * 只推明度、保留色相，所以站点识别不受影响。
  */
-export const TileGlyph = ({ name, cls, fs, size, tip }: {
+export const TileGlyph = ({ name, cls, fs, size, tip, bg }: {
   name: string; cls: string; fs?: number | undefined; size?: number | undefined
   /** 悬停提示的名称（图标格容器里的格子只有名称、没有网址，故不带域名）；省略则不提示 */
   tip?: string | undefined
+  /** 字形背后的实际底色；省略时按容器令牌 --tile-bg 校正 */
+  bg?: string | undefined
 }) => {
-  const b = brandOf(name)
+  const b = brandOn(name, bg ?? tileBgOf())
   const font = fs === undefined ? undefined : b.latin ? Math.round(fs * 0.74) : fs
   return (
     <div
@@ -66,6 +73,9 @@ export const TileGlyph = ({ name, cls, fs, size, tip }: {
     </div>
   )
 }
+
+/** 读当前皮肤下容器令牌的实际色（由 App 的主题 effect 写入，见 skin-runtime） */
+const tileBgOf = (): string => skinRuntime.tileBg
 
 /**
  * 站点图标：优先真实 favicon（IndexedDB 缓存 → SW 解析），失败回退品牌字形。
@@ -245,20 +255,18 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
                 <span className="cal-ji">忌 {almanac.bad.slice(0, 3).join(' ')}</span>
               </div>
             )}
-            {bool(c['showSchedule']) && (
-              todayEvents.length === 0
-                ? <div className="cal-empty">今日暂无日程</div>
-                : (
-                  <div className="cal-events">
-                    {todayEvents.slice(0, 2).map((e, i) => (
-                      <div className={`cal-ev${e.done ? ' done' : ''}`} key={`${i}-${e.text}`}>
-                        <i className="cal-ev-dot" />{e.text}
-                      </div>
-                    ))}
-                    {todayEvents.length > 2 && <div className="cal-empty">还有 {todayEvents.length - 2} 项</div>}
-                    {doneCount > 0 && <div className="cal-empty">{doneCount}/{todayEvents.length} 已完成</div>}
+            {/* 没有日程时不渲染占位：空状态不该占掉卡面高度（4.97）。
+                日程区块只在真有内容时出现，卡上留给日期 / 农历 / 节日 */}
+            {bool(c['showSchedule']) && todayEvents.length > 0 && (
+              <div className="cal-events">
+                {todayEvents.slice(0, 2).map((e, i) => (
+                  <div className={`cal-ev${e.done ? ' done' : ''}`} key={`${i}-${e.text}`}>
+                    <i className="cal-ev-dot" />{e.text}
                   </div>
-                )
+                ))}
+                {todayEvents.length > 2 && <div className="cal-empty">还有 {todayEvents.length - 2} 项</div>}
+                {doneCount > 0 && <div className="cal-empty">{doneCount}/{todayEvents.length} 已完成</div>}
+              </div>
             )}
           </div>
         </div>

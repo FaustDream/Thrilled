@@ -4,6 +4,8 @@
  * - 视觉：品牌色 + 字形（统一图标容器规范 02 §12.2，真 Logo 后续替换）
  * - URL：Dock 应用 / 网址导航 / 图标卡片打开真实站点用；无 URL 的名称回退搜索
  */
+import { hexLum, readableInk } from '../shared/luma'
+
 export interface Brand {
   color: string
   glyph: string
@@ -107,6 +109,20 @@ export const brandOf = (name: string): { color: string; glyph: string; latin: bo
   const b = BRANDS[name]
   if (b) return { color: b.color, glyph: b.glyph, latin: b.latin === true }
   return { color: '#64748B', glyph: name.slice(0, 1), latin: /^[\x20-\x7E]/.test(name.slice(0, 1)) }
+}
+
+/**
+ * 按落点底色挑品牌色：同一套品牌色在经典（白底）与暗黑（深底）上不可能同时可读——
+ * Notion #1F1F1F 在白底上清晰、在深底上消失，闲鱼 #E8C400 正好相反。
+ * 这里只推明度、保留色相，让字形在每个皮肤上都跨过 3:1。
+ *
+ * @param name 站点名（未知名称走 brandOf 的灰）
+ * @param bg   字形背后的实际底色（--tile-bg / --card-bg / --mask-color）
+ */
+export const brandOn = (name: string, bg: string): { color: string; glyph: string; latin: boolean } => {
+  const b = brandOf(name)
+  const bgLum = hexLum(bg) ?? 0.9
+  return { ...b, color: readableInk(b.color, bgLum) }
 }
 
 /** 读取站点 URL（未知名称返回 null，调用方回退搜索） */

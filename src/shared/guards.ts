@@ -211,7 +211,12 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     dockApps: Array.isArray(o['dockApps'])
       ? (o['dockApps'] as unknown[]).map(normDockApp).filter((x): x is DockApp => x !== null)
       : [...d.dockApps],
-    clockColor: strish(o['clockColor'], d.clockColor),
+    /* 时间颜色：空串 = 跟随主题。4.97 之前出厂值写死 #1f2937，
+       切到暗黑主题后时钟等于隐形；存量的这个旧出厂值一并归位（用户改过的其它颜色保留） */
+    clockColor: ((): string => {
+      const v = strish(o['clockColor'], d.clockColor);
+      return v.toLowerCase() === '#1f2937' ? '' : v;
+    })(),
     glass,
     blur,
     gAlpha: numish(o['gAlpha'], d.gAlpha, 0.2, 1),

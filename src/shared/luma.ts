@@ -96,6 +96,104 @@ export const fixForInk = (toneAvg: number, toneWorst: number, inkLum: number): I
 }
 
 /**
+ * 品牌色可读性：品牌色是各站点自带的标识色，深浅两端都极端（Notion #1F1F1F 与
+ * 闲鱼 #E8C400）。同一个字形放在浅色或深色皮肤上，总有一半撞底。
+ *
+ * 这里只改**明度**、不动色相与饱和度，把颜色推到目标对比度为止——
+ * 品牌识别靠色相，靠明度提亮 / 压暗不会让人认不出是哪个站点。
+ * 已经在目标之上的颜色原样返回，不做任何「顺手美化」。
+ */
+
+/** #rgb / #rrggbb → [r,g,b]（0–255）；其它写法返回 null */
+export const hexRgb = (hex: string): [number, number, number] | null => {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())
+  if (m === null) return null
+  const h = m[1] ?? ''
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  return [
+    Number.parseInt(full.slice(0, 2), 16),
+    Number.parseInt(full.slice(2, 4), 16),
+    Number.parseInt(full.slice(4, 6), 16),
+  ]
+}
+
+/** [r,g,b]（0–255）→ #rrggbb */
+export const rgbHex = (rgb: readonly [number, number, number]): string =>
+  `#${rgb.map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, '0')).join('')}`
+
+/** [r,g,b] → [h(0–360), s(0–1), l(0–1)] */
+const toHsl = ([r, g, b]: readonly [number, number, number]): [number, number, number] => {
+  const rn = r / 255, gn = g / 255, bn = b / 255
+  const max = Math.max(rn, gn, bn), min = Math.min(rn, gn, bn)
+  const l = (max + min) / 2
+  if (max === min) return [0, 0, l]
+  const d = max - min
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h: number
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6
+  else if (max === gn) h = ((bn - rn) / d + 2) / 6
+  else h = ((rn - gn) / d + 4) / 6
+  return [h * 360, s, l]
+}
+
+/** [h(0–360), s(0–1), l(0–1)] → [r,g,b]（0–255） */
+const fromHsl = ([h, s, l]: readonly [number, number, number]): [number, number, number] => {
+  if (s === 0) { const v = l * 255; return [v, v, v] }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+  const p = 2 * l - q
+  const hue = (t: number): number => {
+    let x = t
+    if (x < 0) x += 1
+    if (x > 1) x -= 1
+    if (x < 1 / 6) return p + (q - p) * 6 * x
+    if (x < 1 / 2) return q
+    if (x < 2 / 3) return p + (q - p) * (2 / 3 - x) * 6
+    return p
+  }
+  const hn = h / 360
+  return [hue(hn + 1 / 3) * 255, hue(hn) * 255, hue(hn - 1 / 3) * 255]
+}
+
+/**
+ * 把颜色朝「离背景更远」的方向推：背景暗就提亮、背景亮就压暗。
+ *
+ * 只动 **HSL 的明度**，色相与饱和度保持原样——这是品牌识别能留下来的关键：
+ * 直接往白里混会把 #24292F（GitHub 的深墨）洗成中性灰 #7e8184，色相没了，
+ * 一排图标里就认不出谁是谁；改成抬高 L 则得到浅冷灰，仍是同一族颜色。
+ *
+ * @param hex   原始品牌色
+ * @param bgLum 背景相对亮度（用 hexLum 算）
+ * @param target 目标对比度，默认 3.2（WCAG 1.4.11 非文本 3:1 留余量）
+ */
+export const readableInk = (hex: string, bgLum: number, target = TONE_TARGET): string => {
+  const rgb = hexRgb(hex)
+  if (rgb === null) return hex
+  if (contrast(relLum(rgb[0], rgb[1], rgb[2]), bgLum) >= target) return hex
+  const [h, s, l0] = toHsl(rgb)
+  const up = bgLum < 0.18
+  /* 二分找最小达标明度：L 的可行区间是 [l0, 1] 或 [0, l0] */
+  let lo = up ? l0 : 0
+  let hi = up ? 1 : l0
+  let best = fromHsl([h, s, up ? 1 : 0])
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2
+    const cand = fromHsl([h, s, mid])
+    if (contrast(relLum(cand[0], cand[1], cand[2]), bgLum) >= target) { best = cand; if (up) hi = mid; else lo = mid }
+    else if (up) lo = mid
+    else hi = mid
+  }
+  /* 量化到 8 位色深后再验一次：四舍五入可能把对比度压回阈值下方，此时沿同方向多推一点 */
+  const quantized = rgbHex(best)
+  if (contrast(hexLum(quantized) ?? 0, bgLum) >= target) return quantized
+  for (let step = 0.004; step <= 0.08; step += 0.004) {
+    const cand = fromHsl([h, s, Math.min(1, Math.max(0, (up ? hi : lo) + (up ? step : -step)))])
+    const out = rgbHex(cand)
+    if (contrast(hexLum(out) ?? 0, bgLum) >= target) return out
+  }
+  return rgbHex(fromHsl([h, s, up ? 1 : 0]))
+}
+
+/**
  * 壁纸遮罩（`settings.cover`）的自动加成：壁纸越「花」，全局压一层越能让 UI 的统一色
  * （卡片底衬、搜索框）站稳。用可见区域的**极差**（max−min）当作「花」的程度——
  * 亮度均匀的壁纸（纯色、天空）不需要压，明暗交错（人物 + 天空 + 反光）才需要。

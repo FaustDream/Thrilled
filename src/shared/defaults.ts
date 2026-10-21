@@ -50,7 +50,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   dockCount: 8,
   dockIcon: 'rect',
   dockApps: [...DEFAULT_DOCK_APPS],
-  clockColor: '#1f2937',
+  clockColor: '',
   /* 透明度：前六项等同旧「玻璃质感」的视觉，后六项默认 0（不改变出厂外观） */
   glass: {
     card: 0.6, tile: 0.35, dock: 0.7, search: 0.45, panel: 0.65, menu: 0.65,
@@ -79,6 +79,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 };
 
 /** 内置主题只有两套：经典（浅色）与暗黑（深色）；配色不再提供编辑器 */
+/* 语义色（--ok / --bad / --warn / --danger）两套主题各给一份：写死一个绿 / 红不可能同时
+   在浅底与深底上跨过 3:1——暗黑主题的深色卡上，#16a34a 只有 2.2:1（4.97 修） */
 const CLASSIC_TOKENS: Record<string, string> = {
   '--card-bg': '#ffffff', '--card-text': '#1f2937', '--card-sub': '#6b7280', '--accent': '#3b82f6',
   '--label-color': '#1f2937', '--panel-bg': '#ffffff', '--panel-text': '#1f2937', '--panel-sub': '#6b7280',
@@ -86,6 +88,7 @@ const CLASSIC_TOKENS: Record<string, string> = {
   '--line': '#eef1f6', '--chip-bg': 'rgba(255,255,255,.55)', '--chip-text': '#1f2937', '--menu-bg': '#ffffff',
   '--menu-hover': '#f3f5f9', '--clock-color': '#1f2937', '--search-text': '#1f2937',
   '--search-ph': 'rgba(31,41,55,.55)', '--mask-color': '#ffffff',
+  '--ok': '#15803d', '--bad': '#b91c1c', '--warn': '#b45309', '--todo-accent': '#0f766e',
 };
 
 export const BUILTIN_SKINS: readonly SkinPack[] = [
@@ -99,6 +102,8 @@ export const BUILTIN_SKINS: readonly SkinPack[] = [
       '--line': '#2a3247', '--chip-bg': 'rgba(22,28,42,.74)', '--chip-text': '#e8edf7', '--menu-bg': '#1d2332',
       '--menu-hover': '#27304a', '--clock-color': '#ffffff', '--search-text': '#ffffff',
       '--search-ph': 'rgba(255,255,255,.68)', '--mask-color': '#05070c',
+      /* 深底上的语义色要提亮：同一支绿 / 红在深色卡上会沉下去 */
+      '--ok': '#4ade80', '--bad': '#f87171', '--warn': '#fbbf24', '--todo-accent': '#2dd4bf',
     },
   },
 ];

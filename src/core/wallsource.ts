@@ -264,12 +264,15 @@ export const zfEncrypt = async (text: string): Promise<string> => {
   return btoa(bin);
 };
 
-/** 站方协议解密：base64 → AES-128-CBC 解密 → 去除   结尾（与站方前端行为一致） */
+/** 站方协议解密：base64 → AES-128-CBC 解密 → 去除 NUL 结尾（与站方前端行为一致） */
 export const zfDecrypt = async (b64: string): Promise<string> => {
   const { key, iv } = await zfKeyIv();
   const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)).slice();
   const buf = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, raw.buffer);
-  return new TextDecoder().decode(buf).replace(/ .*$/g, '');
+  /* 明文尾部可能带 NUL 填充：按首个 NUL 截断（等价于去掉 NUL 及其后内容） */
+  const text = new TextDecoder().decode(buf);
+  const nul = text.indexOf('\u0000');
+  return nul < 0 ? text : text.slice(0, nul);
 };
 
 /** 解析哲风列表响应（纯函数：解密后的 JSON → 壁纸页） */
