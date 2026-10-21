@@ -3,7 +3,7 @@
  * 覆盖：列表地址构造（各协议 / 分类映射 / 分页）、响应解析（wallhaven / picsum / bing / 061129 / 坏数据）
  */
 import { describe, expect, it, vi } from 'vitest'
-import { buildListUrl, parse061129Categories, parse061129List, parseList, fetchCategories } from '../src/core/wallsource'
+import { buildListUrl, buildZhefengPayload, parse061129Categories, parse061129List, parseList, parseZhefengList, fetchCategories } from '../src/core/wallsource'
 import type { WallpaperSource } from '../src/shared/types'
 
 vi.mock('../src/core/fetch-proxy', () => ({ fetchText: vi.fn(async (url: string) => {
@@ -101,5 +101,43 @@ describe('parseList', () => {
     expect(parseList(wh, 1, 'not-json')).toEqual({ photos: [], page: 1, hasMore: false })
     expect(parseList(bg, 1, '{"x":1}')).toEqual({ photos: [], page: 1, hasMore: false })
     expect(parseList(wg, 1, '{"blob":"v1.bad"}')).toEqual({ photos: [], page: 1, hasMore: false })
+  })
+})
+
+describe('哲风壁纸请求体', () => {
+  it('页大小不超过站方上限 21（22 起返回 400 壁纸分页参数不正确）', () => {
+    expect(buildZhefengPayload('1', 1).rows).toBeLessThanOrEqual(21)
+  })
+  it('字段与站方 PC 端一致：分类进 wpType、标签留空、排序 3', () => {
+    expect(buildZhefengPayload('1,3,4,7', 2)).toMatchObject({ page: 2, sortType: 3, wpType: '1,3,4,7', lbId: '', isFavorites: false })
+  })
+  it('搜索词去空白后写入 search，空搜索不带该字段', () => {
+    expect(buildZhefengPayload('1', 1, '  原神 ')).toMatchObject({ search: '原神' })
+    expect('search' in buildZhefengPayload('1', 1, '   ')).toBe(false)
+  })
+})
+
+describe('parseZhefengList', () => {
+  const text = JSON.stringify({
+    list: [{ wtId: 'w1', fileId: 'f1', type: 1, labelList: ['五条悟', '咒术回战', '特写', '多余'] }],
+    pages: 2,
+    total: 24,
+  })
+  it('映射 wtId / 裁剪图地址与标签标题', () => {
+    const page = parseZhefengList(1, text)
+    expect(page.photos[0]).toEqual({
+      id: 'w1',
+      thumb: 'https://haowallpaper.com/link/common/file/getCroppingImg/f1',
+      full: 'https://haowallpaper.com/link/common/file/getCroppingImg/f1',
+      author: '',
+      title: '五条悟 · 咒术回战 · 特写',
+    })
+    expect(page.hasMore).toBe(true)
+  })
+  it('末页不再 hasMore', () => {
+    expect(parseZhefengList(2, text).hasMore).toBe(false)
+  })
+  it('坏 JSON 返回空页', () => {
+    expect(parseZhefengList(1, 'oops')).toEqual({ photos: [], page: 1, hasMore: false })
   })
 })

@@ -14,6 +14,8 @@
  *   加密（key/iv 硬编码于站方公开前端 JS，对所有用户统一，无身份绑定与时效签名），按其公开传输
  *   协议复现；分类保持原站「壁纸类型」结构，支持关键词搜索；原图下载需登录站方账号，当前以
  *   站方裁剪图（约 890px）作为壁纸图源。授权例外记录见 BUG_FIXES.md。
+ *   站方对分页参数有校验：rows 超过 21 直接返回 400 PUBLIC_REQUEST_INVALID（2026-10-21 实测
+ *   12 / 20 / 21 通过，22 起失败），页大小因此取站方 PC 端默认值 12。
  *
  * 请求统一经 core/fetch-proxy：扩展环境由 SW 代理绕过 CORS，开发预览回退直连。
  */
@@ -245,7 +247,8 @@ export const fetchWallPage = async (src: WallpaperSource, cat: string, page: num
 /** 站方公开前端的 AES-128-CBC 密钥与 IV（对所有用户统一） */
 const ZF_KEY = '68zhehao2O776519' as const;
 const ZF_IV = 'aa176b7519e84710' as const;
-const ZF_PAGE_SIZE = 30 as const;
+/** 站方上限：rows > 21 直接返回 400「壁纸分页参数不正确」；取站方 PC 端默认页大小 */
+const ZF_PAGE_SIZE = 12 as const;
 
 /** iv 显式声明为 ArrayBuffer 承载：WebCrypto 的 BufferSource 不接受 ArrayBufferLike（SharedArrayBuffer）版视图 */
 const zfKeyIv = async (): Promise<{ key: CryptoKey; iv: Uint8Array<ArrayBuffer> }> => {
@@ -297,14 +300,35 @@ export const parseZhefengList = (page: number, text: string): WallPage => {
   return { photos, page, hasMore: (pages > 0 ? page < pages : photos.length > 0) && page * ZF_PAGE_SIZE < (total || page * ZF_PAGE_SIZE + 1) };
 };
 
+/** 列表请求体（纯函数；字段与站方 PC 端 dataForm 一致，wpType 为壁纸类型、lbId 为标签） */
+export const buildZhefengPayload = (cat: string, page: number, query = ''): Record<string, string | number | boolean> => ({
+  page,
+  sortType: 3,
+  rows: ZF_PAGE_SIZE,
+  isFavorites: false,
+  wpType: cat,
+  lbId: '',
+  ...(query.trim() !== '' ? { search: query.trim() } : {}),
+});
+
+/** 解析 JSON 对象（坏数据返回空对象，不抛错） */
+const asObject = (text: string): Record<string, unknown> => {
+  try { return itemOf(JSON.parse(text)); } catch { return {}; }
+};
+
+/** 站方错误响应里的提示语（非 JSON / 无 msg 时为空串），让失败原因直接可读 */
+const zfErrorSuffix = (text: string): string => {
+  const msg = asObject(text)['msg'];
+  return typeof msg === 'string' && msg !== '' ? `：${msg}` : '';
+};
+
 /** 拉取哲风一页（加密请求 → 解密响应） */
 const fetchZhefengPage = async (src: WallpaperSource, cat: string, page: number, query: string): Promise<WallPage> => {
-  const payload = { page, sortType: 3, rows: ZF_PAGE_SIZE, isFavorites: false, wpType: cat, ...(query.trim() !== '' ? { search: query.trim() } : {}) };
-  const url = `${cleanBase(src.apiBase)}/pc/wallpaper/wallpaperList?data=${encodeURIComponent(await zfEncrypt(JSON.stringify(payload)))}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(20000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const j = itemOf(JSON.parse(await res.text()));
-  const data = typeof j['data'] === 'string' ? j['data'] : '';
-  if (data === '') throw new Error('响应格式异常');
-  return parseZhefengList(page, await zfDecrypt(data));
+  const data = encodeURIComponent(await zfEncrypt(JSON.stringify(buildZhefengPayload(cat, page, query))));
+  const res = await fetch(`${cleanBase(src.apiBase)}/pc/wallpaper/wallpaperList?data=${data}`, { signal: AbortSignal.timeout(20000) });
+  const raw = await res.text();
+  if (!res.ok) throw new Error(`HTTP ${res.status}${zfErrorSuffix(raw)}`);
+  const body = asObject(raw)['data'];
+  if (typeof body !== 'string' || body === '') throw new Error('响应格式异常');
+  return parseZhefengList(page, await zfDecrypt(body));
 };
