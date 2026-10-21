@@ -20,14 +20,14 @@ describe('设置归一化（normalizeSettings）', () => {
     const s = normalizeSettings({
       mode: 'privacy',
       searchWidth: 9999,          // 超上限 → 钳制到 1400
-      dockCount: 'eight',         // 类型错 → 回退 8
+      dockIconSize: 'xl',         // 非三档 → 回退中档
       gAlpha: 0.5,
       glass: { card: 2 },         // 超上限 → 钳制 1，其余回退默认
       skinId: 'dark',
     })
     expect(s.mode).toBe('standard') // privacy 已移除，归位 standard
     expect(s.searchWidth).toBe(1400)
-    expect(s.dockCount).toBe(DEFAULT_SETTINGS.dockCount)
+    expect(s.dockIconSize).toBe(DEFAULT_SETTINGS.dockIconSize)
     expect(s.gAlpha).toBe(0.5)
     expect(s.glass.card).toBe(1)
     expect(s.glass.menu).toBe(DEFAULT_SETTINGS.glass.menu)
@@ -117,21 +117,13 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(normalizeSettings(null).dockApps).toEqual(DEFAULT_SETTINGS.dockApps)
   })
 
-  it('按类型的默认大小：只留六档内且在该组件能力区间的项，坏值 / 未知类型丢弃', () => {
-    const s = normalizeSettings({
-      sizeDefaults: {
-        clock: { w: 8, h: 4 },      // 合法
-        fav: { w: 2, h: 4 },        // 合法
-        cal: { w: 2, h: 2 },        // 低于日历的尺寸下限（4×2 起）→ 丢弃
-        icon: { w: 3, h: 3 },       // 不是六档 → 丢弃
-        todo: { w: '4', h: 2 },     // 类型错 → 丢弃
-        nope: { w: 2, h: 2 },       // 未知组件类型 → 丢弃
-        weather: null,              // 结构错 → 丢弃
-      },
-    })
-    expect(s.sizeDefaults).toEqual({ clock: { w: 8, h: 4 }, fav: { w: 2, h: 4 } })
-    expect(normalizeSettings({}).sizeDefaults).toEqual({})
-    expect(normalizeSettings(null).sizeDefaults).toEqual(DEFAULT_SETTINGS.sizeDefaults)
+  it('Dock 图标档位只认 sm / md / lg，坏值回退出厂中档', () => {
+    expect(normalizeSettings({ dockIconSize: 'sm' }).dockIconSize).toBe('sm')
+    expect(normalizeSettings({ dockIconSize: 'lg' }).dockIconSize).toBe('lg')
+    expect(normalizeSettings({ dockIconSize: 'xl' }).dockIconSize).toBe(DEFAULT_SETTINGS.dockIconSize)
+    expect(normalizeSettings({ dockIconSize: 3 }).dockIconSize).toBe(DEFAULT_SETTINGS.dockIconSize)
+    expect(normalizeSettings({}).dockIconSize).toBe(DEFAULT_SETTINGS.dockIconSize)
+    expect(normalizeSettings(null).dockIconSize).toBe(DEFAULT_SETTINGS.dockIconSize)
   })
 })
 

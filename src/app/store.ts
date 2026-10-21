@@ -8,7 +8,7 @@
 import { create } from 'zustand'
 import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc, seedBirthdays } from './layout'
 import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../shared/grid'
-import { WIDGET_DEFS, cfgOf, minSizeOf, placeSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
+import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
 import { getCityWeather, getWeather, cityKeyOf, type GeoStatus, type WeatherData } from '../core/weather'
@@ -37,7 +37,6 @@ import type {
   WallFocus,
   WallSourceKind,
   WidgetKind,
-  WidgetSize,
 } from '../shared/types'
 
 export type { SkinPack } from '../shared/types'
@@ -51,7 +50,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'kindSizes' | 'backup' | 'restore' | 'reset' | 'newSite' | 'dockEdit'
+export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'backup' | 'restore' | 'reset' | 'newSite' | 'dockEdit'
 
 /**
  * 应用内通用对话框（替代 window.confirm / window.prompt）
@@ -173,8 +172,6 @@ interface AppState {
   setWallSource: (kind: WallSourceKind) => void
   /** 放置组件；at 给定时优先落在该网格格附近（被占则就近），返回是否放置成功 */
   place: (kind: WidgetKind, config?: Record<string, unknown>, at?: { c: number; r: number }) => boolean
-  /** 组件库：整体设置各类组件的默认大小（键 = 组件类型，缺键 = 用定义表出厂尺寸；只影响之后新增的实例） */
-  setSizeDefaults: (next: Record<string, WidgetSize>) => void
   updateConfig: (id: string, patch: Record<string, unknown>) => void
   resize: (id: string, w: number, h: number) => void
   /**
@@ -457,15 +454,6 @@ export const useApp = create<AppState>()((set, get) => ({
     toast: '已恢复默认快捷键',
   })),
 
-  /* ---------- 组件库：按类型的默认大小（弹窗里逐个类型设好、确认后一次性写入） ---------- */
-  setSizeDefaults: (next) => {
-    const n = Object.keys(next).length
-    set((s) => ({
-      settings: { ...s.settings, sizeDefaults: next },
-      toast: n === 0 ? '已全部恢复为出厂大小' : `已更新 ${n} 类组件的默认大小（之后新增的实例按此落位）`,
-    }))
-  },
-
   /* ---------- 实例样式（配置弹窗「样式」段） ---------- */
   applyStyle: (id, patch) => set((s) => ({
     pages: s.pages.map((pg) => pg.map((it) => (it.id === id
@@ -563,8 +551,8 @@ export const useApp = create<AppState>()((set, get) => ({
       const def = WIDGET_DEFS[kind]
       const curIdx = s.cur
       const page = [...(list[curIdx] ?? [])]
-      /* 尺寸：优先该类组件的默认大小（组件库 →「默认大小」设置；缺省 / 坏值回退定义表尺寸） */
-      const size = placeSizeOf(kind, config, s.settings.sizeDefaults)
+      /* 尺寸：一律用定义表的出厂尺寸（单个实例的尺寸在编辑弹窗 / 右键「修改尺寸」里改） */
+      const size = def.units
       const item: GridItem = {
         id: `i${Date.now().toString(36)}`, c: 0, r: 0, w: size.w, h: size.h, t: kind,
         /* 新实例先套该类组件的默认样式（「设为该组件默认」写入的），再叠放置时的显式配置 */
@@ -594,8 +582,8 @@ export const useApp = create<AppState>()((set, get) => ({
     let placed = 0
     set((s) => {
       const list = s.pages.map((pg) => [...pg])
-      /* 批量落位的网址图标同样遵循该类型的默认大小（缺省 2×2） */
-      const size = placeSizeOf('icon', {}, s.settings.sizeDefaults)
+      /* 批量落位的网址图标同样用定义表尺寸（2×2） */
+      const size = WIDGET_DEFS['icon'].units
       let curIdx = s.cur
       let seq = 0
       for (const entry of entries) {

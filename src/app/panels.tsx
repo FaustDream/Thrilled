@@ -21,7 +21,7 @@ import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
 import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, startOfWeek, type TodoEntry } from '../core/utils'
-import { dockAppsWith, dockFailText, type DockAddResult } from '../shared/dock'
+import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith, type DockAddResult } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { cityKeyOf, searchCities, weatherText, type GeoHit } from '../core/weather'
 import { dayKey, normScheduleEvents, upcomingEvents, type ScheduleEvent } from '../core/schedule'
@@ -31,7 +31,7 @@ import { openLink } from '../core/link-opener'
 import { resetAllData } from '../core/reset'
 import { saveDoc } from '../core/storage'
 import { SHORTCUT_DEFS, comboOf, formatCombo } from '../shared/shortcuts'
-import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind, WidgetSize } from '../shared/types'
+import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
   /* 添加抽屉不带副标题（标题已说明用途，减少顶部行数——用户反馈） */
@@ -187,9 +187,9 @@ const AddPanel = () => {
   /* 自定义页书签快速添加的过滤列表 */
   const bmList = (bm ?? []).filter((e) => bkFilter.trim() === '' || e.label.toLowerCase().includes(bkFilter.trim().toLowerCase()))
 
-  /** 加进 Dock 快捷方式（去重 + 上限判定在 shared/dock；返回 ok / dup / full 供调用方提示） */
-  const addToDock = (label: string, link: string): 'ok' | 'dup' | 'full' => {
-    const r = dockAppsWith(settings.dockApps, settings.dockCount, label, link)
+  /** 加进 Dock 快捷方式（去重判定在 shared/dock；返回 ok / dup 供调用方提示） */
+  const addToDock = (label: string, link: string): 'ok' | 'dup' => {
+    const r = dockAppsWith(settings.dockApps, label, link)
     if (!r.ok) return r.reason
     setSetting('dockApps', r.apps)
     return 'ok'
@@ -202,12 +202,11 @@ const AddPanel = () => {
     for (const it of nvList) {
       const url = it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''
       if (url === '' || apps.some((a) => a.url === url)) continue
-      if (apps.length >= settings.dockCount) break
       apps.push({ name: it.label, url })
       ok += 1
     }
     if (ok > 0) setSetting('dockApps', apps)
-    showToast(ok > 0 ? `已添加 ${ok} 个快捷方式到 Dock` : '没有可添加的条目（可能已存在或 Dock 已满）')
+    showToast(ok > 0 ? `已添加 ${ok} 个快捷方式到 Dock` : '没有可添加的条目（可能已存在）')
   }
 
   const addCustom = (): void => {
@@ -318,7 +317,7 @@ const AddPanel = () => {
         <>
           {/* 已添加的 Dock 快捷方式：紧凑 chips 行（点击 × 移除），不占内容区主空间 */}
           <div className="dock-chips">
-            <span className="dock-chip-count">已添加 {settings.dockApps.length}/{settings.dockCount}</span>
+            <span className="dock-chip-count">已添加 {settings.dockApps.length} 个</span>
             <span className="dock-chip-edit" title="集中改名 / 改网址 / 移除" onClick={() => setModal('dockEdit')}>管理</span>
             {settings.dockApps.map((a, i) => (
               <span className="dock-chip" key={`${a.url}-${i}`} title={a.url}>
@@ -338,7 +337,7 @@ const AddPanel = () => {
           <div className="nv-toolbar">
             <span className="nv-tool" onClick={addAllToDock}>全部加到 Dock</span>
           </div>
-          {/* 点击条目 = 添加为底部 Dock 快捷方式（去重 + 上限提示）；已在 Dock 的置灰，已添加的见顶部 chips */}
+          {/* 点击条目 = 添加为底部 Dock 快捷方式（只做去重判定）；已在 Dock 的置灰，已添加的见顶部 chips */}
           <div className="nv-grid">
             {nvList.map((it) => {
               const url = it.url !== '' ? it.url : siteUrlOf(it.label) ?? ''
@@ -347,9 +346,7 @@ const AddPanel = () => {
                 <div className={`nv-item${inDock ? ' dis' : ''}`} key={it.label} title={url !== '' ? url : it.label}
                   onClick={() => {
                     const r = addToDock(it.label, url)
-                    showToast(r === 'ok'
-                      ? `已添加「${it.label}」到 Dock`
-                      : r === 'dup' ? '该站点已在 Dock 中' : `Dock 最多 ${settings.dockCount} 个快捷方式，请先移除一些`)
+                    showToast(r === 'ok' ? `已添加「${it.label}」到 Dock` : DOCK_DUP_TEXT)
                   }}>
                   <SiteIcon url={url} name={it.label} cls="nv-ico" fs={18} size={56} />
                   <div className="nv-name">{it.label}</div>
@@ -697,8 +694,6 @@ const ComponentLibraryTab = () => {
   const setModal = useApp((st) => st.setModal)
   const setDrawer = useApp((st) => st.setDrawer)
   const goPage = useApp((st) => st.goPage)
-  /* 已单独设置过默认大小的类型数（只用于摘要，不暴露具体尺寸） */
-  const sized = useApp((st) => Object.keys(st.settings.sizeDefaults).length)
   const [dragId, setDragId] = useState<string | null>(null)
   const page = pages[cur] ?? EMPTY_PAGE
   /* 该类型落在哪一页：任意页存在即算已添加；在别页的给一个「第 N 页」入口，而不是让人自己翻 */
@@ -780,55 +775,6 @@ const ComponentLibraryTab = () => {
           )
         })}
       </SecCard>
-      <SecCard t="组件默认大小" info="设置每类组件新放置时的默认大小，只影响之后新增的实例（页面已有实例不变）；单个实例的尺寸在页面右键菜单「修改尺寸」或上面「页面组件」列表的 ··· →「配置」里调。">
-        <div className="ks-entry">
-          <span className="ks-summary">{sized === 0 ? '全部组件使用出厂大小' : `已单独设置 ${sized} 类组件，其余使用出厂大小`}</span>
-          <button className="btn sm" onClick={() => setModal('kindSizes')}>设置</button>
-        </div>
-      </SecCard>
-    </>
-  )
-}
-
-/**
- * 组件库 →「组件默认大小」弹窗：单张清单列出组件库里的各类组件，选好档位后点「确认设置」才写入（二次确认）。
- * 「出厂」= 不单独设置、用定义表尺寸；只影响之后新增的实例。
- */
-const KindSizeModal = () => {
-  const setModal = useApp((s) => s.setModal)
-  const sizeDefaults = useApp((s) => s.settings.sizeDefaults)
-  const setSizeDefaults = useApp((s) => s.setSizeDefaults)
-  /* 草稿：确认前不改动设置；键缺失 = 该类用出厂尺寸 */
-  const [draft, setDraft] = useState<Record<string, WidgetSize>>(sizeDefaults)
-  const pick = (t: WidgetKind, size: WidgetSize | null): void => {
-    const rest = Object.fromEntries(Object.entries(draft).filter(([k]) => k !== t))
-    setDraft(size === null ? rest : { ...rest, [t]: size })
-  }
-  return (
-    <>
-      <h2>组件默认大小</h2>
-      <p className="sub">设置每类组件新放置时的默认大小；点「确认设置」才生效，只影响之后新增的实例，页面已有实例保持不变。「出厂」= 用定义表尺寸。</p>
-      {LIBRARY_LIST.map((w) => {
-        const cur = draft[w.t]
-        return (
-          <div className="ks-row" key={w.t}>
-            <div className="er-ico" style={{ background: w.c }}>{w.g}</div>
-            <span className="ks-name">{w.n}</span>
-            <div className="cats">
-              <div className={`cat${cur === undefined ? ' active' : ''}`} onClick={() => pick(w.t, null)}>出厂</div>
-              {SIZES.filter((sz) => sizeAllowed(w.t, sz.w, sz.h)).map((sz) => (
-                <div key={`${sz.w}x${sz.h}`}
-                  className={`cat${cur !== undefined && cur.w === sz.w && cur.h === sz.h ? ' active' : ''}`}
-                  onClick={() => pick(w.t, { w: sz.w, h: sz.h })}>{sz.w}×{sz.h}</div>
-              ))}
-            </div>
-          </div>
-        )
-      })}
-      <div className="btn-row end">
-        <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
-        <button className="btn" onClick={() => { setSizeDefaults(draft); setModal(null) }}>确认设置</button>
-      </div>
     </>
   )
 }
@@ -856,7 +802,7 @@ const DockEditModal = () => {
   return (
     <>
       <h2>管理 Dock 快捷方式</h2>
-      <p className="sub">逐行改名称与网址；网址留空或不是 http(s) 开头的行会被丢掉。数量上限由「快捷方式数量」设置决定。</p>
+      <p className="sub">逐行改名称与网址；网址留空或不是 http(s) 开头的行会被丢掉。数量不设上限，放不下时可在个性化 →「搜索与 Dock」把图标调小一档。</p>
       {draft.length === 0 && <div className="empty-box">Dock 里还没有快捷方式，去「快捷方式」页签挑一个</div>}
       {draft.map((a, i) => (
         <div className="dock-edit-row" key={`${a.url}-${i}`}>
@@ -1105,7 +1051,17 @@ const PersonalPanel = () => {
         <NumberRow l="搜索框圆角" min={0} max={25} value={s.searchRadius} unit="px" onInput={(v) => setSetting('searchRadius', v)} />
         <SwitchRow l="沉浸式搜索框" d="与壁纸融合的透明样式" on={s.immersive} onToggle={() => toggle('immersive')} />
         <SwitchRow l="极简模式用线框样式" on={s.simpleSearch} onToggle={() => toggle('simpleSearch')} />
-        <NumberRow l="Dock 应用数量" min={4} max={8} value={s.dockCount} unit="个" onInput={(v) => setSetting('dockCount', v)} />
+        <div className="num-row">
+          <div className="nr-main">
+            <span className="nr-label">Dock 图标大小</span>
+            <div className="cats" style={{ margin: 0 }}>
+              {DOCK_ICON_OPTIONS.map((o) => (
+                <div key={o.k} className={`cat${s.dockIconSize === o.k ? ' active' : ''}`}
+                  onClick={() => setSetting('dockIconSize', o.k)}>{o.n}</div>
+              ))}
+            </div>
+          </div>
+        </div>
         <SwitchRow l="圆形 Dock 图标" on={s.dockIcon === 'circle'}
           onToggle={() => setSetting('dockIcon', s.dockIcon === 'circle' ? 'rect' : 'circle')} />
         <SwitchRow l="Dock 快捷栏" d="隐藏底部快捷栏" on={s.mascot} onToggle={() => toggle('mascot')} />
@@ -1479,6 +1435,13 @@ interface LogVersion {
 
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
+  {
+    v: '5.01', d: '2026-10-21', items: [
+      { k: '调整', s: 'Dock 快捷方式不再限制数量', d: '去掉 4–8 个的数量上限，想加多少加多少；一排装不下时快捷栏内部横向滚动，不会把整条 Dock 撑出页面。' },
+      { k: '新增', s: 'Dock 图标可调三档大小', d: '个性化 →「搜索与 Dock」里的「Dock 应用数量」换成「Dock 图标大小」：小 / 中 / 大，只影响 Dock，与页面图标的六档尺寸互不干扰；功能键字形同步缩放。' },
+      { k: '移除', s: '组件库不再提供「组件默认大小」设置', d: '新放置的组件一律用出厂尺寸，单个实例的尺寸仍在编辑弹窗或右键「修改尺寸」里调；旧设置里的该字段读取时忽略。' },
+    ],
+  },
   {
     v: '5.0', d: '2026-10-21', items: [
       { k: '调整', s: '壁纸来源改为内置五个，不再需要添加', d: '哲风壁纸 / Wallpaper Gallery / 必应每日 / Picsum / Wallhaven 全部内置并默认启用，去掉添加、改名、改基址、删除与启用开关——填错基址导致整个来源不可用的情况不会再发生。' },
@@ -2676,14 +2639,13 @@ const NEW_SITE_TARGETS: readonly { k: NewSiteTarget; n: string }[] = [
 ]
 
 /** 新建站点弹窗的结果提示（页面 / Dock 两处落位各自成败的组合） */
-const newSiteToast = (placed: boolean, dock: DockAddResult | null, dockCount: number): string => {
-  const fail = dock !== null && !dock.ok ? dockFailText(dock.reason, dockCount) : ''
+const newSiteToast = (placed: boolean, dock: DockAddResult | null): string => {
   if (placed) {
     if (dock === null) return '已添加到页面'
-    return dock.ok ? '已添加到页面与 Dock' : `已添加到页面；${fail}`
+    return dock.ok ? '已添加到页面与 Dock' : `已添加到页面；${DOCK_DUP_TEXT}`
   }
   if (dock?.ok) return '已添加到底部 Dock'
-  return fail !== '' ? fail : '最多 5 页，已没有位置可放'
+  return dock !== null ? DOCK_DUP_TEXT : '最多 5 页，已没有位置可放'
 }
 
 /**
@@ -2706,10 +2668,10 @@ const NewSiteModal = () => {
     if (link === null) { showToast('请输入有效的网址，例如 baidu.com'); return }
     const label = name.trim() !== '' ? name.trim() : hostOf(link)
     const at = draft === null ? undefined : { c: draft.c, r: draft.r }
-    const dockRes = to === 'page' ? null : dockAppsWith(settings.dockApps, settings.dockCount, label, link)
+    const dockRes = to === 'page' ? null : dockAppsWith(settings.dockApps, label, link)
     const placed = to === 'dock' ? false : place('icon', { label, url: link }, at)
     if (dockRes !== null && dockRes.ok) setSetting('dockApps', dockRes.apps)
-    showToast(newSiteToast(placed, dockRes, settings.dockCount))
+    showToast(newSiteToast(placed, dockRes))
     setModal(null)
   }
 
@@ -2848,8 +2810,6 @@ export const Modal = () => {
             </div>
           </>
         )
-      case 'kindSizes':
-        return <KindSizeModal />
       case 'newSite':
         return <NewSiteModal />
       case 'dockEdit':

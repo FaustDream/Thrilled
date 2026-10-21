@@ -296,21 +296,26 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* ============ 6. Dock（苹果式悬浮栏：快捷方式 favicon + 功能键） ============ */
 .dock{position:absolute;left:0;bottom:0;width:100%;height:96px;display:flex;align-items:flex-end;
   justify-content:center;z-index:var(--z-float);padding-bottom:14px}
-.dock-bar{display:flex;align-items:center;padding:9px 12px;border-radius:24px;
+.dock-bar{display:flex;align-items:center;padding:9px 12px;border-radius:24px;max-width:calc(100% - 40px);
   background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * (var(--ga-dock) + .08) * 100%),transparent);
   backdrop-filter:blur(var(--blur-dock)) saturate(1.6);
   box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 18px 44px -14px rgba(6,12,24,.36);
   outline:1px solid color-mix(in srgb,var(--card-text) 10%,transparent);outline-offset:-1px}
 #stage[data-mode='minimal'] .dock-bar{background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * (var(--ga-dock) + .12) * 100%),transparent)}
+/* 快捷方式不设数量上限：装不下时整条横向滚动（隐藏滚动条），不会把快捷栏撑出页面 */
 .dock-apps,.dock-actions{display:flex;align-items:center}
+.dock-apps{overflow-x:auto;scrollbar-width:none;flex:0 1 auto}
+.dock-apps::-webkit-scrollbar{display:none}
+.dock-actions{flex:0 0 auto}
 .dock-sep{width:1px;height:34px;margin:0 14px;background:var(--label-color);opacity:.22;flex:0 0 auto}
-.dock-item{width:64px;height:60px;display:flex;align-items:center;justify-content:center;
-  position:relative;cursor:pointer}
-.dock-icon{width:46px;height:46px;border-radius:var(--r-xl);font-size:var(--fs-3xl);flex:0 0 auto;overflow:hidden}
+/* 三档尺寸由 shared/dock 的 DOCK_ICON_METRICS 通过变量给出（sm / md / lg） */
+.dock-item{width:var(--dock-item-w,64px);height:var(--dock-item-h,60px);display:flex;align-items:center;justify-content:center;
+  position:relative;cursor:pointer;flex:0 0 auto}
+.dock-icon{width:var(--dock-box,46px);height:var(--dock-box,46px);border-radius:var(--r-xl);font-size:var(--fs-3xl);flex:0 0 auto;overflow:hidden}
 .dock-icon.circle{border-radius:50%}
 .dock-favicon{width:38px;height:38px;object-fit:cover;display:flex;align-items:center;justify-content:center}
 .dock-fn{background:color-mix(in srgb,var(--card-text) 8%,transparent);color:var(--label-color)}
-.dock-fn svg{width:21px;height:21px}
+.dock-fn svg{width:var(--dock-fn,21px);height:var(--dock-fn,21px)}
 .dock-name{display:none;position:absolute;top:4px;left:50%;transform:translate(-50%,-100%) scale(.92);
   background:rgba(15,23,42,.86);color:#fff;font-size:var(--fs-sm);padding:4px 10px;border-radius:var(--r-sm);
   white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .16s,transform .16s}
@@ -690,18 +695,6 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 /* 列表条目的来源标签：节日（橙）/ 自定义（灰） */
 .dt-tag{flex:0 0 auto;font-size:var(--fs-2xs);padding:2px 6px;border-radius:var(--r-xs);background:var(--line);color:var(--panel-sub)}
 .dt-tag.fest{background:color-mix(in srgb,var(--warn,#b45309) 16%,transparent);color:var(--warn,#b45309)}
-/* 组件库底部「组件默认大小」入口：一行摘要 + 设置按钮（尺寸设置集中一处，不摊在每个组件上） */
-.ks-entry{display:flex;align-items:center;justify-content:space-between;gap:10px}
-.ks-summary{font-size:var(--fs-sm);color:var(--panel-sub)}
-/* 「组件默认大小」弹窗：按分组列出各类组件，一行 = 图标 + 名称 + 档位胶囊（出厂 / 该组件装得下的档位） */
-.ks-group>.sec-title{font-size:var(--fs-sm);font-weight:500;margin:14px 0 2px}
-.ks-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line)}
-.ks-row:last-child{border-bottom:none}
-.ks-row .er-ico{width:22px;height:22px;border-radius:var(--r-xs);display:flex;align-items:center;
-  justify-content:center;color:#fff;font-size:var(--fs-xs);font-weight:700;flex:0 0 auto}
-.ks-name{flex:1;min-width:0;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ks-row .cats{margin:0;gap:4px;flex-wrap:nowrap}
-.ks-row .cat{padding:4px 8px;font-size:var(--fs-xs)}
 .cat{font-size:var(--fs-sm);padding:5px 10px;border-radius:var(--r-sm);background:var(--line);color:var(--panel-sub);cursor:pointer}
 .cat.active{background:var(--accent);color:#fff}
 .eng-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:var(--fs-md)}

@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type CtxState } from './store'
 import { ARRANGE_KINDS } from './layout'
-import { WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
+import { WIDGET_DEFS, sizeAllowedFor } from '../shared/widget-defs'
 import { MAX_PAGES, SIZES, findSlot } from '../shared/grid'
 import { stage } from './stage'
 import { CheckIcon } from './icons'
@@ -93,19 +93,14 @@ const DockMenu = ({ idx }: { idx: number }) => {
  * 空白处右键菜单（固定 9 项：4 个新建 + 3 个打开 + 整理图标；动作在 App.onAct）。
  * 小组件的添加入口在个性化 → 组件库（「添加组件」二级菜单已按用户要求移除）；
  * 网站图标 / 图标文件夹 / 图标格容器不是小组件，新建入口只在这里。
- * 置灰只覆盖可判定的情形：Dock 满额、到 5 页上限且本页放不下默认尺寸的图标。
+ * 置灰只覆盖可判定的情形：到 5 页上限且本页放不下出厂尺寸的图标。
  */
 const BlankMenu = () => {
   const pages = useApp((s) => s.pages)
   const cur = useApp((s) => s.cur)
-  const sizeDefaults = useApp((s) => s.settings.sizeDefaults)
-  const apps = useApp((s) => s.settings.dockApps)
-  const dockCount = useApp((s) => s.settings.dockCount)
-  const icon = placeSizeOf('icon', {}, sizeDefaults)
+  const icon = WIDGET_DEFS['icon'].units
   const noRoom = pages.length >= MAX_PAGES && findSlot(pages[cur] ?? [], icon.w, icon.h) === null
-  const dockFull = apps.length >= dockCount
   const roomTip = '最多 5 页，已没有位置可放'
-  const dockTip = `Dock 最多 ${dockCount} 个快捷方式，请先移除一些`
   return (
     <>
       {/* 前三项都直接落位、不弹任何表单：生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」 */}
@@ -119,7 +114,7 @@ const BlankMenu = () => {
       <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'group'}>
         <span>添加图标格容器</span>
       </div>
-      <div className={`ctx-item${dockFull ? ' dis' : ''}`} data-act={dockFull ? 'ctx-blocked' : 'newsite'} data-v={dockFull ? dockTip : 'dock'}>
+      <div className="ctx-item" data-act="newsite" data-v="dock">
         <span>添加到 Dock 快捷方式</span>
       </div>
       <div className="ctx-sep" />

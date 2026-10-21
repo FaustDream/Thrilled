@@ -10,12 +10,11 @@
 import { z } from 'zod';
 import { BLUR_MAX_PX, MESSAGE_TYPE } from './constants';
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from './defaults';
-import { isLegalSize } from './grid';
 import { normalizeShortcuts } from './shortcuts';
 import { isBlankStyle, normStyle } from './widget-style';
-import { WIDGET_KINDS, fromLegacyKind, sizeAllowed } from './widget-defs';
+import { WIDGET_KINDS, fromLegacyKind } from './widget-defs';
 import type { ExtensionRequest, FetchResourceData, ResolveFaviconData } from './messages';
-import type { AppSettings, CityPick, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallSourceKind, WidgetKind, WidgetSize, WidgetStyle } from './types';
+import type { AppSettings, CityPick, DockApp, EngineDef, ModePages, SkinPack, StoredDoc, WallFocus, WallSourceKind, WidgetStyle } from './types';
 
 /* ===== 消息 payload schema ===== */
 
@@ -164,6 +163,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
   const mode = o['mode'];
   const openMode = o['openMode'];
   const dockIcon = o['dockIcon'];
+  const dockIconSize = o['dockIconSize'];
   // privacy 模式已移除：旧值归位为 standard
   const normalizedMode = mode === 'minimal' || mode === 'standard' ? mode : d.mode;
   return {
@@ -195,8 +195,8 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     historyItemDel: boolish(o['historyItemDel'], d.historyItemDel),
     searchWidth: numish(o['searchWidth'], d.searchWidth, 400, 1400),
     searchRadius: numish(o['searchRadius'], d.searchRadius, 0, 25),
-    dockCount: numish(o['dockCount'], d.dockCount, 4, 8),
     dockIcon: dockIcon === 'circle' ? 'circle' : 'rect',
+    dockIconSize: dockIconSize === 'sm' || dockIconSize === 'lg' ? dockIconSize : 'md',
     dockApps: Array.isArray(o['dockApps'])
       ? (o['dockApps'] as unknown[]).map(normDockApp).filter((x): x is DockApp => x !== null)
       : [...d.dockApps],
@@ -229,7 +229,6 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     wallSource: isWallSourceKind(o['wallSource']) ? o['wallSource'] : d.wallSource,
     shortcuts: normalizeShortcuts(o['shortcuts']),
     styleDefaults: normStyleDefaults(o['styleDefaults']),
-    sizeDefaults: normSizeDefaults(o['sizeDefaults']),
     weatherCity: normCityPick(o['weatherCity']),
     weatherCities: normCityPickList(o['weatherCities']),
   };
@@ -255,25 +254,6 @@ const normCityPickList = (v: unknown): CityPick[] => {
     const c = normCityPick(raw);
     if (c !== null) out.push(c);
     if (out.length >= 8) break;
-  }
-  return out;
-};
-
-/**
- * 按类型的默认大小归一化：只认已知组件类型 + 六档合法 + 落在该组件的能力区间内，
- * 坏值直接丢弃（该类型回到定义表尺寸）——`{}` 即「该类没有单独设置默认大小」。
- */
-const normSizeDefaults = (v: unknown): Record<string, WidgetSize> => {
-  if (typeof v !== 'object' || v === null) return {};
-  const out: Record<string, WidgetSize> = {};
-  for (const [k, raw] of Object.entries(v as Record<string, unknown>)) {
-    if (!WIDGET_KINDS.has(k)) continue;
-    if (typeof raw !== 'object' || raw === null) continue;
-    const o = raw as Record<string, unknown>;
-    const w = typeof o['w'] === 'number' ? o['w'] : -1;
-    const h = typeof o['h'] === 'number' ? o['h'] : -1;
-    if (!isLegalSize(w, h) || !sizeAllowed(k as WidgetKind, w, h)) continue;
-    out[k] = { w, h };
   }
   return out;
 };

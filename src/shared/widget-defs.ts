@@ -5,7 +5,7 @@
  * 实例决定：位置与尺寸（布局）+ config（内容）
  * 纯数据无 React 依赖 → app（渲染 / 编辑弹窗）与 core（导入校验 / 迁移）共用。
  */
-import type { WidgetDefinition, WidgetKind, WidgetSize } from './types';
+import type { WidgetDefinition, WidgetKind } from './types';
 import { CELL, INSET, groupFits, insetOf } from './grid';
 
 export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
@@ -186,15 +186,3 @@ export const sizeAllowedFor = (
   return true;
 };
 
-/**
- * 新放置实例采用的尺寸：优先用户为该类型单独设置的默认大小（组件库 →「默认大小」），
- * 未设置 / 坏值 / 当前内容装不下时回退定义表尺寸。
- */
-export const placeSizeOf = (
-  t: WidgetKind,
-  config: Record<string, unknown>,
-  sizeDefaults: Record<string, WidgetSize>,
-): { w: number; h: number } => {
-  const p = sizeDefaults[t];
-  return p !== undefined && sizeAllowedFor(t, config, p.w, p.h) ? p : WIDGET_DEFS[t].units;
-};

@@ -5,7 +5,7 @@
  * 平台行为：打开链接走 core/link-opener（打开方式设置），壁纸走 core/wallpaper（IndexedDB）。
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, type CtxState, type DrawerKey, type NewSiteTarget } from './store'
 import { CELL, COLS, GRID_LEFT, GRID_TOP, PAGE_W, ROWS, SNAP_ALIGN_PX, STAGE_W, insetOf, itemBox, nearOnAxis, snapAxis } from '../shared/grid'
 import type { AxisSnap } from '../shared/grid'
@@ -28,6 +28,7 @@ import { GLASS_ALPHA_FACTOR, GLASS_FADED_KEYS, PAGE_EDGE_MS, PAGE_EDGE_PX, WHEEL
 import { crossPlan } from './layout'
 import { SHORTCUT_DEFS, comboOf, isBareCombo } from '../shared/shortcuts'
 import { HOLD_MS, holdVerdict } from '../shared/hold'
+import { DOCK_ICON_METRICS } from '../shared/dock'
 import { computeWallFocus } from '../core/wallpaper-focus'
 import { buildToneGrid, boxUv, toneAt, type ToneGrid } from '../core/walltone'
 import { coverFix, fixForInk, hexLum, pickInk } from '../shared/luma'
@@ -428,6 +429,8 @@ export const App = () => {
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
   const dockApps = settings.dockApps
+  /* Dock 图标档位：三档尺寸集中定义在 shared/dock，CSS 只读这里给出的变量 */
+  const dockM = DOCK_ICON_METRICS[settings.dockIconSize]
 
   /* ---------- 启动：天气 + 首次引导标记（配置已在挂载前载入） ---------- */
   useEffect(() => {
@@ -1247,15 +1250,20 @@ export const App = () => {
 
       {/* Dock：用户快捷方式（favicon 图标）+ 功能键 新增/个性化/设置；悬停反馈为纯 CSS 排他动效（prototype.css 第 17 节），一次只激活指针下的那一个图标 */}
       {settings.mascot && (
-        <div className="dock">
+        <div className="dock" style={{
+          '--dock-item-w': `${dockM.item}px`,
+          '--dock-item-h': `${dockM.item - 4}px`,
+          '--dock-box': `${dockM.box}px`,
+          '--dock-fn': `${dockM.fn}px`,
+        } as CSSProperties}>
           <div className="dock-bar">
             <div className="dock-apps">
-              {dockApps.slice(0, settings.dockCount).map((app, i) => (
+              {dockApps.map((app, i) => (
                 /* 名称与域名挂成提示数据（悬停气泡，见 app/tip.tsx）；不再用原生 title，避免双重气泡 */
                 <div className="dock-item" key={`dock-${i}`} data-act="dock-app" data-v={app.url} data-idx={String(i)}
                   data-tip={app.name} data-tip-host={hostOf(app.url)} aria-label={app.name}>
                   <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`}>
-                    <SiteIcon url={app.url} name={app.name} cls="dock-favicon" fs={24} size={38} />
+                    <SiteIcon url={app.url} name={app.name} cls="dock-favicon" fs={dockM.fs} size={dockM.ico} />
                   </div>
                 </div>
               ))}

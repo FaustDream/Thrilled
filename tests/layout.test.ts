@@ -7,7 +7,7 @@ import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, REPEATAB
 import { CELL, COLS, ICON_INSET, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, insetOf, isLegalSize, itemBox, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
   LIBRARY_EXCLUDED, LIBRARY_LIST, WIDGET_DEFS, WIDGET_LIST, inLibrary,
-  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor,
+  boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, sizeAllowed, sizeAllowedFor,
 } from '../src/shared/widget-defs'
 import type { GridItem, WidgetKind } from '../src/shared/types'
 
@@ -262,18 +262,6 @@ describe('组件库数据（平铺清单 / 默认大小 / 配置项上限）', (
     expect(inLibrary('clock')).toBe(true)
     expect(inLibrary('todo')).toBe(false)
     expect(inLibrary('icon')).toBe(false)
-  })
-
-  it('新放置实例的尺寸：优先用该类设置的默认大小，坏值 / 内容装不下时回退出厂尺寸', () => {
-    /* 未设置 → 出厂尺寸 */
-    expect(placeSizeOf('clock', {}, {})).toEqual(WIDGET_DEFS.clock.units)
-    /* 已设置且合法 → 用默认大小 */
-    expect(placeSizeOf('clock', {}, { clock: { w: 8, h: 4 } })).toEqual({ w: 8, h: 4 })
-    /* 低于组件下限（归一化会拦，这里是兜底路径）→ 回退出厂尺寸 */
-    expect(placeSizeOf('cal', {}, { cal: { w: 2, h: 2 } })).toEqual(WIDGET_DEFS.cal.units)
-    /* 图标格容器按实例内容收紧：应用多到该档装不下 → 回退出厂尺寸 */
-    const apps = Array.from({ length: 100 }, (_, i) => `https://a${i}.com`)
-    expect(placeSizeOf('group', { apps }, { group: { w: 4, h: 2 } })).toEqual(WIDGET_DEFS.group.units)
   })
 
   /* 通用段 2 项（名称标签 / 显示标题 / 透明度按需展开）+ 专属 ≤3 项；

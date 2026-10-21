@@ -194,6 +194,9 @@ export interface DockApp {
   url: string;
 }
 
+/** Dock 图标档位：小 / 中 / 大（Dock 装得下更多图标，与页面图标的六档尺寸互不影响） */
+export type DockIconSize = 'sm' | 'md' | 'lg';
+
 /** v4 界面设置（本地持久化，云同步见 01 §5） */
 export interface AppSettings {
   mode: ViewMode;
@@ -240,9 +243,10 @@ export interface AppSettings {
   historyItemDel: boolean;
   searchWidth: number;
   searchRadius: number;
-  dockCount: number;
   dockIcon: 'rect' | 'circle';
-  /** Dock 快捷应用（用户手动新增；图标显示站点 favicon，右键可改名 / 改网址 / 移除） */
+  /** Dock 图标档位（与页面图标分开配置：Dock 是窄条快捷栏，图标更小、名称悬停才出） */
+  dockIconSize: DockIconSize;
+  /** Dock 快捷应用（数量不设上限；图标显示站点 favicon，右键可改名 / 改网址 / 移除） */
   dockApps: DockApp[];
   clockColor: string;
   glass: GlassSettings;
@@ -271,11 +275,6 @@ export interface AppSettings {
   shortcuts: Record<string, string>;
   /** 按组件类型的默认样式（新放置的实例继承；键为 WidgetKind，值为 shared/widget-style 的样式项） */
   styleDefaults: Record<string, WidgetStyle>;
-  /**
-   * 按组件类型的默认大小（组件库里逐个类型单独设置；新放置的实例按此落位，页面已有实例不变）。
-   * 键为 WidgetKind，值为六档尺寸之一；缺键 = 用定义表的出厂尺寸。
-   */
-  sizeDefaults: Record<string, WidgetSize>;
   /**
    * 天气定位：null = 用真实定位（浏览器定位权限）；有值 = 用户手选的城市坐标。
    * 定位被拒绝时界面提示「允许定位」，用户也可在天气卡配置里手选城市作为替代。

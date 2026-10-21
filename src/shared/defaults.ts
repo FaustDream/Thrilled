@@ -47,8 +47,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   historyItemDel: true,
   searchWidth: 880,
   searchRadius: 25,
-  dockCount: 8,
   dockIcon: 'rect',
+  dockIconSize: 'md',
   dockApps: [...DEFAULT_DOCK_APPS],
   clockColor: '',
   /* 透明度：前六项等同旧「玻璃质感」的视觉，后六项默认 0（不改变出厂外观） */
@@ -73,8 +73,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   shortcuts: { ...DEFAULT_SHORTCUTS },
   /* 按组件类型的默认样式：出行为空（跟随主题），用户可在配置弹窗「样式」段里设为默认 */
   styleDefaults: {},
-  /* 按组件类型的默认大小：出厂为空（新放置的实例用定义表尺寸），用户可在组件库里逐个类型设置 */
-  sizeDefaults: {},
   /* 天气默认用真实定位（浏览器定位权限）；手选城市是定位不可用时的替代方案 */
   weatherCity: null,
   weatherCities: [],
