@@ -7,7 +7,7 @@
  * 说明：加载扩展时选 dist/ 目录；dist/ 是构建产物，不提交到 git。
  */
 import { build } from 'esbuild';
-import { cpSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -44,6 +44,31 @@ const copyStatics = () => {
   cpSync(join(ROOT, 'icons'), join(DIST, 'icons'), { recursive: true });
 };
 
+/**
+ * 清理上一轮遗留的 hash 产物
+ *
+ * dist 被加载中的扩展占用时整体删除会失败，vite 的 emptyOutDir 同样清不干净，
+ * 结果旧 index-*.js 一直躺在 assets 里被一起打进发布包（实测 5.0 的 zip 一度有 5 份旧包）。
+ * 这里以 index.html 的实际引用为准，把没被引用的资源删掉。
+ */
+const pruneStaleAssets = () => {
+  const assetsDir = join(DIST, 'assets');
+  if (!existsSync(assetsDir)) return;
+  const html = readFileSync(join(DIST, 'index.html'), 'utf8');
+  const keep = new Set([...html.matchAll(/(?:src|href)="\.?\/?assets\/([^"]+)"/g)].map((m) => m[1]));
+  let removed = 0;
+  for (const name of readdirSync(assetsDir)) {
+    if (keep.has(name)) continue;
+    try {
+      rmSync(join(assetsDir, name), { force: true });
+      removed += 1;
+    } catch (e) {
+      console.warn(`[build] 旧产物删不掉（文件被占用）: ${name}`, e instanceof Error ? e.message : String(e));
+    }
+  }
+  if (removed > 0) console.log(`[build] 已清理 ${removed} 个旧产物`);
+};
+
 async function main() {
   /* dist 可能被加载中的 Chrome 持有句柄（扩展目录）而无法整体删除：
      删不掉就跳过，靠 vite 的 emptyOutDir 与覆盖写完成原地重建 */
@@ -56,6 +81,7 @@ async function main() {
   await buildApp();
   await buildBackground();
   copyStatics();
+  pruneStaleAssets();
   console.log(`[build] 完成 → dist/（${PROD ? 'production' : 'development'}）`);
 }
 
