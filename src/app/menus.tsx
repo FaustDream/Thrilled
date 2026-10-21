@@ -1,16 +1,17 @@
 /**
  * 右键菜单（空白处 8 项 + 卡片 6 项 / 图标类 7 项 + Dock 图标 5 项）
  *
- * 空白处分三组：添加网站图标 / 添加网站容器 / 添加到 Dock 快捷方式 / 添加组件（二级 9 类）为「新建」，
- *  打开添加面板 / 个性化 / 设置为「打开」，末尾单独一组是「整理图标」。
- *  前两项直接落位（不弹表单）——生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」。
+ * 空白处分三组：添加网站图标 / 添加图标文件夹 / 添加图标格容器 / 添加到 Dock 快捷方式 /
+ *  添加组件（二级，只列组件库里的类型）为「新建」，打开添加面板 / 个性化 / 设置为「打开」，
+ *  末尾单独一组是「整理图标」。前三项直接落位（不弹表单）——生成后由卡片的落位提示指出位置，
+ *  编辑走卡片右键「编辑信息」。图标文件夹与图标格容器不是小组件，只从这里添加。
  * 卡片与 Dock 图标各有自己的菜单；输入框、抽屉、弹窗、引擎面板里的右键仍交给浏览器原生菜单
  * （见 App 的 contextmenu 处理）。二级菜单按 UiTab 实测复刻。
  */
 import { useEffect, useRef, useState } from 'react'
 import { useApp, type CtxState } from './store'
 import { ARRANGE_KINDS, placedKindsOf } from './layout'
-import { WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
+import { LIBRARY_LIST, WIDGET_DEFS, placeSizeOf, sizeAllowedFor } from '../shared/widget-defs'
 import { MAX_PAGES, SIZES, findSlot } from '../shared/grid'
 import { stage } from './stage'
 import { CheckIcon } from './icons'
@@ -107,26 +108,30 @@ const BlankMenu = () => {
   const dockTip = `Dock 最多 ${dockCount} 个快捷方式，请先移除一些`
   return (
     <>
-      {/* 前两项都直接落位、不弹任何表单：生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」 */}
+      {/* 前三项都直接落位、不弹任何表单：生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」 */}
       <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'icon'}>
         <span>添加网站图标</span>
       </div>
+      {/* 图标文件夹 / 图标格容器不是小组件，不进组件库，入口只在这里 */}
+      <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'folder'}>
+        <span>添加图标文件夹</span>
+      </div>
       <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'group'}>
-        <span>添加网站容器</span>
+        <span>添加图标格容器</span>
       </div>
       <div className={`ctx-item${dockFull ? ' dis' : ''}`} data-act={dockFull ? 'ctx-blocked' : 'newsite'} data-v={dockFull ? dockTip : 'dock'}>
         <span>添加到 Dock 快捷方式</span>
       </div>
       <div className="ctx-item"><span>添加组件</span><span className="ctx-arrow" />
         <div className="ctx-sub" style={{ maxHeight: 560, overflow: 'auto' }}>
-          {(Object.keys(WIDGET_DEFS) as WidgetKind[]).map((k) => {
+          {LIBRARY_LIST.map((w) => {
             /* 该类型已在任意页存在 → 置灰 + 「已添加」标记，点击只给原因（不落位） */
-            const isAdded = added.has(k)
+            const isAdded = added.has(w.t)
             return (
-              <div key={k} className={`ctx-sub-item${isAdded ? ' dis' : ''}`}
+              <div key={w.t} className={`ctx-sub-item${isAdded ? ' dis' : ''}`}
                 data-act={isAdded ? 'ctx-blocked' : 'place-kind'}
-                data-v={isAdded ? `「${WIDGET_DEFS[k].n}」已在页面上，删除后可再次添加` : k}>
-                <span>{WIDGET_DEFS[k].n}</span>
+                data-v={isAdded ? `「${w.n}」已在页面上，删除后可再次添加` : w.t}>
+                <span>{w.n}</span>
                 {isAdded && <span className="ctx-sub-tag">已添加</span>}
               </div>
             )

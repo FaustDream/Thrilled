@@ -104,6 +104,13 @@ export const fromLegacyKind = (t: string, config: Record<string, unknown>): { t:
 
 /* ---------- 组件库分组（个性化 → 组件库：常用 / 时间 / 信息 / 图标） ---------- */
 
+/**
+ * 不进组件库的类型：待办清单与收藏夹（用户要求从组件库里去掉），
+ * 图标文件夹与图标格容器（它们不是「小组件」，入口在空白处右键）。
+ * 这些类型仍是合法的卡片类型——已放好的照常渲染、编辑、删除，只是不再出现在组件库与默认大小面板里。
+ */
+export const LIBRARY_EXCLUDED: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['todo', 'fav', 'folder', 'group']);
+
 /** 组件库分组名（「常用」是跨类型的置顶快捷组，其余按组件类型归类） */
 export type WidgetGroup = '常用' | '时间' | '信息' | '图标';
 
@@ -118,19 +125,25 @@ export const WIDGET_GROUPS: Readonly<Record<WidgetKind, Exclude<WidgetGroup, '�
 };
 
 /** 「常用」分组的内置高频清单（出厂固定，不随使用情况变化；成员仍保留自己的类型分组） */
-export const COMMON_KINDS: readonly WidgetKind[] = ['clock', 'weather', 'todo', 'icon'];
+export const COMMON_KINDS: readonly WidgetKind[] = ['clock', 'weather', 'icon'];
 
-/** 组件库清单（定义表生成；原「经典语录」别名入口随每日一言一并移除） */
+/** 全部类型清单（定义表生成；渲染 / 更换组件 / 导入校验用，不受组件库过滤影响） */
 export const WIDGET_LIST: readonly WidgetDefinition[] = Object.keys(WIDGET_DEFS).map((k) => WIDGET_DEFS[k as WidgetKind]);
+
+/** 组件库清单：全部类型去掉 LIBRARY_EXCLUDED（组件库与「组件默认大小」都按它出条目） */
+export const LIBRARY_LIST: readonly WidgetDefinition[] = WIDGET_LIST.filter((w) => !LIBRARY_EXCLUDED.has(w.t));
+
+/** 某类型是否在组件库里（不在的只能从右键 / 其它入口放置） */
+export const inLibrary = (t: WidgetKind): boolean => !LIBRARY_EXCLUDED.has(t);
 
 /**
  * 某分组下要展示的组件：常用组按内置高频清单的顺序给出（该组是置顶快捷入口，
- * 与下面的类型组重复展示），其余组按类型归属过滤（组内顺序沿用定义表）。
+ * 与下面的类型组重复展示），其余组按类型归属过滤（组内顺序沿用定义表）；两者都排除不进组件库的类型。
  */
 export const widgetsInGroup = (g: WidgetGroup): readonly WidgetDefinition[] =>
   g === '常用'
-    ? COMMON_KINDS.map((k) => WIDGET_DEFS[k])
-    : WIDGET_LIST.filter((w) => WIDGET_GROUPS[w.t] === g);
+    ? COMMON_KINDS.filter((k) => inLibrary(k)).map((k) => WIDGET_DEFS[k])
+    : LIBRARY_LIST.filter((w) => WIDGET_GROUPS[w.t] === g);
 
 /* ---------- 配置读取（定义默认值 ⊕ 实例覆盖值） ---------- */
 

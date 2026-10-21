@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, REPEATABLE_KINDS, arrangePages, crossPlan, dropPlan, isIconOnlyPage, mergeIconPages, normPages, packPage, placedKindsOf, prunePages, uid } from '../src/app/layout'
 import { CELL, COLS, ICON_INSET, INSET, ROWS, SIZES, SNAP_ALIGN_PX, findSlot, findSlotNear, groupBoxOf, groupFits, groupGrid, insetOf, isLegalSize, itemBox, nearOnAxis, overlaps, snapAxis } from '../src/shared/grid'
 import {
-  COMMON_KINDS, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST,
+  COMMON_KINDS, LIBRARY_EXCLUDED, LIBRARY_LIST, WIDGET_DEFS, WIDGET_GROUPS, WIDGET_GROUPS_ORDER, WIDGET_LIST, inLibrary,
   boxOfUnits, maxSizeOf, minSizeOf, naturalBoxOf, naturalMinOf, placeSizeOf, sizeAllowed, sizeAllowedFor, widgetsInGroup,
 } from '../src/shared/widget-defs'
 import type { GridItem, WidgetKind } from '../src/shared/types'
@@ -259,9 +259,21 @@ describe('组件库数据（分组 / 默认大小 / 配置项上限）', () => {
     }
   })
 
-  it('类型分组取件拼起来覆盖全部组件（无遗漏、无重复）', () => {
+  it('类型分组取件拼起来覆盖组件库清单（无遗漏、无重复）', () => {
     const grouped = WIDGET_GROUPS_ORDER.filter((g) => g !== '常用').flatMap((g) => widgetsInGroup(g).map((w) => w.t))
-    expect([...grouped].sort()).toEqual(Object.keys(WIDGET_DEFS).sort())
+    expect([...grouped].sort()).toEqual(LIBRARY_LIST.map((w) => w.t).sort())
+  })
+
+  it('组件库排除待办 / 收藏夹 / 图标文件夹 / 图标格容器，但它们仍是合法卡片类型', () => {
+    for (const t of LIBRARY_EXCLUDED) {
+      expect(LIBRARY_LIST.some((w) => w.t === t), `${t} 不应出现在组件库`).toBe(false)
+      expect(widgetsInGroup('常用').some((w) => w.t === t), `${t} 不应出现在常用组`).toBe(false)
+      /* 仍在定义表里：已放好的卡片照常渲染 / 编辑 */
+      expect(WIDGET_DEFS[t]).toBeDefined()
+    }
+    expect([...LIBRARY_EXCLUDED].sort()).toEqual(['fav', 'folder', 'group', 'todo'])
+    expect(inLibrary('clock')).toBe(true)
+    expect(inLibrary('todo')).toBe(false)
   })
 
   it('新放置实例的尺寸：优先用该类设置的默认大小，坏值 / 内容装不下时回退出厂尺寸', () => {
