@@ -10,7 +10,7 @@
 
 import { isSafeDomain } from '../shared/guards';
 import { FAVICON_FETCH_TIMEOUT_MS, FAVICON_MAX_BYTES } from '../shared/constants';
-import { warn } from '../core/logger';
+import { debug } from '../core/logger';
 
 const MODULE = 'favicon-resolver';
 
@@ -121,80 +121,97 @@ function relPriority(rel: string): number {
   return 0;
 }
 
-/**
- * 从站点首页 HTML 解析图标 href（按优先级排序，高清图标优先）
- * @returns 绝对 URL 数组（优先级降序）或 null
- */
-async function extractIconUrls(domain: string): Promise<string[] | null> {
+/** 首页抓取结果：最终 origin（可能因重定向变化）+ HTML */
+interface HomePage {
+  origin: string;
+  html: string;
+}
+
+/** 从 URL 取 origin（fetch 跟随重定向后 res.url 是最终地址；异常时回退到请求地址） */
+function originOf(url: string, fallback: string): string {
   try {
-    const res = await fetchWithTimeout(`https://${domain}/`, FAVICON_FETCH_TIMEOUT_MS);
-    if (!res.ok) return null;
-    const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
-    if (!contentType.includes('text/html') && contentType !== '') return null;
-    const html = await res.text();
+    return new URL(url).origin;
+  } catch {
+    return fallback;
+  }
+}
 
-    // 匹配 <link ... rel=...icon... ...>；允许 href 在 rel 之前或之后；兼容单/双/无引号
-    const linkRe = /<link\b([^>]*?)>/gi;
-    type Candidate = { href: string; priority: number };
-    const candidates: Candidate[] = [];
-    for (const m of html.matchAll(linkRe)) {
-      const attrs = m[1] ?? '';
-      const rel = getAttr(attrs, 'rel');
-      const href = getAttr(attrs, 'href');
-      if (rel === null || href === null) continue;
-      const pri = relPriority(rel);
-      if (pri <= 0) continue;
-      // sizes 属性：越大越优先（apple-touch-icon 常带 sizes="180x180"）
-      const sizes = getAttr(attrs, 'sizes');
-      let sizeBonus = 0;
-      if (sizes !== null) {
-        const sm = /(\d+)\s*x\s*\d+/i.exec(sizes);
-        const sizeStr = sm?.[1];
-        if (sizeStr !== undefined) sizeBonus = Math.min(parseInt(sizeStr, 10), 512) / 100;
-      }
-      candidates.push({ href, priority: pri + sizeBonus });
+/**
+ * 抓站点首页：先 https，失败（证书 / 连接 / 非 2xx / 非 HTML）再试 http。
+ * 只探 https 会让只有 http 的老站点连首页都拿不到，后面的 <link> 解析全部落空。
+ */
+async function fetchHomePage(domain: string): Promise<HomePage | null> {
+  for (const proto of ['https', 'http'] as const) {
+    const base = `${proto}://${domain}`;
+    try {
+      const res = await fetchWithTimeout(`${base}/`, FAVICON_FETCH_TIMEOUT_MS);
+      if (!res.ok) continue;
+      const contentType = (res.headers.get('content-type') ?? '').toLowerCase();
+      if (!contentType.includes('text/html') && contentType !== '') continue;
+      const html = await res.text();
+      return { origin: originOf(res.url, base), html };
+    } catch {
+      // 证书错误 / DNS 失败 / 超时：换下一个协议
     }
-    if (candidates.length === 0) return null;
-    candidates.sort((a, b) => b.priority - a.priority);
+  }
+  return null;
+}
 
-    const resolved: string[] = [];
-    const seen = new Set<string>();
-    for (const { href } of candidates) {
-      let abs: string;
-      if (href.startsWith('data:')) {
-        abs = href; // 内联 data URL，直接用
-      } else {
-        try {
-          abs = new URL(href, `https://${domain}/`).href;
-        } catch {
-          continue;
-        }
-      }
-      // 同域安全校验（data: 跳过）
-      if (!abs.startsWith('data:')) {
-        try {
-          const u = new URL(abs);
-          if (!isSafeDomain(u.hostname)) continue;
-        } catch {
-          continue;
-        }
-      }
-      if (!seen.has(abs)) {
-        seen.add(abs);
-        resolved.push(abs);
-        if (resolved.length >= 5) break; // 最多取前 5 个候选
-      }
-    }
-    return resolved.length > 0 ? resolved : null;
+/** href → 绝对地址（data: 原样返回；域名不合法返回 null） */
+function toAbsolute(raw: string, origin: string): string | null {
+  if (raw.startsWith('data:')) return raw;
+  try {
+    const u = new URL(raw, `${origin}/`);
+    return isSafeDomain(u.hostname) ? u.href : null;
   } catch {
     return null;
   }
 }
 
+/**
+ * 从首页 HTML 解析图标 href（按优先级排序，高清图标优先）
+ * @returns 绝对 URL 数组（优先级降序，最多 5 个）
+ */
+export function parseIconLinks(html: string, origin: string): string[] {
+  // 匹配 <link ... rel=...icon... ...>；允许 href 在 rel 之前或之后；兼容单/双/无引号
+  const linkRe = /<link\b([^>]*?)>/gi;
+  type Candidate = { href: string; priority: number };
+  const candidates: Candidate[] = [];
+  for (const m of html.matchAll(linkRe)) {
+    const attrs = m[1] ?? '';
+    const rel = getAttr(attrs, 'rel');
+    const href = getAttr(attrs, 'href');
+    if (rel === null || href === null) continue;
+    const pri = relPriority(rel);
+    if (pri <= 0) continue;
+    // sizes 属性：越大越优先（apple-touch-icon 常带 sizes="180x180"）
+    const sizes = getAttr(attrs, 'sizes');
+    let sizeBonus = 0;
+    if (sizes !== null) {
+      const sm = /(\d+)\s*x\s*\d+/i.exec(sizes);
+      const sizeStr = sm?.[1];
+      if (sizeStr !== undefined) sizeBonus = Math.min(parseInt(sizeStr, 10), 512) / 100;
+    }
+    candidates.push({ href, priority: pri + sizeBonus });
+  }
+  candidates.sort((a, b) => b.priority - a.priority);
+
+  const resolved: string[] = [];
+  const seen = new Set<string>();
+  for (const { href } of candidates) {
+    const abs = toAbsolute(href, origin);
+    if (abs === null || seen.has(abs)) continue;
+    seen.add(abs);
+    resolved.push(abs);
+    if (resolved.length >= 5) break; // 最多取前 5 个候选
+  }
+  return resolved;
+}
+
 /** 按顺序尝试一组 URL，返回首个可转 dataURL 的结果 */
-async function tryUrls(urls: Array<{ url: string; isData?: boolean }>): Promise<string | null> {
-  for (const { url, isData } of urls) {
-    if (isData) return url; // data: URI 直接返回
+async function tryUrls(urls: readonly string[]): Promise<string | null> {
+  for (const url of urls) {
+    if (url.startsWith('data:')) return url; // 内联 data URI 直接用
     try {
       const res = await fetchWithTimeout(url, FAVICON_FETCH_TIMEOUT_MS);
       const dataUrl = await responseToDataUrl(res);
@@ -206,37 +223,44 @@ async function tryUrls(urls: Array<{ url: string; isData?: boolean }>): Promise<
   return null;
 }
 
+/** 常见图标路径（高清 PNG 优先于传统 .ico；现代站点还会有 svg） */
+const COMMON_ICON_PATHS: readonly string[] = [
+  '/apple-touch-icon.png',
+  '/apple-touch-icon-precomposed.png',
+  '/favicon-32x32.png',
+  '/favicon-16x16.png',
+  '/favicon.png',
+  '/favicon.svg',
+  '/favicon.ico',
+];
+
 /**
  * 解析真实 favicon（多级候选）
  * 优先级：HTML <link> 候选（apple-touch-icon > icon > shortcut icon）
- *        → /apple-touch-icon.png → /apple-touch-icon-precomposed.png
- *        → /favicon-32x32.png → /favicon-16x16.png → /favicon.png → /favicon.ico
+ *        → 常见路径（apple-touch-icon → favicon-32/16 → favicon.png/svg/ico）
+ * 首页与常见路径都按「https → http」探测，跟随重定向后改用最终 origin。
  * @returns dataURL 或 null
  */
 export async function resolveRealFavicon(domain: string): Promise<string | null> {
   if (!isSafeDomain(domain)) return null;
 
-  // 1. 解析首页 HTML 的 <link rel="icon">
-  const htmlIcons = await extractIconUrls(domain);
-  if (htmlIcons !== null) {
-    const dataUrl = await tryUrls(
-      htmlIcons.map((u) => ({ url: u, isData: u.startsWith('data:') })),
-    );
+  // 1. 抓首页（https 失败回退 http，跟随重定向），解析 <link rel="icon">
+  const home = await fetchHomePage(domain);
+  if (home !== null) {
+    const dataUrl = await tryUrls(parseIconLinks(home.html, home.origin));
     if (dataUrl !== null) return dataUrl;
   }
 
-  // 2. 尝试常见图标路径（高清 PNG 优先于传统 .ico）
-  const commonPaths = [
-    `https://${domain}/apple-touch-icon.png`,
-    `https://${domain}/apple-touch-icon-precomposed.png`,
-    `https://${domain}/favicon-32x32.png`,
-    `https://${domain}/favicon-16x16.png`,
-    `https://${domain}/favicon.png`,
-    `https://${domain}/favicon.ico`,
-  ];
-  const dataUrl = await tryUrls(commonPaths.map((u) => ({ url: u })));
+  // 2. 常见图标路径：优先用首页实际 origin；抓不到首页时 https 之后再试一轮 http
+  const origin = home?.origin ?? `https://${domain}`;
+  let dataUrl = await tryUrls(COMMON_ICON_PATHS.map((p) => `${origin}${p}`));
   if (dataUrl !== null) return dataUrl;
+  if (home === null) {
+    dataUrl = await tryUrls(COMMON_ICON_PATHS.map((p) => `http://${domain}${p}`));
+    if (dataUrl !== null) return dataUrl;
+  }
 
-  warn(MODULE, `favicon 解析失败`, { domain });
+  // 站点本来就没有可用图标（很常见），不是异常：开发期用 debug 记录即可
+  debug(MODULE, `favicon 解析失败`, { domain });
   return null;
 }
