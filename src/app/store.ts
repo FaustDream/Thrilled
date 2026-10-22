@@ -7,7 +7,7 @@
  */
 import { create } from 'zustand'
 import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc, seedBirthdays } from './layout'
-import { MAX_PAGES, findSlot, findSlotNear, isLegalSize, overlaps } from '../shared/grid'
+import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
@@ -50,7 +50,7 @@ export const skinTokensOf = (skins: SkinPack[], id: string): Record<string, stri
 /** 内置壁纸：仅两个主题——经典浅色 / 经典深色（更多背景走本地上传 / 外链） */
 
 export type DrawerKey = 'add' | 'personal' | 'setting'
-export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'backup' | 'restore' | 'reset' | 'newSite' | 'dockEdit'
+export type ModalKey = 'addEngine' | 'editItem' | 'itemDetail' | 'backup' | 'restore' | 'reset' | 'dockEdit'
 
 /**
  * 应用内通用对话框（替代 window.confirm / window.prompt）
@@ -73,16 +73,6 @@ export interface DialogRequest {
   validate?: (v: string) => string | null
 }
 
-/** 空白处右键「新建站点」的落点 */
-export type NewSiteTarget = 'page' | 'dock' | 'both'
-
-/** 新建站点弹窗的预置：落点预选 + 空白处右键换算出的网格格（新建图标的落位参考） */
-export interface NewSiteDraft {
-  c: number
-  r: number
-  to: NewSiteTarget
-}
-
 export interface CtxState {
   x: number
   y: number
@@ -90,8 +80,6 @@ export interface CtxState {
   id: string | null
   /** Dock 应用下标；非 null = Dock 图标右键菜单（修改 / 移除 / 恢复默认） */
   dock: number | null
-  /** 空白处右键换算出的网格格；卡片 / Dock 菜单为 null */
-  cell: { c: number; r: number } | null
 }
 
 interface AppState {
@@ -122,8 +110,6 @@ interface AppState {
   /** 多选集合（Ctrl/Cmd 单击切换、Shift 范围选中）：跨页有效——可以选好第 2、3 页的图标一次搬到第 1 页；
    *  纯界面态、不落盘（buildDoc 只取设置 / 布局 / 引擎 / 皮肤 / 历史等字段） */
   picked: readonly string[]
-  /** 新建站点弹窗的预置（空白处右键「新建网址图标 / 添加到 Dock」写入） */
-  newSite: NewSiteDraft | null
   /** 刚放置的实例 id：该卡片播一次落位提示（App 在动画结束后清除），让用户看清新图标落在哪 */
   flashId: string | null
   toast: string
@@ -170,8 +156,8 @@ interface AppState {
   setWallFocus: (f: WallFocus) => void
   /** 切换当前浏览的内置壁纸来源 */
   setWallSource: (kind: WallSourceKind) => void
-  /** 放置组件；at 给定时优先落在该网格格附近（被占则就近），返回是否放置成功 */
-  place: (kind: WidgetKind, config?: Record<string, unknown>, at?: { c: number; r: number }) => boolean
+  /** 放置组件到当前页第一个空位（页满则新建一页），返回是否放置成功 */
+  place: (kind: WidgetKind, config?: Record<string, unknown>) => boolean
   updateConfig: (id: string, patch: Record<string, unknown>) => void
   resize: (id: string, w: number, h: number) => void
   /**
@@ -224,8 +210,6 @@ interface AppState {
   setModal: (k: ModalKey | null) => void
   /** 写入 / 关闭通用对话框（由 app/dialog 的 askConfirm / askInput 驱动） */
   setDialog: (d: DialogRequest | null) => void
-  /** 打开新建站点弹窗：一次性写入预置并收起抽屉 / 菜单（弹窗层级低于抽屉，必须先收抽屉） */
-  openNewSite: (draft: NewSiteDraft) => void
   openCtx: (ctx: CtxState | null) => void
   setEnginePanel: (open: boolean) => void
 }
@@ -419,7 +403,6 @@ export const useApp = create<AppState>()((set, get) => ({
   dialog: null,
   ctx: null,
   picked: [],
-  newSite: null,
   flashId: null,
   toast: '',
   settingsTab: 0,
@@ -544,7 +527,7 @@ export const useApp = create<AppState>()((set, get) => ({
   setWallFocus: (f) => set((s) => ({ settings: { ...s.settings, wallFocus: f } })),
   setWallSource: (kind) => set((s) => ({ settings: { ...s.settings, wallSource: kind } })),
 
-  place: (kind, config = {}, at) => {
+  place: (kind, config = {}) => {
     let ok = false
     set((s) => {
       const list = [...s.pages]
@@ -558,8 +541,7 @@ export const useApp = create<AppState>()((set, get) => ({
         /* 新实例先套该类组件的默认样式（「设为该组件默认」写入的），再叠放置时的显式配置 */
         config: { label: def.n, ...(s.settings.styleDefaults[kind] ?? {}), ...config },
       }
-      /* 空白处右键新建：先试右键所在格，放不下再就近；其余入口仍是「本页第一个空位」 */
-      const slot = at === undefined ? findSlot(page, item.w, item.h) : findSlotNear(page, item.w, item.h, at)
+      const slot = findSlot(page, item.w, item.h)
       if (slot !== null) {
         item.c = slot.c
         item.r = slot.r
@@ -898,7 +880,6 @@ export const useApp = create<AppState>()((set, get) => ({
   /* 打开弹窗时收起抽屉：弹窗层级（50）低于抽屉（60），否则被盖住 */
   setModal: (k) => set({ modal: k, ctx: null, enginePanel: false, drawer: k !== null ? null : get().drawer }),
   setDialog: (d) => set({ dialog: d }),
-  openNewSite: (draft) => set({ modal: 'newSite', newSite: draft, ctx: null, enginePanel: false, drawer: null }),
   openCtx: (ctx) => set({ ctx, enginePanel: false }),
   setEnginePanel: (open) => set({ enginePanel: open }),
 }))

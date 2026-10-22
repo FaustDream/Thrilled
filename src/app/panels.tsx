@@ -3,7 +3,7 @@
  * 结构与文案按 docs/v4/02-UI规格.md §8、§6.1、§6.3、§7 与原型冻结内容落地。
  */
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { useApp, type DrawerKey, type NewSiteTarget } from './store'
+import { useApp, type DrawerKey } from './store'
 import { WALL_SOURCES, fetchCategories, fetchWallPage, sourceSearchable, wallSourceOf, type WallCategory, type WallPage, type WallPhoto } from '../core/wallsource'
 import { askConfirm, askInput } from './dialog'
 import { clearWallpaperHistory, findWallpaperBySource, listWallpapers, storeRemoteWallpaper } from '../core/wallpaper'
@@ -21,7 +21,7 @@ import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
 import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, startOfWeek, type TodoEntry } from '../core/utils'
-import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith, type DockAddResult } from '../shared/dock'
+import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { cityKeyOf, searchCities, weatherText, type GeoHit } from '../core/weather'
 import { dayKey, normScheduleEvents, upcomingEvents, type ScheduleEvent } from '../core/schedule'
@@ -1436,7 +1436,14 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
-    v: '5.01', d: '2026-10-21', items: [
+    v: '5.2', d: '2026-10-22', items: [
+      { k: '调整', s: '版本号改为 x.1 起递增', d: 'Chrome 会把「5.01」读成「5.1」，两处写法对不上；现在统一为「主版本.次版本」，次版本从 1 起（5.1 → 5.2 → 5.3），不再使用前导零。' },
+      { k: '移除', s: '右键菜单去掉四项新建入口', d: '去掉「添加网站图标 / 添加图标文件夹 / 添加图标格容器 / 添加到 Dock 快捷方式」，新建统一走「打开添加面板」抽屉；空白处右键只保留 打开添加面板 / 打开个性化 / 打开设置 与 整理图标。' },
+      { k: '优化', s: 'Dock 图标悬停放大不再被裁掉顶部', d: '快捷栏横向滚动会让容器的纵向溢出一并被裁掉，图标放大上浮时顶部缺一块；现在快捷栏上下留出绘制空间，图标完整露出。' },
+    ],
+  },
+  {
+    v: '5.1', d: '2026-10-21', items: [
       { k: '调整', s: 'Dock 快捷方式不再限制数量', d: '去掉 4–8 个的数量上限，想加多少加多少；一排装不下时快捷栏内部横向滚动，不会把整条 Dock 撑出页面。' },
       { k: '新增', s: 'Dock 图标可调三档大小', d: '个性化 →「搜索与 Dock」里的「Dock 应用数量」换成「Dock 图标大小」：小 / 中 / 大，只影响 Dock，与页面图标的六档尺寸互不干扰；功能键字形同步缩放。' },
       { k: '移除', s: '组件库不再提供「组件默认大小」设置', d: '新放置的组件一律用出厂尺寸，单个实例的尺寸仍在编辑弹窗或右键「修改尺寸」里调；旧设置里的该字段读取时忽略。' },
@@ -2630,74 +2637,6 @@ const ItemDetail = ({ item }: { item: GridItem }) => {
   )
 }
 
-/* ============================== 新建站点（空白处右键） ============================== */
-
-const NEW_SITE_TARGETS: readonly { k: NewSiteTarget; n: string }[] = [
-  { k: 'page', n: '页面图标' },
-  { k: 'dock', n: 'Dock 快捷方式' },
-  { k: 'both', n: '两者都加' },
-]
-
-/** 新建站点弹窗的结果提示（页面 / Dock 两处落位各自成败的组合） */
-const newSiteToast = (placed: boolean, dock: DockAddResult | null): string => {
-  if (placed) {
-    if (dock === null) return '已添加到页面'
-    return dock.ok ? '已添加到页面与 Dock' : `已添加到页面；${DOCK_DUP_TEXT}`
-  }
-  if (dock?.ok) return '已添加到底部 Dock'
-  return dock !== null ? DOCK_DUP_TEXT : '最多 5 页，已没有位置可放'
-}
-
-/**
- * 空白处右键「新建网址图标 / 添加到 Dock 快捷方式」共用的轻量弹窗：
- * 网址 + 名称（留空取域名）、落点三选一；页面落位用右键所在的格，被占则就近。
- */
-const NewSiteModal = () => {
-  const draft = useApp((s) => s.newSite)
-  const place = useApp((s) => s.place)
-  const settings = useApp((s) => s.settings)
-  const setSetting = useApp((s) => s.setSetting)
-  const setModal = useApp((s) => s.setModal)
-  const showToast = useApp((s) => s.showToast)
-  const [to, setTo] = useState<NewSiteTarget>(draft?.to ?? 'page')
-  const [name, setName] = useState('')
-  const [url, setUrl] = useState('')
-
-  const submit = (): void => {
-    const link = normalizeSiteUrl(url)
-    if (link === null) { showToast('请输入有效的网址，例如 baidu.com'); return }
-    const label = name.trim() !== '' ? name.trim() : hostOf(link)
-    const at = draft === null ? undefined : { c: draft.c, r: draft.r }
-    const dockRes = to === 'page' ? null : dockAppsWith(settings.dockApps, label, link)
-    const placed = to === 'dock' ? false : place('icon', { label, url: link }, at)
-    if (dockRes !== null && dockRes.ok) setSetting('dockApps', dockRes.apps)
-    showToast(newSiteToast(placed, dockRes))
-    setModal(null)
-  }
-
-  return (
-    <>
-      <h2>新建站点</h2>
-      <p className="sub">只填网址就行（不写 https:// 也会自动补全）；页面图标落在右键位置，被占则就近。</p>
-      <div className="f-row"><label className="f-label">网址</label>
-        <input className="f-input" placeholder="例如 baidu.com" value={url} onChange={(e) => setUrl(e.target.value)} autoFocus /></div>
-      <div className="f-row"><label className="f-label">名称（可选，留空取域名）</label>
-        <input className="f-input" placeholder="例如 百度" value={name} onChange={(e) => setName(e.target.value)} /></div>
-      <div className="f-row"><label className="f-label">添加到哪里</label>
-        <div className="btn-row">
-          {NEW_SITE_TARGETS.map((t) => (
-            <button key={t.k} className={`btn sm${to === t.k ? '' : ' ghost'}`} onClick={() => setTo(t.k)}>{t.n}</button>
-          ))}
-        </div>
-      </div>
-      <div className="btn-row end">
-        <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
-        <button className="btn" onClick={submit}>确认添加</button>
-      </div>
-    </>
-  )
-}
-
 export const Modal = () => {
   const modal = useApp((s) => s.modal)
   const setModal = useApp((s) => s.setModal)
@@ -2716,7 +2655,7 @@ export const Modal = () => {
   const engImgFile = useRef<HTMLInputElement | null>(null)
   const item = pages[cur]?.find((x) => x.id === itemId) ?? null
   if (!modal) return null
-  const narrow = modal === 'backup' || modal === 'restore' || modal === 'reset' || modal === 'newSite'
+  const narrow = modal === 'backup' || modal === 'restore' || modal === 'reset'
   const body = () => {
     switch (modal) {
       case 'addEngine':
@@ -2810,8 +2749,6 @@ export const Modal = () => {
             </div>
           </>
         )
-      case 'newSite':
-        return <NewSiteModal />
       case 'dockEdit':
         return <DockEditModal />
       case 'editItem':

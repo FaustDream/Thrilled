@@ -1,11 +1,8 @@
 /**
- * 右键菜单（空白处 9 项 + 卡片 6 项 / 图标类 7 项 + Dock 图标 5 项）
+ * 右键菜单（空白处 4 项 + 卡片 6 项 / 图标类 7 项 + Dock 图标 5 项）
  *
- * 空白处分三组：添加网站图标 / 添加图标文件夹 / 添加图标格容器 / 添加到 Dock 快捷方式 为「新建」，
- *  打开添加面板 / 个性化 / 设置为「打开」，末尾单独一组是「整理图标」。
- *  前三项直接落位（不弹表单）——生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」。
- *  小组件不再从右键添加（「添加组件」已移除，入口统一在个性化 → 组件库）；
- *  图标文件夹与图标格容器不是小组件，只从这里添加。
+ * 空白处只有「打开」与「整理图标」两组：打开添加面板 / 个性化 / 设置，末尾单独一组是「整理图标」。
+ *  新建网站、图标文件夹与图标格容器统一走「打开添加面板」抽屉，右键不再提供新建入口。
  * 卡片与 Dock 图标各有自己的菜单；输入框、抽屉、弹窗、引擎面板里的右键仍交给浏览器原生菜单
  * （见 App 的 contextmenu 处理）。二级菜单按 UiTab 实测复刻。
  */
@@ -13,7 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useApp, type CtxState } from './store'
 import { ARRANGE_KINDS } from './layout'
 import { WIDGET_DEFS, sizeAllowedFor } from '../shared/widget-defs'
-import { MAX_PAGES, SIZES, findSlot } from '../shared/grid'
+import { SIZES } from '../shared/grid'
 import { stage } from './stage'
 import { CheckIcon } from './icons'
 import { cfg } from './widgets'
@@ -90,43 +87,19 @@ const DockMenu = ({ idx }: { idx: number }) => {
 }
 
 /**
- * 空白处右键菜单（固定 9 项：4 个新建 + 3 个打开 + 整理图标；动作在 App.onAct）。
- * 小组件的添加入口在个性化 → 组件库（「添加组件」二级菜单已按用户要求移除）；
- * 网站图标 / 图标文件夹 / 图标格容器不是小组件，新建入口只在这里。
- * 置灰只覆盖可判定的情形：到 5 页上限且本页放不下出厂尺寸的图标。
+ * 空白处右键菜单（固定 4 项：打开添加面板 / 个性化 / 设置 + 整理图标；动作在 App.onAct）。
+ * 新建网站、图标文件夹与图标格容器都在「打开添加面板」抽屉里，右键不再提供新建入口。
  */
-const BlankMenu = () => {
-  const pages = useApp((s) => s.pages)
-  const cur = useApp((s) => s.cur)
-  const icon = WIDGET_DEFS['icon'].units
-  const noRoom = pages.length >= MAX_PAGES && findSlot(pages[cur] ?? [], icon.w, icon.h) === null
-  const roomTip = '最多 5 页，已没有位置可放'
-  return (
-    <>
-      {/* 前三项都直接落位、不弹任何表单：生成后由卡片的落位提示指出位置，编辑走卡片右键「编辑信息」 */}
-      <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'icon'}>
-        <span>添加网站图标</span>
-      </div>
-      {/* 图标文件夹 / 图标格容器不是小组件，不进组件库，入口只在这里 */}
-      <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'folder'}>
-        <span>添加图标文件夹</span>
-      </div>
-      <div className={`ctx-item${noRoom ? ' dis' : ''}`} data-act={noRoom ? 'ctx-blocked' : 'place-kind'} data-v={noRoom ? roomTip : 'group'}>
-        <span>添加图标格容器</span>
-      </div>
-      <div className="ctx-item" data-act="newsite" data-v="dock">
-        <span>添加到 Dock 快捷方式</span>
-      </div>
-      <div className="ctx-sep" />
-      <div className="ctx-item" data-act="drawer-open" data-v="add"><span>打开添加面板</span></div>
-      <div className="ctx-item" data-act="drawer-open" data-v="personal"><span>打开个性化</span></div>
-      <div className="ctx-item" data-act="drawer-open" data-v="setting"><span>打开设置</span></div>
-      {/* 工具组：手动整理（自动整理只发生在删除后，存量页面里已有的空洞靠这里补） */}
-      <div className="ctx-sep" />
-      <div className="ctx-item" data-act="arrange"><span>整理图标</span></div>
-    </>
-  )
-}
+const BlankMenu = () => (
+  <>
+    <div className="ctx-item" data-act="drawer-open" data-v="add"><span>打开添加面板</span></div>
+    <div className="ctx-item" data-act="drawer-open" data-v="personal"><span>打开个性化</span></div>
+    <div className="ctx-item" data-act="drawer-open" data-v="setting"><span>打开设置</span></div>
+    {/* 工具组：手动整理（自动整理只发生在删除后，存量页面里已有的空洞靠这里补） */}
+    <div className="ctx-sep" />
+    <div className="ctx-item" data-act="arrange"><span>整理图标</span></div>
+  </>
+)
 
 /** 关闭淡出时长（ms）：与 CSS 的 ctx-out 动画一致，期间保留 DOM 不卸载 */
 const CTX_FADE_MS = 100

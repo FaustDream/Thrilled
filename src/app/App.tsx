@@ -6,7 +6,7 @@
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
-import { useApp, skinTokensOf, markWelcomed, type CtxState, type DrawerKey, type NewSiteTarget } from './store'
+import { useApp, skinTokensOf, markWelcomed, type CtxState, type DrawerKey } from './store'
 import { CELL, COLS, GRID_LEFT, GRID_TOP, PAGE_W, ROWS, SNAP_ALIGN_PX, STAGE_W, insetOf, itemBox, nearOnAxis, snapAxis } from '../shared/grid'
 import type { AxisSnap } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
@@ -33,7 +33,7 @@ import { computeWallFocus } from '../core/wallpaper-focus'
 import { buildToneGrid, boxUv, toneAt, type ToneGrid } from '../core/walltone'
 import { coverFix, fixForInk, hexLum, pickInk } from '../shared/luma'
 import type { WeatherData } from '../core/weather'
-import type { GridItem, OpenMode, WidgetKind } from '../shared/types'
+import type { GridItem, OpenMode } from '../shared/types'
 
 const allItems = (pages: GridItem[][]): GridItem[] => pages.flat()
 
@@ -214,8 +214,6 @@ export const App = () => {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const stageRef = useRef<HTMLDivElement | null>(null)
   const wheelAt = useRef(0)
-  /* 当前页网格元素：空白处右键的「格」换算用（故提到组件顶部声明） */
-  const gridRef = useRef<HTMLDivElement | null>(null)
 
   /* ---------- 多选与跨页拖拽（v4.4 补丁 36） ---------- */
   /* 多选集合放 store：拖拽、右键菜单与卡片描边都要读；跨页有效——可以选好第 2、3 页的图标一次搬到第 1 页 */
@@ -651,17 +649,7 @@ export const App = () => {
         case 'sp-clear': st.clearHistory(); setHistoryOpen(false); break
         case 'set-mode': st.setMode(v as 'minimal' | 'standard'); break
         case 'go-page': st.goPage(Number(v)); break
-        /* 空白处右键菜单：新建站点弹窗（落点由菜单项预选）、添加组件、打开三个面板 */
-        case 'newsite': {
-          const cell = st.ctx?.cell ?? { c: 0, r: 0 }
-          st.openNewSite({ c: cell.c, r: cell.r, to: v as NewSiteTarget })
-          break
-        }
-        case 'place-kind': {
-          st.place(v as WidgetKind, {}, st.ctx?.cell ?? undefined)
-          st.openCtx(null)
-          break
-        }
+        /* 空白处右键菜单：打开添加面板 / 个性化 / 设置 */
         case 'drawer-open': st.setDrawer(v as DrawerKey); break
         /* 空页引导「添加组件」：直达个性化 → 组件库 */
         case 'open-library': st.setPersonalTab(2); st.setDrawer('personal'); break
@@ -759,24 +747,11 @@ export const App = () => {
       e.preventDefault()
       const r = el.getBoundingClientRect()
       const s = r.width / stage.w
-      /* 空白处：把右键位置换算成网格格（新建图标的落位参考，故按图标类卡片的框口径）；卡片与 Dock 菜单不需要 */
-      let cell: { c: number; r: number } | null = null
-      const g = gridRef.current
-      if (id === null && dockIdx === null && g !== null) {
-        const gr = g.getBoundingClientRect()
-        const gs = gr.width / (COLS * CELL)
-        const edge = insetOf('icon')
-        cell = {
-          c: Math.round(((e.clientX - gr.left) / gs - edge) / CELL),
-          r: Math.round(((e.clientY - gr.top) / gs - edge) / CELL),
-        }
-      }
       const next: CtxState = {
         x: Math.min((e.clientX - r.left) / s, stage.w - 240),
         y: (e.clientY - r.top) / s,
         id,
         dock: dockIdx !== null ? Number(dockIdx) : null,
-        cell,
       }
       useApp.getState().openCtx(next)
     }
@@ -1105,7 +1080,7 @@ export const App = () => {
             {i === cur && drag !== null && guides && drag.gy !== null && (
               <div className="align-guide h" style={{ top: GRID_TOP + drag.gy.pos }} />
             )}
-            <div className="grid" ref={i === cur ? gridRef : undefined}>
+            <div className="grid">
               {pg.map((it, idx) => (
                 /* 拖拽中的卡片不在这里渲染：改由舞台级浮层画（见下面的 drag-layer），
                    否则跨页翻页时它会跟着 #pager 一起滑出去 */

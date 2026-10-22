@@ -302,9 +302,11 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
   box-shadow:inset 0 1px 0 rgba(255,255,255,.5),0 18px 44px -14px rgba(6,12,24,.36);
   outline:1px solid color-mix(in srgb,var(--card-text) 10%,transparent);outline-offset:-1px}
 #stage[data-mode='minimal'] .dock-bar{background:color-mix(in srgb,var(--card-bg) calc(var(--g-alpha) * (var(--ga-dock) + .12) * 100%),transparent)}
-/* 快捷方式不设数量上限：装不下时整条横向滚动（隐藏滚动条），不会把快捷栏撑出页面 */
+/* 快捷方式不设数量上限：装不下时整条横向滚动（隐藏滚动条），不会把快捷栏撑出页面。
+   横向滚动会把 overflow-y 也算成 auto，悬停放大 + 上浮的图标会被容器上缘裁掉：
+   上下各留一块绘制区并用负外边距抵消占位，图标顶部完整露出。 */
 .dock-apps,.dock-actions{display:flex;align-items:center}
-.dock-apps{overflow-x:auto;scrollbar-width:none;flex:0 1 auto}
+.dock-apps{overflow-x:auto;scrollbar-width:none;flex:0 1 auto;padding:12px 0;margin:-12px 0}
 .dock-apps::-webkit-scrollbar{display:none}
 .dock-actions{flex:0 0 auto}
 .dock-sep{width:1px;height:34px;margin:0 14px;background:var(--label-color);opacity:.22;flex:0 0 auto}
