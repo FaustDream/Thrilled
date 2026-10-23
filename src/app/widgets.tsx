@@ -19,6 +19,8 @@ import { almanacOf, festivalsOf, solarToLunar } from '../core/lunar'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
 import { weatherText } from '../core/weather'
+import { isDayAt, weatherFxOf } from '../core/weather-fx'
+import { WeatherGlyph } from './weather-fx'
 import type { GridItem, WidgetKind } from '../shared/types'
 
 /* ---------- 配置读取（定义默认值 ⊕ 实例覆盖值） ---------- */
@@ -191,6 +193,9 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
       const desc = weather !== null
         ? `${weatherText(weather.currentCode)}${bool(c['showRange']) ? ` ${range}` : ''}`
         : `待定位${bool(c['showRange']) ? ` ${range}` : ''}`
+      /* 卡片只跑图标层：现象决定主图，温度决定雨/雪形态，昼夜决定星月；无数据时静态占位 */
+      const isDay = weather?.currentIsDay ?? isDayAt(now.getHours())
+      const fx = weatherFxOf(weather?.currentCode ?? 2, weather?.currentTemp ?? 20, isDay)
       return (
         <div className="w-weather" style={{ position: 'absolute', inset: 0 }}>
           <div className="wx-temp">{temp}</div>
@@ -204,7 +209,7 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
             {/* 宽卡扩展信息行：装得下时才显示（窄卡由 @container 隐去） */}
             <div className="wx-next">明日 {dayRange(1)}</div>
           </div>
-          <div className="wx-ico">{Icon.cloudy()}</div>
+          <div className="wx-ico"><WeatherGlyph fx={fx} muted={weather === null} /></div>
         </div>
       )
     }

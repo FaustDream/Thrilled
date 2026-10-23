@@ -24,6 +24,8 @@ import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, n
 import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { cityKeyOf, searchCities, weatherText, type GeoHit, type WeatherData } from '../core/weather'
+import { isDayAt, weatherFxOf, type WeatherFx } from '../core/weather-fx'
+import { WeatherGlyph, WeatherScene } from './weather-fx'
 import { dayKey, normScheduleEvents, upcomingEvents, type ScheduleEvent } from '../core/schedule'
 import { almanacOf, festivalsOf, solarToLunar } from '../core/lunar'
 import { normModes, readoutOf, type CountdownMode } from '../core/countdown'
@@ -1436,6 +1438,16 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '5.23', d: '2026-10-23', items: [
+      { k: '新增', s: '天气卡片与详情按天气现象播放动画', d: '晴 / 多云 / 雨 / 雪 / 雷 / 雾 / 夜间各有图标动效；温度决定降水形态，≤2°C 下雨转雪，≥35°C 加暖色光晕。' },
+      { k: '新增', s: '天气详情加入场景层', d: '雨丝、雪花、雾带与晴日光晕只铺在详情右侧，离开视口或切到后台自动暂停，系统开启「减少动态效果」时降级为静态。' },
+      { k: '优化', s: '日历详情的文字不再发虚', d: '农历、日期与日程角标加大加深，移除文字层透明度和过小字号，半透明玻璃底上也能看清。' },
+      { k: '优化', s: '配置弹窗把低频样式收进「个性化（高级）」', d: '首屏只留名称、功能开关与尺寸；高级区默认折叠，数字输入双列排布，样式默认 / 复制到同类卡片等批量操作一并收进去。' },
+      { k: '优化', s: '编辑配置改为即时生效', d: '去掉取消 / 确认修改，只保留「完成」，避免改完忘点确认。' },
+      { k: '优化', s: '日历月视图的日程角标更醒目', d: '有日程的日期显示数量角标，字号与对比度提升。' },
+    ],
+  },
+  {
     v: '5.22', d: '2026-10-23', items: [
       { k: '优化', s: '小组件详情改为「概览 / 设置」两级', d: '概览只保留核心信息与高频操作，低频配置收进「设置」；去掉职责模糊的「编辑配置」按钮，面板高度大幅缩短。' },
       { k: '优化', s: '天气详情：一个搜索框、7 天预报、状态驱动的定位入口', d: '搜索结果行直接选「设为主定位 / 加入列表」，城市行常显「设为主 / 删除」；已授权定位时不再出现「允许定位」；预报扩到 7 天，刷新按钮旁显示「x 分钟前更新」。' },
@@ -1813,13 +1825,18 @@ const StyleSection = ({ item }: { item: GridItem }) => {
   const c = { ...WIDGET_DEFS[item.t].def, ...item.config }
   return (
     <>
-      <div className="sec-title">样式</div>
-      <NumberRow l="字号缩放" min={60} max={160} value={Math.round(num(c['fontScale'], 1) * 100)}
-        unit="%" onInput={(v) => updateConfig(item.id, { fontScale: v / 100 })} />
-      <NumberRow l="图标缩放" min={60} max={160} value={Math.round(num(c['iconScale'], 1) * 100)}
-        unit="%" onInput={(v) => updateConfig(item.id, { iconScale: v / 100 })} />
-      <NumberRow l="卡片圆角" min={0} max={28} value={Math.round(num(c['radius'], 16))}
-        unit="px" onInput={(v) => updateConfig(item.id, { radius: v })} />
+      {/* 数字双列：字号 / 图标一行，圆角与「重置」一行，展开后高度减半 */}
+      <div className="num-grid">
+        <NumberRow l="字号缩放" min={60} max={160} value={Math.round(num(c['fontScale'], 1) * 100)}
+          unit="%" onInput={(v) => updateConfig(item.id, { fontScale: v / 100 })} />
+        <NumberRow l="图标缩放" min={60} max={160} value={Math.round(num(c['iconScale'], 1) * 100)}
+          unit="%" onInput={(v) => updateConfig(item.id, { iconScale: v / 100 })} />
+        <NumberRow l="卡片圆角" min={0} max={28} value={Math.round(num(c['radius'], 16))}
+          unit="px" onInput={(v) => updateConfig(item.id, { radius: v })} />
+        <div className="cfg-reset-cell">
+          <button className="btn sm ghost" title="清除字号 / 图标 / 圆角 / 文字颜色" onClick={() => applyStyle(item.id, {})}>重置样式</button>
+        </div>
+      </div>
       <ColorField label="文字颜色" auto="跟随风格"
         value={/^#[0-9a-f]{6}$/i.test(String(c['textColor'] ?? '')) ? String(c['textColor']) : '#1f2937'}
         onAuto={() => updateConfig(item.id, { textColor: '' })} onChange={(x) => updateConfig(item.id, { textColor: x })} />
@@ -1829,7 +1846,7 @@ const StyleSection = ({ item }: { item: GridItem }) => {
           <button key={label} className="btn sm ghost" onClick={() => applyStyle(item.id, patch)}>{label}</button>
         ))}
       </div>
-      <div className="btn-row">
+      <div className="btn-row cfg-adv-actions">
         <button className="btn sm ghost" onClick={() => saveStyleDefault(item.id)}>设为该组件默认</button>
         {styleDefault !== undefined && !isBlankStyle(styleDefault) && (
           <button className="btn sm ghost" onClick={() => clearStyleDefault(item.t)}>取消默认</button>
@@ -1936,30 +1953,32 @@ const KindSection = ({ item }: { item: GridItem }) => {
   )
 }
 
-/** 配置表单：通用 → 专属 → 样式 → 尺寸 */
+/** 配置表单：通用 → 专属 → 尺寸；低频的样式与批量操作收进默认折叠的高级区 */
 const CardConfigBody = ({ item }: { item: GridItem }) => (
   <>
     <GeneralSection item={item} />
     <KindSection item={item} />
-    <StyleSection item={item} />
     <SizeSection item={item} />
+    <details className="cfg-adv">
+      <summary>个性化（高级）</summary>
+      <div className="cfg-adv-body"><StyleSection item={item} /></div>
+    </details>
   </>
 )
 
-/** 独立配置弹窗（卡片悬浮「编辑」进入）：标题 + 表单 + 关闭 */
+/** 独立配置弹窗（卡片悬浮「编辑」进入）：改动即时保存，故只保留「完成」 */
 const EditCardModal = ({ item }: { item: GridItem }) => {
   const setModal = useApp((s) => s.setModal)
-  const showToast = useApp((s) => s.showToast)
   const def = WIDGET_DEFS[item.t]
   return (
     <>
-      <h2>配置 · {def.n}</h2>
-      <p className="sub">这张卡片是「{def.n}」组件的实例：位置与尺寸属于布局，下面的字段只改本实例的内容。</p>
-      <CardConfigBody item={item} />
-      <div className="btn-row end">
-        <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
-        <button className="btn" onClick={() => { setModal(null); showToast('修改成功') }}>确认修改</button>
+      {/* 改动即时生效，「完成」只是关闭：钉在标题行，长表单也不用滚到底 */}
+      <div className="dt-head cfg-head">
+        <h2>配置 · {def.n}</h2>
+        <button className="btn sm" onClick={() => setModal(null)}>完成</button>
       </div>
+      <p className="sub">位置与尺寸属于布局；下面的字段只改本实例，修改即时生效。</p>
+      <CardConfigBody item={item} />
     </>
   )
 }
@@ -2599,17 +2618,40 @@ const CountdownSettings = ({ item }: { item: GridItem }) => {
   )
 }
 
-/** 天气实况主行：温度大字 > 天气现象 > 地名（层级即信息优先级） */
-const WeatherNow = ({ d, toF, showRange }: { d: WeatherData; toF: boolean; showRange: boolean }) => {
+/** 天气实况主行：温度大字 > 天气现象 > 地名（层级即信息优先级），动效图标只做氛围 */
+const WeatherNow = ({ d, toF, showRange, fx }: {
+  d: WeatherData
+  toF: boolean
+  showRange: boolean
+  fx: WeatherFx
+}) => {
   const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
   const range = `${conv(d.daily[0]?.min ?? 0)}°/${conv(d.daily[0]?.max ?? 0)}°`
   return (
-    <div className="dt-now">
+    <div className="wx-now">
       <span className="dt-temp">{conv(d.currentTemp)}°</span>
       <div className="dt-now-main">
         <span className="dt-cond">{weatherText(d.currentCode)}{showRange ? ` ${range}` : ''}</span>
         <span className="dt-host">{d.source === 'geo' ? (d.place !== '' ? d.place : '当前位置') : `手选城市 · ${d.place}`}</span>
       </div>
+      <div className="wx-now-ico"><WeatherGlyph fx={fx} /></div>
+    </div>
+  )
+}
+
+/** 天气 hero：主信息 + 图标层 + 只在详情出现的光影 / 粒子场景层 */
+const WeatherHero = ({ d, toF, showRange, now }: {
+  d: WeatherData
+  toF: boolean
+  showRange: boolean
+  now: Date
+}) => {
+  const isDay = d.currentIsDay ?? isDayAt(now.getHours())
+  const fx = weatherFxOf(d.currentCode, d.currentTemp, isDay)
+  return (
+    <div className={`wx-hero${fx.night ? ' is-night' : ''}${fx.hot ? ' is-hot' : ''}${fx.cold ? ' is-cold' : ''}`}>
+      <WeatherScene fx={fx} />
+      <WeatherNow d={d} toF={toF} showRange={showRange} fx={fx} />
     </div>
   )
 }
@@ -2748,7 +2790,7 @@ const WeatherOverview = ({ item, now }: { item: GridItem; now: Date }) => {
         </div>
       ) : (
         <>
-          <WeatherNow d={weather} toF={toF} showRange={bool(c['showRange'])} />
+          <WeatherHero d={weather} toF={toF} showRange={bool(c['showRange'])} now={now} />
           <WeatherForecast d={weather} toF={toF} now={now} />
         </>
       )}

@@ -36,6 +36,8 @@ export interface WeatherData {
   ts: number;
   currentTemp: number;
   currentCode: number;
+  /** 数据源给的昼夜标记（1 = 白天）；旧缓存可能没有，界面按当前小时兜底 */
+  currentIsDay?: boolean;
   daily: Array<{ date: string; max: number; min: number; code: number }>;
   /** 地名（坐标反查得到；反查失败时为空串，界面回退到坐标描述） */
   place: string;
@@ -186,14 +188,14 @@ async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
     lat +
     '&longitude=' +
     lon +
-    '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=7';
+    '&current=temperature_2m,weather_code,is_day&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=7';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const resp = await fetch(url, { signal: controller.signal });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = (await resp.json()) as {
-      current?: { temperature_2m?: number; weather_code?: number };
+      current?: { temperature_2m?: number; weather_code?: number; is_day?: number };
       daily?: { time?: string[]; temperature_2m_max?: number[]; temperature_2m_min?: number[]; weather_code?: number[] };
     };
     const current = data.current ?? {};
@@ -204,6 +206,7 @@ async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
       ts: Date.now(),
       currentTemp: Math.round(current.temperature_2m ?? 0),
       currentCode: current.weather_code ?? 0,
+      ...(current.is_day === undefined ? {} : { currentIsDay: current.is_day === 1 }),
       daily: (daily.time ?? []).map((date, i) => ({
         date,
         max: Math.round(daily.temperature_2m_max?.[i] ?? 0),
