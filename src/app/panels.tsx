@@ -1438,6 +1438,13 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '5.24', d: '2026-10-23', items: [
+      { k: '优化', s: '天气刷新有明确的加载与结果反馈', d: '点刷新后图标旋转并显示「刷新中」，至少保持 600ms；成功显示绿色「已更新」，失败显示红色「未更新」，1.6s 后恢复。' },
+      { k: '优化', s: '日历节气与宜忌标签更清晰', d: '标签底色改为与面板底色混合的不透明色，文字用语义色与正文色混一档，字号提到 12px，浅色 / 暗黑主题下都保持足够对比。' },
+      { k: '优化', s: '组件设置的分隔与节奏统一', d: '通用 / 专属 / 尺寸各自成组，文本框、开关、数字、颜色统一用同一条底线；组内末行不画线，组与组之间留 16px，不再一半有横线一半靠空白。' },
+    ],
+  },
+  {
     v: '5.23', d: '2026-10-23', items: [
       { k: '新增', s: '天气卡片与详情按天气现象播放动画', d: '晴 / 多云 / 雨 / 雪 / 雷 / 雾 / 夜间各有图标动效；温度决定降水形态，≤2°C 下雨转雪，≥35°C 加暖色光晕。' },
       { k: '新增', s: '天气详情加入场景层', d: '雨丝、雪花、雾带与晴日光晕只铺在详情右侧，离开视口或切到后台自动暂停，系统开启「减少动态效果」时降级为静态。' },
@@ -1799,7 +1806,7 @@ const GeneralSection = ({ item }: { item: GridItem }) => {
   const updateConfig = useApp((s) => s.updateConfig)
   const c = { ...WIDGET_DEFS[item.t].def, ...item.config }
   return (
-    <>
+    <div className="cfg-group">
       <div className="sec-title">通用</div>
       <div className="f-row"><label className="f-label">名称</label>
         <input className="f-input" value={String(c['label'] ?? '')} placeholder="网址图标用作站点名；文件夹卡显示为卡内名称"
@@ -1810,7 +1817,7 @@ const GeneralSection = ({ item }: { item: GridItem }) => {
         <NumberRow l="单独透明度" min={0} max={100} value={Math.round(Number(c['opacity']) * 100)}
           unit="%" onInput={(v) => updateConfig(item.id, { opacity: v / 100 })} />
       )}
-    </>
+    </div>
   )
 }
 
@@ -1862,7 +1869,7 @@ const SizeSection = ({ item }: { item: GridItem }) => {
   const resize = useApp((s) => s.resize)
   const def = WIDGET_DEFS[item.t]
   return (
-    <>
+    <div className="cfg-group">
       <div className="sec-title">尺寸</div>
       <div className="f-row"><label className="f-label">尺寸</label>
         <div className="cats">{SIZES.map((sz) => {
@@ -1882,7 +1889,7 @@ const SizeSection = ({ item }: { item: GridItem }) => {
         尺寸能力 {minSizeOf(item.t).w}×{minSizeOf(item.t).h} – {maxSizeOf(item.t).w}×{maxSizeOf(item.t).h}，
         内容按当前尺寸等比缩放（自然尺寸 {def.units.w}×{def.units.h} 下与设计稿一致）。
       </Hint>
-    </>
+    </div>
   )
 }
 
@@ -1941,7 +1948,7 @@ const KindSection = ({ item }: { item: GridItem }) => {
     )
   }
   return (
-    <>
+    <div className="cfg-group">
       {def.fields.length > 0 && <div className="sec-title">专属</div>}
       {item.t === 'countdown' ? <CountdownSettings item={item} /> : def.fields.map(field)}
       {item.t === 'clock' && (
@@ -1949,21 +1956,21 @@ const KindSection = ({ item }: { item: GridItem }) => {
           on={bool(c['showGreeting'])} onToggle={() => updateConfig(item.id, { showGreeting: !bool(c['showGreeting']) })} />
       )}
       {item.t === 'weather' && <WeatherEveryRow />}
-    </>
+    </div>
   )
 }
 
 /** 配置表单：通用 → 专属 → 尺寸；低频的样式与批量操作收进默认折叠的高级区 */
 const CardConfigBody = ({ item }: { item: GridItem }) => (
-  <>
+  <div className="cfg-form">
     <GeneralSection item={item} />
     <KindSection item={item} />
     <SizeSection item={item} />
     <details className="cfg-adv">
       <summary>个性化（高级）</summary>
-      <div className="cfg-adv-body"><StyleSection item={item} /></div>
+      <div className="cfg-adv-body cfg-group"><StyleSection item={item} /></div>
     </details>
-  </>
+  </div>
 )
 
 /** 独立配置弹窗（卡片悬浮「编辑」进入）：改动即时保存，故只保留「完成」 */
@@ -2656,6 +2663,60 @@ const WeatherHero = ({ d, toF, showRange, now }: {
   )
 }
 
+/**
+ * 天气刷新：点下去立刻进入「刷新中」并旋转图标，至少保持 600ms（避免缓存命中时一闪而过）；
+ * 成功显示「已更新」+ 勾，失败显示「未更新」+ 叉，1.6s 后回到「刷新」。
+ */
+const WeatherRefreshButton = () => {
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'fail'>('idle')
+  const timer = useRef<number | null>(null)
+  const alive = useRef(true)
+  const busy = useRef(false)
+  useEffect(() => {
+    /* StrictMode 会 setup → cleanup → setup；这里必须把 alive 重置回 true */
+    alive.current = true
+    return () => {
+      alive.current = false
+      if (timer.current !== null) window.clearTimeout(timer.current)
+    }
+  }, [])
+  const run = async (): Promise<void> => {
+    if (busy.current) return
+    busy.current = true
+    if (timer.current !== null) { window.clearTimeout(timer.current); timer.current = null }
+    setState('loading')
+    const before = useApp.getState().weather?.ts ?? 0
+    const started = Date.now()
+    let ok = false
+    try {
+      await useApp.getState().loadWeather(true, true)
+      ok = (useApp.getState().weather?.ts ?? 0) > before
+    } catch {
+      ok = false
+    } finally {
+      busy.current = false
+    }
+    if (!alive.current) return
+    const wait = Math.max(0, 600 - (Date.now() - started))
+    timer.current = window.setTimeout(() => {
+      if (!alive.current) return
+      setState(ok ? 'done' : 'fail')
+      timer.current = window.setTimeout(() => { if (alive.current) setState('idle') }, 1600)
+    }, wait)
+  }
+  return (
+    <button type="button" className={`btn sm ghost wx-refresh is-${state}`}
+      disabled={state === 'loading'} aria-live="polite"
+      title={state === 'loading' ? '正在刷新天气…' : '立即刷新天气'}
+      onClick={() => { void run() }}>
+      <span className="wx-refresh-ico" aria-hidden="true">
+        {state === 'done' ? <Icon.check /> : state === 'fail' ? <Icon.close /> : <Icon.sync />}
+      </span>
+      {state === 'loading' ? '刷新中' : state === 'done' ? '已更新' : state === 'fail' ? '未更新' : '刷新'}
+    </button>
+  )
+}
+
 /** 未来 7 天：刷新与「x 分钟前更新」都固定在标题行右侧 */
 const WeatherForecast = ({ d, toF, now }: { d: WeatherData; toF: boolean; now: Date }) => {
   const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
@@ -2668,7 +2729,7 @@ const WeatherForecast = ({ d, toF, now }: { d: WeatherData; toF: boolean; now: D
       <SecHead title="未来 7 天" action={
         <>
           <span className="dt-sec-sub">{relTimeText(d.ts, now)}更新</span>
-          <button className="btn sm ghost" onClick={() => { void useApp.getState().loadWeather(true) }}>刷新</button>
+          <WeatherRefreshButton />
         </>
       } />
       <div className="dt-days week">

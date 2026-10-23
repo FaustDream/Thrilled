@@ -228,8 +228,9 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
 /* 宜忌是参考信息，不是当天的重点：整行降到辅助色，与农历拉开一档 */
 .cal-yiji{display:flex;flex-direction:column;gap:calc(1 * var(--u));font-size:calc(11 * var(--u));
   color:var(--card-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-yi{color:var(--ok,#15803d)}
-.cal-ji{color:var(--bad,#b91c1c)}
+/* 卡片内的宜 / 忌：与正文色混一档，浅底更深、深底更亮，玻璃卡上也读得清 */
+.cal-yi{color:color-mix(in srgb,var(--ok,#15803d) 86%,var(--card-text))}
+.cal-ji{color:color-mix(in srgb,var(--bad,#b91c1c) 86%,var(--card-text))}
 .cal-events{display:flex;flex-direction:column;gap:calc(1 * var(--u));margin-top:calc(2 * var(--u))}
 .cal-ev{display:flex;align-items:center;gap:calc(5 * var(--u));font-size:calc(11 * var(--u));
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -656,9 +657,16 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .dcs-date{font-size:var(--fs-2xl);font-weight:600;line-height:1.2}
 .dcs-sub{font-size:var(--fs-sm);color:var(--panel-sub)}
 .dcs-chips{display:flex;flex-wrap:wrap;gap:6px}
-/* 宜 / 忌标签：语义色只做底色淡化，文字本身仍可读（颜色不单独承担信息） */
-.dt-tag.yi{background:color-mix(in srgb,var(--ok,#15803d) 14%,transparent);color:var(--ok,#15803d)}
-.dt-tag.ji{background:color-mix(in srgb,var(--bad,#b91c1c) 12%,transparent);color:var(--bad,#b91c1c)}
+/* 宜 / 忌 / 节气：底色与面板底色混合成不透明色，不再把半透明色叠在玻璃上；
+   文字再用同色与正文色混一档，经典 / 暗黑两套主题下都保持足够对比 */
+.dt-tag.yi{
+  background:color-mix(in srgb,var(--ok,#15803d) 15%,var(--panel-bg));
+  color:color-mix(in srgb,var(--ok,#15803d) 86%,var(--panel-text));
+  border-color:color-mix(in srgb,var(--ok,#15803d) 34%,transparent)}
+.dt-tag.ji{
+  background:color-mix(in srgb,var(--bad,#b91c1c) 14%,var(--panel-bg));
+  color:color-mix(in srgb,var(--bad,#b91c1c) 84%,var(--panel-text));
+  border-color:color-mix(in srgb,var(--bad,#b91c1c) 34%,transparent)}
 .dt-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:var(--fs-sm)}
 .dt-cal-wd{color:var(--panel-sub);padding:4px 0}
 .dt-cal-wd.end{color:var(--bad,#b91c1c)}
@@ -713,9 +721,19 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 /* 自定义倒数日编辑行：名称 / 日期 / 备注 + 删除 */
 .cd-edit{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .cd-edit .f-input{margin:0}
-/* 列表条目的来源标签：节日（橙）/ 自定义（灰） */
-.dt-tag{flex:0 0 auto;font-size:var(--fs-2xs);padding:2px 6px;border-radius:var(--r-xs);background:var(--line);color:var(--panel-sub)}
-.dt-tag.fest{background:color-mix(in srgb,var(--warn,#b45309) 16%,transparent);color:var(--warn,#b45309)}
+/* 列表条目的来源标签：节日（橙）/ 自定义（灰）；底色不透明，文字用混色保证对比 */
+.dt-tag{flex:0 0 auto;font-size:var(--fs-2xs);line-height:1.5;padding:2px 7px;border-radius:var(--r-xs);
+  background:color-mix(in srgb,var(--panel-text) 7%,var(--panel-bg));
+  color:color-mix(in srgb,var(--panel-text) 76%,var(--panel-bg));
+  border:1px solid color-mix(in srgb,var(--panel-text) 10%,transparent)}
+.dt-tag.fest{
+  background:color-mix(in srgb,var(--warn,#b45309) 17%,var(--panel-bg));
+  color:color-mix(in srgb,var(--warn,#b45309) 86%,var(--panel-text));
+  border-color:color-mix(in srgb,var(--warn,#b45309) 34%,transparent);
+  font-weight:600}
+/* 日历选中日：节气与宜忌是供阅读的标签，比列表来源标签再大一号 */
+.dt-cal-sel .dt-tag.fest{font-size:var(--fs-sm);padding:3px 8px}
+.dcs-chips .dt-tag{font-size:var(--fs-sm);line-height:1.6;padding:4px 10px;border-radius:var(--r-sm);font-weight:500}
 
 /* ---- 详情弹窗的信息层级：顶部两级切换 / 区块标题行 / 状态行 ---- */
 /* 标题与「概览 / 设置」切换同排：概览只读、设置才出表单，底部不再有职责模糊的「编辑配置」 */
@@ -734,6 +752,20 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .dt-sec-title{font-size:var(--fs-md);font-weight:600}
 .dt-sec-sub{font-size:var(--fs-xs);color:var(--panel-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dt-sec-act{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto}
+/* 天气刷新：加载中旋转、成功勾、失败叉；按钮宽度固定，切换状态时标题行不跳动 */
+.wx-refresh{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:82px;
+  transition:color .18s,border-color .18s,background-color .18s,transform .12s}
+.wx-refresh .wx-refresh-ico{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex:0 0 auto}
+.wx-refresh .wx-refresh-ico svg{width:14px;height:14px}
+.wx-refresh:active:not(:disabled){transform:translateY(1px) scale(.98)}
+.wx-refresh.is-loading{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 34%,transparent);
+  background:color-mix(in srgb,var(--accent) 9%,transparent);opacity:1;cursor:progress}
+.wx-refresh.is-loading .wx-refresh-ico{animation:wx-refresh-spin .9s linear infinite}
+.wx-refresh.is-done{color:var(--ok,#15803d);border-color:color-mix(in srgb,var(--ok,#15803d) 34%,transparent);
+  background:color-mix(in srgb,var(--ok,#15803d) 9%,transparent)}
+.wx-refresh.is-fail{color:var(--bad,#b91c1c);border-color:color-mix(in srgb,var(--bad,#b91c1c) 34%,transparent);
+  background:color-mix(in srgb,var(--bad,#b91c1c) 9%,transparent)}
+@keyframes wx-refresh-spin{to{transform:rotate(360deg)}}
 .dt-link{border:none;background:transparent;font:inherit;font-size:var(--fs-sm);color:var(--accent);cursor:pointer;padding:0}
 .dt-link:hover{text-decoration:underline}
 /* 行内小操作（设为主 / 删除 / 隐藏 / 农历）：常显，不靠悬停才发现 */
@@ -866,6 +898,7 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 @media (prefers-reduced-motion: reduce){
   .wx-glyph *,.wx-scene *{animation:none!important}
   .wx-scene-drop,.wx-scene-flake,.wx-scene-fog,.wx-scene-flash{display:none}
+  .wx-refresh.is-loading .wx-refresh-ico{animation:none!important}
 }
 .dt-empty-line{font-size:var(--fs-sm);color:var(--panel-sub);padding:6px 8px}
 /* 去掉列表内嵌滚动：展开全部时由面板统一滚动，避免双层滚动条 */
@@ -964,6 +997,20 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .modal .f-row{margin-bottom:10px}
 .modal .sec-title{margin:18px 0 8px}
 .modal .cats{margin:8px 0}
+/* 组件设置：统一成「分组 + 行分隔线」的节奏。文本框、开关、数字、颜色一律同一条底线，
+   组内末行去掉线，组与组之间留 16px——不再一半有横线、一半靠空白硬撑 */
+.modal .cfg-group{--cfg-line:color-mix(in srgb,var(--panel-text) 22%,transparent);margin-top:16px}
+.modal .cfg-form>.cfg-group:first-child{margin-top:4px}
+.modal .cfg-group .sec-title{margin:0 0 4px}
+.modal .cfg-group>.f-row,
+.modal .cfg-group>.switch-row,
+.modal .cfg-group>.num-row,
+.modal .cfg-group>.color-field{margin:0;padding:8px 0;border-bottom:1px solid var(--cfg-line)}
+.modal .cfg-group .num-grid .num-row,
+.modal .cfg-group .cfg-reset-cell{padding:8px 0;border-bottom-color:var(--cfg-line)}
+.modal .cfg-group>:last-child{border-bottom:0}
+.modal .cfg-group>.btn-row{margin-top:10px;padding-top:2px}
+.modal .cfg-adv-body.cfg-group{margin-top:0}
 .log-line{min-height:28px}
 .log-line.more{cursor:pointer}
 .log-head:hover,.log-line.more:hover{background:var(--menu-hover)}
