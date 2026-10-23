@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Thrilled",
-  "version": "5.25",
+  "version": "5.26",
   "description": "新标签页",
   "chrome_url_overrides": {
     "newtab": "index.html"
@@ -9,12 +9,22 @@
   "permissions": [
     "storage",
     "geolocation",
-    "bookmarks"
+    "bookmarks",
+    "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
     "https://*/*",
     "http://*/*"
   ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "wallpaper-referer",
+        "enabled": true,
+        "path": "rules/wallpaper-referer.json"
+      }
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },

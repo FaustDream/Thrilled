@@ -1438,6 +1438,11 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '5.26', d: '2026-10-23', items: [
+      { k: '优化', s: 'Wallpaper Gallery 的缩略图恢复显示', d: '站方图片 CDN 加了 Cloudflare 防盗链，只接受壁纸站点的 Referer；扩展里页面的默认 Referer 被拒（全部 403）。现在由扩展的 DNR 静态规则给该 CDN 补上站点 Referer，缩略图与原图都能正常加载。' },
+    ],
+  },
+  {
     v: '5.25', d: '2026-10-23', items: [
       { k: '调整', s: '组件设置去掉横线分隔', d: '不再给开关、数字、颜色行画底线；只保留「通用 / 专属 / 尺寸」的分组间距与行内边距。' },
     ],

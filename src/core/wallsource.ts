@@ -10,7 +10,9 @@
  * - picsum：picsum.photos v2 列表协议；原站无分类 → 单一「全部」
  * - bing：必应官方 HPImageArchive 接口 200 JSON，原图 1080p/UHD 与缩略图 CDN 均 200 可达；分类=每日精选，按天分页
  * - wg061129：Wallpaper Gallery（github.com/IT-NuanxinPro/wallpaper-gallery，MIT）公开数据目录 /data，
- *   分类与清单 JSON 经项目开源 codec 解码（blob 字段），图片 CDN img.061129.xyz 浏览器内核实测可达；分类保持原站结构
+ *   分类与清单 JSON 经项目开源 codec 解码（blob 字段）。图片 CDN img.061129.xyz 有 Cloudflare
+ *   防盗链：Referer 不是壁纸站点域一律 403（2026-10-23 实测，扩展页的默认 Referer 同样被拒），
+ *   由 rules/wallpaper-referer.json 的 DNR 规则补站点 Referer 后缩略图与原图均可取；分类保持原站结构
  * - 哲风壁纸（haowallpaper.com）：**经用户明确授权**的兼容实现——其请求/响应为 AES-128-CBC
  *   加密（key/iv 硬编码于站方公开前端 JS，对所有用户统一，无身份绑定与时效签名），按其公开传输
  *   协议复现；分类保持原站「壁纸类型」结构，支持关键词搜索；原图下载需登录站方账号，当前以

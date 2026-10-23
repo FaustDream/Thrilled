@@ -42,6 +42,7 @@ const buildBackground = async () => {
 const copyStatics = () => {
   cpSync(join(ROOT, 'manifest.json'), join(DIST, 'manifest.json'));
   cpSync(join(ROOT, 'icons'), join(DIST, 'icons'), { recursive: true });
+  cpSync(join(ROOT, 'rules'), join(DIST, 'rules'), { recursive: true });
 };
 
 /**
