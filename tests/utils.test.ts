@@ -3,7 +3,7 @@
  * + 月历网格（日历详情弹窗）+ 待办条目归一化（待办详情弹窗）
  */
 import { describe, expect, it } from 'vitest'
-import { addDays, daysUntil, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, pushHistory, startOfWeek } from '../src/core/utils'
+import { addDays, daysUntil, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, pushHistory, relTimeText, startOfWeek } from '../src/core/utils'
 
 const NOW = new Date(2026, 9, 10) // 2026-10-10
 
@@ -31,6 +31,23 @@ describe('daysUntil：距离目标日期还有几天', () => {
     expect(daysUntil('下个月', NOW)).toBeNull()
     expect(daysUntil('2026-13-01', NOW)).toBeNull()
     expect(daysUntil('2026-02-30', NOW)).toBeNull()
+  })
+})
+
+describe('relTimeText：天气详情的「x 分钟前更新」', () => {
+  const base = new Date(2026, 9, 10, 12, 0, 0)
+
+  it('不足一分钟（含未来时间戳与非法值）显示刚刚', () => {
+    expect(relTimeText(base.getTime() - 30_000, base)).toBe('刚刚')
+    expect(relTimeText(base.getTime() + 60_000, base)).toBe('刚刚')
+    expect(relTimeText(Number.NaN, base)).toBe('刚刚')
+  })
+
+  it('分钟 / 小时 / 天按整数档递进', () => {
+    expect(relTimeText(base.getTime() - 5 * 60_000, base)).toBe('5 分钟前')
+    expect(relTimeText(base.getTime() - 59 * 60_000, base)).toBe('59 分钟前')
+    expect(relTimeText(base.getTime() - 90 * 60_000, base)).toBe('1 小时前')
+    expect(relTimeText(base.getTime() - 26 * 3600_000, base)).toBe('1 天前')
   })
 })
 

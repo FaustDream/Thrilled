@@ -76,6 +76,21 @@ export function getGreetingByHour(hour: number): string {
   return period?.text ?? GREETING_NIGHT;
 }
 
+/**
+ * 相对时间文案（天气详情「x 分钟前更新」用）：不足 1 分钟 / 时间戳非法返回「刚刚」。
+ * 只给到分钟级——更细的秒数对「数据有多新」没有帮助。
+ */
+export function relTimeText(ts: number, now: Date = new Date()): string {
+  if (!Number.isFinite(ts)) return '刚刚';
+  const diff = now.getTime() - ts;
+  if (diff < 60_000) return '刚刚';
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
+}
+
 /* ===== 数值工具 ===== */
 
 /** 数值钳制 */

@@ -187,11 +187,12 @@ interface AppState {
   restoreBackup: () => boolean
   /**
    * 刷新天气：默认按设置里的定位方式（真实定位 / 手选城市）取数据。
-   * force = true 时跳过缓存并重新请求定位权限（用户点「允许定位」后走这里）。
+   * force = true 时跳过缓存并重新请求定位权限（用户点「允许定位」/「刷新」后走这里）；
+   * quiet = true 时失败不弹提示（自动刷新用，避免后台反复打扰）。
    */
-  loadWeather: (force?: boolean) => Promise<void>
-  /** 拉取「其他城市」清单的实况（各自带缓存；主定位不动） */
-  loadCityWeathers: () => Promise<void>
+  loadWeather: (force?: boolean, quiet?: boolean) => Promise<void>
+  /** 拉取「其他城市」清单的实况（各自带缓存；主定位不动；force 跳过缓存） */
+  loadCityWeathers: (force?: boolean) => Promise<void>
   /** 天气详情：添加一个其他城市（同名 / 同坐标去重，上限 8 个） */
   addWeatherCity: (city: CityPick) => void
   /** 天气详情：移除一个其他城市（下标对应 settings.weatherCities） */
@@ -795,23 +796,23 @@ export const useApp = create<AppState>()((set, get) => ({
     return true
   },
 
-  loadWeather: async (force = false) => {
+  loadWeather: async (force = false, quiet = false) => {
     /* 定位方式以设置为准：手选城市优先，否则走真实定位 */
-    const data = await getWeather(get().settings.weatherCity)
+    const data = await getWeather(get().settings.weatherCity, force)
     set({ weather: data, geoStatus: data === null ? 'denied' : 'ok' })
-    if (force && data === null) set({ toast: '未获得定位权限：请在浏览器允许定位，或在天气卡配置里手选城市' })
+    if (force && !quiet && data === null) set({ toast: '未获得定位权限：请在浏览器允许定位，或在天气卡配置里手选城市' })
     /* 其他城市的实况顺带刷新（各自有 30min 缓存，重复调用开销可忽略） */
-    void get().loadCityWeathers()
+    void get().loadCityWeathers(force)
   },
 
-  loadCityWeathers: async () => {
+  loadCityWeathers: async (force = false) => {
     const cities = get().settings.weatherCities
     if (cities.length === 0) {
       if (Object.keys(get().cityWeathers).length > 0) set({ cityWeathers: {} })
       return
     }
     const rows = await Promise.all(cities.map(async (ct) => {
-      const w = await getCityWeather(ct)
+      const w = await getCityWeather(ct, force)
       return [cityKeyOf(ct), ...(w === null ? [] : [w])] as const
     }))
     /* 失败的城市不出现在结果里（列表行显示「暂无数据」而不是拿旧值冒充） */

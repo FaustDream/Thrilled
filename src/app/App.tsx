@@ -437,6 +437,14 @@ export const App = () => {
     if (!useApp.getState().welcomed) markWelcomed()
   }, [])
 
+  /* ---------- 天气自动刷新：按设置间隔静默取新数据（0 = 关闭；force 跳过 30min 缓存） ---------- */
+  useEffect(() => {
+    const minutes = settings.weatherEvery
+    if (minutes <= 0) return
+    const timer = window.setInterval(() => { void useApp.getState().loadWeather(true, true) }, minutes * 60_000)
+    return () => window.clearInterval(timer)
+  }, [settings.weatherEvery])
+
   /* ---------- 主题令牌 → CSS 变量（皮肤 / 透明度 / 玻璃质感 / 壁纸 / 搜索框） ---------- */
   useEffect(() => {
     const rt = document.documentElement.style

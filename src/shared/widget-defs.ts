@@ -13,12 +13,13 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     t: 'clock', n: '时钟', g: '钟', c: '#3B82F6', s: '大号数字时间，可切换 12/24 小时', units: { w: 4, h: 4 },
     /* 44px 的「13:07」约 105px 宽：宽 2 格（98px）会把时间裁掉，故宽度下限 4 格 */
     min: { w: 4, h: 2 },
+    /* 专属字段守 ≤3：问候语开关作为第 4 项由详情设置页单独渲染（见 app/panels 的显示问候语行） */
     fields: [
       { k: 'timeMode', l: '时间显示', t: 'sel', o: ['24 小时', '12 小时', '隐藏'] },
       { k: 'showDate', l: '显示日期', t: 'bool' },
       { k: 'showSeconds', l: '显示秒数', t: 'bool' },
     ],
-    def: { timeMode: '24 小时', showDate: true, showSeconds: false },
+    def: { timeMode: '24 小时', showDate: true, showGreeting: true, showSeconds: false },
   },
   cal: {
     t: 'cal', n: '日历', g: '历', c: '#0EA5E9', s: '阳历农历 + 节日宜忌 + 日程', units: { w: 4, h: 4 }, min: { w: 4, h: 2 },
@@ -59,7 +60,7 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     /* 旧键（mode / mascotEmoji）仍在读取时兼容：mode 会被转成 modes，见 core/countdown 的 normModes */
     def: {
       modes: ['下班倒计时'], rotate: true, at: '18:00', date: '2027-01-01', annDate: '2020-05-20',
-      title: '与MiNa相识', unitLabel: '天', showFestivals: true,
+      title: '与MiNa相识', unitLabel: '天', showFestivals: true, hiddenFestivals: [],
     },
   },
   fav: {

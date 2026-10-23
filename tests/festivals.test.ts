@@ -79,4 +79,21 @@ describe('upcomingRows：合并与排序', () => {
     const rows = userRows([{ name: '旧事', date: '2026-10-01' }], NOW)
     expect(rows[0]?.days).toBe(-9)
   })
+
+  it('隐藏指定节日后不再出现在列表里，其余节日照常', () => {
+    const all = upcomingRows([], true, NOW)
+    const rows = upcomingRows([], true, NOW, ['国庆', '中秋'])
+    expect(all.some((r) => r.name === '国庆')).toBe(true)
+    expect(rows.some((r) => r.name === '国庆')).toBe(false)
+    expect(rows.some((r) => r.name === '中秋')).toBe(false)
+    expect(rows.some((r) => r.name === '元旦')).toBe(true)
+  })
+
+  it('自定义行带回 config.entries 下标（详情行内编辑定位用）', () => {
+    const rows = upcomingRows([
+      { name: 'A', date: '2026-10-20' },
+      { name: 'B', date: '2026-11-01' },
+    ], false, NOW)
+    expect(rows.map((r) => r.entryIndex)).toEqual([0, 1])
+  })
 })

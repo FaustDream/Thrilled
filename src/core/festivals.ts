@@ -116,6 +116,8 @@ export interface CountdownRow {
   lunarLabel?: string;
   progress: number | null;
   festival: boolean;
+  /** 自定义条目在 config.entries 里的下标（详情弹窗行内编辑用；节日行没有该字段） */
+  entryIndex?: number;
 }
 
 /** 阳历节日第 y 年的日期（补零） */
@@ -158,10 +160,14 @@ function nextOccurrence(f: FestivalDef, now: Date): { date: string; prev: string
   return null;
 }
 
-/** 节日倒数行（含进度：以上一次发生到下一次发生的总天数为分母） */
-export function festivalRows(now: Date): CountdownRow[] {
+/**
+ * 节日倒数行（含进度：以上一次发生到下一次发生的总天数为分母）。
+ * hidden 为用户在详情里单独隐藏的节日名（只影响展示，不影响节日库本身）。
+ */
+export function festivalRows(now: Date, hidden: readonly string[] = []): CountdownRow[] {
   const rows: CountdownRow[] = [];
   for (const f of FESTIVALS) {
+    if (hidden.includes(f.name)) continue;
     const occ = nextOccurrence(f, now);
     if (occ === null) continue;
     const days = daysUntil(occ.date, now);
@@ -181,7 +187,7 @@ export function festivalRows(now: Date): CountdownRow[] {
 
 /** 用户自定义倒数行（created 提供时给进度：自创建到目标日的已流逝比例） */
 export function userRows(entries: readonly CountdownEntry[], now: Date): CountdownRow[] {
-  return entries.map((e) => {
+  return entries.map((e, entryIndex) => {
     /* 农历条目每年按农历重算日期（不能用存下来的阳历日期跨年） */
     const date = e.lunar !== undefined ? (nextLunarDate(e.lunar, now) ?? e.date) : e.date;
     const days = daysUntil(date, now);
@@ -200,6 +206,7 @@ export function userRows(entries: readonly CountdownEntry[], now: Date): Countdo
       ...(e.lunar !== undefined ? { lunarLabel: lunarLabel(e.lunar) } : {}),
       progress,
       festival: false,
+      entryIndex,
     };
   });
 }
@@ -209,7 +216,8 @@ export function upcomingRows(
   entries: readonly CountdownEntry[],
   showFestivals: boolean,
   now: Date,
+  hiddenFestivals: readonly string[] = [],
 ): CountdownRow[] {
-  const rows = [...(showFestivals ? festivalRows(now) : []), ...userRows(entries, now)];
+  const rows = [...(showFestivals ? festivalRows(now, hiddenFestivals) : []), ...userRows(entries, now)];
   return rows.sort((a, b) => a.days - b.days);
 }

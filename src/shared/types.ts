@@ -282,6 +282,8 @@ export interface AppSettings {
   weatherCity: CityPick | null;
   /** 天气详情里的「其他城市」清单（每行显示当地实况；主定位仍是 weatherCity） */
   weatherCities: CityPick[];
+  /** 天气自动刷新间隔（分钟，0 = 不自动刷新；天气组件共用） */
+  weatherEvery: number;
 }
 
 /** 组件尺寸（网格单位数，取值见 shared/grid 的 SIZES 六档） */

@@ -132,7 +132,7 @@ const CountdownCard = ({ item, c, now }: { item: GridItem; c: Record<string, unk
   const mode = rotating ? rotateMode(modes, tick) : (modes[0] ?? '下班倒计时')
   const r = readoutOf(mode, c, now, str)
   const rows = item.h >= 4
-    ? upcomingRows(normCountdownEntries(c['entries']), bool(c['showFestivals']), now).slice(0, 4)
+    ? upcomingRows(normCountdownEntries(c['entries']), bool(c['showFestivals']), now, list(c['hiddenFestivals'])).slice(0, 4)
     : []
   return (
     <div className={`w-cd${r.timer ? '' : ' day'}`} style={{ position: 'absolute', inset: 0 }}>

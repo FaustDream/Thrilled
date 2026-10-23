@@ -656,19 +656,17 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .dt-cal-cell.fest:not(.today) .dt-cal-d{text-decoration:underline dotted}
 .dt-cal-d{font-size:var(--fs-sm);font-weight:600}
 .dt-cal-l{font-size:var(--fs-2xs);opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-/* 有日程的日子：右下角一个小圆点（今日格子里用白点，保持对比） */
-.dt-cal-dot{position:absolute;right:4px;bottom:3px;width:4px;height:4px;border-radius:50%;
-  background:var(--accent)}
-.dt-cal-cell.today .dt-cal-dot{background:#fff}
+/* 有日程的日子：右下角数量角标（今日格子里反白，保持对比） */
+.dt-cal-badge{position:absolute;right:3px;bottom:2px;min-width:12px;height:12px;padding:0 3px;
+  border-radius:var(--r-pill);background:var(--accent);color:#fff;font-size:9px;line-height:12px;
+  font-style:normal;font-weight:600;text-align:center}
+.dt-cal-cell.today .dt-cal-badge{background:#fff;color:var(--accent)}
 /* 农历条目编辑：月 / 日两个小输入框 */
 .cd-edit-lunar{display:flex;align-items:center;gap:3px;flex:1.1;font-size:var(--fs-sm);color:var(--panel-sub)}
 .cd-num{width:48px!important;padding:4px 6px!important}
 .dt-list{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
 .dt-row{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:var(--r-md);cursor:pointer}
 .dt-row:hover{background:var(--line)}
-/* 其他城市行：整行可点（设为主定位），删除键与待办行同一套悬停显现 */
-.dt-row.city .dt-row-del{opacity:0}
-.dt-row.city:hover .dt-row-del{opacity:1}
 .dt-ico{width:30px;height:30px;border-radius:var(--r-md);flex:0 0 auto}
 .dt-name{font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dt-host{margin-left:auto;font-size:var(--fs-xs);color:var(--panel-sub);flex:0 0 auto}
@@ -680,9 +678,6 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .row-kind{flex:0 0 auto;font-size:var(--fs-2xs);line-height:16px;padding:0 6px;border-radius:var(--r-xs);
   background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent);font-weight:500}
 .row-kind.alt{background:var(--line);color:var(--panel-sub);font-weight:400}
-/* 小节标题：与上文统一留 12px（原先 10px 内联值散落各处）；弹窗说明行紧跟着的标题不再叠加空白 */
-.dt-todo-head{font-size:var(--fs-md);font-weight:600;margin:12px 0 6px}
-.modal p.sub+.dt-todo-head{margin-top:2px}
 .dt-todo-row{display:flex;align-items:center;gap:10px;padding:5px 8px;border-radius:var(--r-md)}
 .dt-todo-row input[type='checkbox']{accent-color:var(--accent)}
 .dt-todo-txt{font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -697,6 +692,74 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 /* 列表条目的来源标签：节日（橙）/ 自定义（灰） */
 .dt-tag{flex:0 0 auto;font-size:var(--fs-2xs);padding:2px 6px;border-radius:var(--r-xs);background:var(--line);color:var(--panel-sub)}
 .dt-tag.fest{background:color-mix(in srgb,var(--warn,#b45309) 16%,transparent);color:var(--warn,#b45309)}
+
+/* ---- 详情弹窗的信息层级：顶部两级切换 / 区块标题行 / 状态行 ---- */
+/* 标题与「概览 / 设置」切换同排：概览只读、设置才出表单，底部不再有职责模糊的「编辑配置」 */
+.dt-head{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.dt-head h2{margin:0}
+.dt-seg{display:flex;gap:2px;margin-left:auto;padding:3px;border-radius:var(--r-pill);background:var(--line)}
+.dt-seg button{border:none;background:transparent;font:inherit;font-size:var(--fs-sm);color:var(--panel-sub);
+  padding:4px 14px;border-radius:var(--r-pill);cursor:pointer;transition:background .14s,color .14s}
+.dt-seg button.on{background:var(--panel-bg);color:var(--panel-text);font-weight:600;
+  box-shadow:0 1px 3px rgba(15,23,42,.12)}
+/* 区块标题行：主操作钉在右侧，长内容滚动时也不会把按钮带走 */
+.dt-sec-head{display:flex;align-items:center;gap:8px;margin:16px 0 8px;min-height:28px}
+.dt-sec-title{font-size:var(--fs-md);font-weight:600}
+.dt-sec-sub{font-size:var(--fs-xs);color:var(--panel-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dt-sec-act{margin-left:auto;display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.dt-link{border:none;background:transparent;font:inherit;font-size:var(--fs-sm);color:var(--accent);cursor:pointer;padding:0}
+.dt-link:hover{text-decoration:underline}
+/* 行内小操作（设为主 / 删除 / 隐藏 / 农历）：常显，不靠悬停才发现 */
+.dt-mini{border:1px solid var(--line);background:transparent;font:inherit;font-size:var(--fs-xs);
+  color:var(--panel-sub);padding:2px 8px;border-radius:var(--r-sm);cursor:pointer;flex:0 0 auto;white-space:nowrap}
+.dt-mini:hover{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 40%,transparent)}
+.dt-mini:disabled{opacity:.6;cursor:default;color:var(--accent);border-color:color-mix(in srgb,var(--accent) 30%,transparent)}
+.dt-mini.danger:hover{color:var(--bad,#b91c1c);border-color:color-mix(in srgb,var(--bad,#b91c1c) 40%,transparent)}
+.dt-city-act{display:flex;gap:4px;flex:0 0 auto;margin-left:2px}
+/* 状态行：来源 / 刷新间隔 / 定位入口（已授权时不再出现「允许定位」按钮） */
+.dt-stat{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:14px;
+  font-size:var(--fs-xs);color:var(--panel-sub)}
+.dt-empty{display:flex;align-items:center;gap:12px;padding:14px 0;font-size:var(--fs-md);color:var(--panel-sub)}
+.dt-empty-line{font-size:var(--fs-sm);color:var(--panel-sub);padding:6px 8px}
+/* 去掉列表内嵌滚动：展开全部时由面板统一滚动，避免双层滚动条 */
+.dt-list.flat{max-height:none;overflow:visible}
+.dt-more{border:none;background:transparent;font:inherit;font-size:var(--fs-sm);color:var(--accent);
+  cursor:pointer;padding:6px 8px;border-radius:var(--r-sm)}
+.dt-more:hover{background:var(--menu-hover)}
+/* 添加日程：目标日期贴在输入框左侧，先看清「加到哪天」再输入 */
+.dt-add-line{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.dt-add-date{flex:0 0 auto;font-size:var(--fs-sm);font-weight:600;color:var(--accent);
+  background:color-mix(in srgb,var(--accent) 10%,transparent);padding:4px 8px;border-radius:var(--r-sm)}
+.dt-inline{flex:1;min-width:0;height:30px;padding:0 8px;font-size:var(--fs-md)}
+/* 行尾操作常显（编辑 / 删除原先只在悬停时出现，触屏或快速点击根本找不到） */
+.dt-row-del.always{opacity:1}
+.dt-row-del + .dt-row-del{margin-left:0}
+/* 天气：7 天预报一行排开（窄屏按可用宽度自然压缩） */
+.dt-days.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.dt-days.week .dt-day{padding:8px 2px;min-width:0}
+.dt-days.week .dt-day span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dt-almanac-btn{margin-left:auto;font-size:var(--fs-xs)}
+/* 倒计时：主模式大卡 + 其余模式并列小卡（点一下切换，不用等轮播） */
+.dt-modes{display:flex;gap:6px;margin:12px 0 2px;flex-wrap:wrap}
+.dt-mode{flex:1 1 0;min-width:96px;display:flex;flex-direction:column;align-items:center;gap:2px;
+  border:1px solid var(--line);background:transparent;border-radius:var(--r-md);padding:8px 6px;
+  cursor:pointer;font:inherit;font-size:var(--fs-xs);color:var(--panel-sub)}
+.dt-mode b{font-size:var(--fs-lg);color:var(--panel-text);font-variant-numeric:tabular-nums}
+.dt-mode.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.dt-mode.on b{color:var(--accent)}
+/* 自定义倒数行：名称 / 日期（或农历月日）/ 切换 / 删除同一行 */
+.cd-name{flex:1.2;min-width:0}
+.cd-date{flex:1;min-width:0}
+/* 说明折叠「?」：低频帮助文案默认只占一个 20px 圆点 */
+.dt-help{position:relative;flex:0 0 auto}
+.dt-help summary{list-style:none;width:20px;height:20px;border-radius:50%;border:1px solid var(--line);
+  display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);color:var(--panel-sub);
+  cursor:pointer;user-select:none}
+.dt-help summary::-webkit-details-marker{display:none}
+.dt-help summary:hover{color:var(--accent);border-color:var(--accent)}
+.dt-help-body{position:absolute;right:0;top:26px;z-index:2;width:260px;padding:10px 12px;
+  border-radius:var(--r-md);background:var(--panel-bg);border:1px solid var(--line);
+  box-shadow:0 10px 28px rgba(6,10,18,.18);font-size:var(--fs-xs);line-height:1.7;color:var(--panel-sub)}
 .cat{font-size:var(--fs-sm);padding:5px 10px;border-radius:var(--r-sm);background:var(--line);color:var(--panel-sub);cursor:pointer}
 .cat.active{background:var(--accent);color:#fff}
 .eng-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);font-size:var(--fs-md)}

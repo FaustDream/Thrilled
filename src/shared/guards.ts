@@ -231,6 +231,7 @@ export const normalizeSettings = (v: unknown): AppSettings => {
     styleDefaults: normStyleDefaults(o['styleDefaults']),
     weatherCity: normCityPick(o['weatherCity']),
     weatherCities: normCityPickList(o['weatherCities']),
+    weatherEvery: numish(o['weatherEvery'], d.weatherEvery, 0, 240),
   };
 };
 

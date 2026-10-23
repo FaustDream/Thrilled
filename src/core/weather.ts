@@ -156,10 +156,10 @@ const cityCacheKey = (c: CityPick): string => `${WEATHER_CACHE_KEY}:city:${cityK
  * 取单个城市的天气（天气详情的「其他城市」）：带 30min TTL 的独立缓存。
  * 请求失败返回 null（列表行显示占位），不影响主定位的天气。
  */
-export async function getCityWeather(city: CityPick): Promise<WeatherData | null> {
+export async function getCityWeather(city: CityPick, force = false): Promise<WeatherData | null> {
   const key = cityCacheKey(city);
   const cached = kvGet<WeatherData | null>(key, null);
-  if (cached !== null && Date.now() - cached.ts < WEATHER_CACHE_TTL_MS) return cached;
+  if (!force && cached !== null && Date.now() - cached.ts < WEATHER_CACHE_TTL_MS) return cached;
   try {
     const data = await fetchWeather(city.lat, city.lon);
     const out: WeatherData = { ...data, place: city.name, source: 'city', geo: 'ok' };
@@ -186,7 +186,7 @@ async function fetchWeather(lat: number, lon: number): Promise<WeatherData> {
     lat +
     '&longitude=' +
     lon +
-    '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=3';
+    '&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=7';
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -235,12 +235,13 @@ async function finish(
 /**
  * 获取天气。
  * @param city 用户手选城市（null = 用真实定位）
+ * @param force 跳过 30min 缓存（用户主动刷新 / 自动刷新按间隔取新数据时用）
  * @returns 天气数据；定位被拒绝 / 不可用且没有手选城市时返回 null（界面据此提示允许定位）
  */
-export async function getWeather(city: CityPick | null = null): Promise<WeatherData | null> {
+export async function getWeather(city: CityPick | null = null, force = false): Promise<WeatherData | null> {
   const cached = kvGet<WeatherData | null>(WEATHER_CACHE_KEY, null);
   if (city !== null) {
-    if (isCacheValid(cached, city.lat, city.lon, 'city')) return cached;
+    if (!force && isCacheValid(cached, city.lat, city.lon, 'city')) return cached;
     try {
       const data = await fetchWeather(city.lat, city.lon);
       return await finish(data, 'city', 'ok', city.name);
@@ -255,7 +256,7 @@ export async function getWeather(city: CityPick | null = null): Promise<WeatherD
     warn(MODULE, `定位不可用（${loc.status}）`);
     return null;
   }
-  if (isCacheValid(cached, loc.lat, loc.lon, 'geo')) return cached;
+  if (!force && isCacheValid(cached, loc.lat, loc.lon, 'geo')) return cached;
   try {
     const data = await fetchWeather(loc.lat, loc.lon);
     const out = await finish(data, 'geo', 'ok');

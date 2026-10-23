@@ -125,6 +125,14 @@ describe('设置归一化（normalizeSettings）', () => {
     expect(normalizeSettings({}).dockIconSize).toBe(DEFAULT_SETTINGS.dockIconSize)
     expect(normalizeSettings(null).dockIconSize).toBe(DEFAULT_SETTINGS.dockIconSize)
   })
+
+  it('天气自动刷新间隔：0–240 分钟，旧文档缺该键回退出厂 30 分钟', () => {
+    expect(normalizeSettings({ weatherEvery: 0 }).weatherEvery).toBe(0)
+    expect(normalizeSettings({ weatherEvery: 60 }).weatherEvery).toBe(60)
+    expect(normalizeSettings({ weatherEvery: 999 }).weatherEvery).toBe(240)
+    expect(normalizeSettings({ weatherEvery: 'often' }).weatherEvery).toBe(DEFAULT_SETTINGS.weatherEvery)
+    expect(normalizeSettings({}).weatherEvery).toBe(DEFAULT_SETTINGS.weatherEvery)
+  })
 })
 
 describe('引擎与皮肤归一化', () => {

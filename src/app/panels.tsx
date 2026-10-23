@@ -20,18 +20,18 @@ import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
-import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, startOfWeek, type TodoEntry } from '../core/utils'
+import { addDays, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, relTimeText, startOfWeek, type TodoEntry } from '../core/utils'
 import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
-import { cityKeyOf, searchCities, weatherText, type GeoHit } from '../core/weather'
+import { cityKeyOf, searchCities, weatherText, type GeoHit, type WeatherData } from '../core/weather'
 import { dayKey, normScheduleEvents, upcomingEvents, type ScheduleEvent } from '../core/schedule'
 import { almanacOf, festivalsOf, solarToLunar } from '../core/lunar'
-import { normModes } from '../core/countdown'
+import { normModes, readoutOf, type CountdownMode } from '../core/countdown'
 import { openLink } from '../core/link-opener'
 import { resetAllData } from '../core/reset'
 import { saveDoc } from '../core/storage'
 import { SHORTCUT_DEFS, comboOf, formatCombo } from '../shared/shortcuts'
-import type { BlurKey, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
+import type { BlurKey, CityPick, GlassKey, GridItem, WidgetField, WidgetKind } from '../shared/types'
 
 const DRAWERS: Record<DrawerKey, readonly [string, string]> = {
   /* 添加抽屉不带副标题（标题已说明用途，减少顶部行数——用户反馈） */
@@ -1436,6 +1436,16 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '5.22', d: '2026-10-23', items: [
+      { k: '优化', s: '小组件详情改为「概览 / 设置」两级', d: '概览只保留核心信息与高频操作，低频配置收进「设置」；去掉职责模糊的「编辑配置」按钮，面板高度大幅缩短。' },
+      { k: '优化', s: '天气详情：一个搜索框、7 天预报、状态驱动的定位入口', d: '搜索结果行直接选「设为主定位 / 加入列表」，城市行常显「设为主 / 删除」；已授权定位时不再出现「允许定位」；预报扩到 7 天，刷新按钮旁显示「x 分钟前更新」。' },
+      { k: '新增', s: '天气支持按间隔自动刷新', d: '设置里可选关闭 / 15 / 30 / 60 分钟，自动刷新静默执行，不弹提示。' },
+      { k: '优化', s: '日历详情：日程数量角标与行内编辑', d: '月格子直接显示当天日程条数；日程可勾选、改名、删除，输入框左侧标出目标日期；宜忌收进日期行的可展开区。' },
+      { k: '优化', s: '倒计时详情：模式并列切换、配置按模式显隐', d: '主读数旁并列显示已启用模式，点一下切换；下班时刻 / 目标日期等字段只在该模式勾选时出现，「多模式轮播」仅在多选时显示；倒数列表默认 5 条、可展开，自定义行内改名改日期，节日可单独隐藏。' },
+      { k: '新增', s: '时钟日期与问候语拆成两个开关', d: '想只留「10月23日 星期五」或只留问候语都可以。' },
+    ],
+  },
+  {
     v: '5.21', d: '2026-10-22', items: [
       { k: '优化', s: '只有 http 的老站点也能取到 favicon', d: '首页与常见图标路径原先只探 https，证书或连接失败就直接放弃；现在先 https、失败再回退 http，并跟随重定向改用最终域名。' },
       { k: '新增', s: 'favicon 探测新增 favicon.svg', d: '常见路径补上 /favicon.svg，现代站点直接提供的矢量图标也能取到。' },
@@ -1753,16 +1763,115 @@ export const Drawer = memo(function Drawer() {
 
 /* ============================== 弹窗 ============================== */
 
-const EditCardModal = ({ item }: { item: GridItem }) => {
+/* ============================== 配置表单（编辑弹窗与详情「设置」页共用） ============================== */
+
+/** 天气自动刷新间隔候选（分钟）：0 = 关闭，与数据源 30min 缓存对齐 */
+const WEATHER_EVERY = [0, 15, 30, 60] as const
+
+/** 天气专属：自动刷新间隔（存设置，天气组件共用） */
+const WeatherEveryRow = () => {
+  const setSetting = useApp((s) => s.setSetting)
+  const every = useApp((s) => s.settings.weatherEvery)
+  return (
+    <div className="f-row"><label className="f-label">自动刷新间隔</label>
+      <div className="cats">{WEATHER_EVERY.map((m) => (
+        <div key={m} className={`cat${every === m ? ' active' : ''}`}
+          onClick={() => setSetting('weatherEvery', m)}>{m === 0 ? '关闭' : `${m} 分钟`}</div>
+      ))}</div>
+    </div>
+  )
+}
+
+/** 通用段：名称与实例透明度 */
+const GeneralSection = ({ item }: { item: GridItem }) => {
   const updateConfig = useApp((s) => s.updateConfig)
-  const resize = useApp((s) => s.resize)
-  const setModal = useApp((s) => s.setModal)
-  const showToast = useApp((s) => s.showToast)
+  const c = { ...WIDGET_DEFS[item.t].def, ...item.config }
+  return (
+    <>
+      <div className="sec-title">通用</div>
+      <div className="f-row"><label className="f-label">名称</label>
+        <input className="f-input" value={String(c['label'] ?? '')} placeholder="网址图标用作站点名；文件夹卡显示为卡内名称"
+          onChange={(e) => updateConfig(item.id, { label: e.target.value })} /></div>
+      <SwitchRow l="透明度跟随全局" d="关掉后可单独设置这张卡片的透明度" on={typeof c['opacity'] !== 'number'}
+        onToggle={() => updateConfig(item.id, { opacity: typeof c['opacity'] === 'number' ? null : 0.6 })} />
+      {typeof c['opacity'] === 'number' && (
+        <NumberRow l="单独透明度" min={0} max={100} value={Math.round(Number(c['opacity']) * 100)}
+          unit="%" onInput={(v) => updateConfig(item.id, { opacity: v / 100 })} />
+      )}
+    </>
+  )
+}
+
+/** 样式段：实例级排版变量（不写入定义表，故专属项仍守 ≤3 的上限） */
+const StyleSection = ({ item }: { item: GridItem }) => {
+  const updateConfig = useApp((s) => s.updateConfig)
   const applyStyle = useApp((s) => s.applyStyle)
   const saveStyleDefault = useApp((s) => s.saveStyleDefault)
   const clearStyleDefault = useApp((s) => s.clearStyleDefault)
   const applyStyleToKind = useApp((s) => s.applyStyleToKind)
   const styleDefault = useApp((s) => s.settings.styleDefaults[item.t])
+  const c = { ...WIDGET_DEFS[item.t].def, ...item.config }
+  return (
+    <>
+      <div className="sec-title">样式</div>
+      <NumberRow l="字号缩放" min={60} max={160} value={Math.round(num(c['fontScale'], 1) * 100)}
+        unit="%" onInput={(v) => updateConfig(item.id, { fontScale: v / 100 })} />
+      <NumberRow l="图标缩放" min={60} max={160} value={Math.round(num(c['iconScale'], 1) * 100)}
+        unit="%" onInput={(v) => updateConfig(item.id, { iconScale: v / 100 })} />
+      <NumberRow l="卡片圆角" min={0} max={28} value={Math.round(num(c['radius'], 16))}
+        unit="px" onInput={(v) => updateConfig(item.id, { radius: v })} />
+      <ColorField label="文字颜色" auto="跟随风格"
+        value={/^#[0-9a-f]{6}$/i.test(String(c['textColor'] ?? '')) ? String(c['textColor']) : '#1f2937'}
+        onAuto={() => updateConfig(item.id, { textColor: '' })} onChange={(x) => updateConfig(item.id, { textColor: x })} />
+      {/* 一键预设 + 默认样式：预设先清空四个样式键再写入，避免上一份残留 */}
+      <div className="btn-row">
+        {STYLE_PRESETS.map(([label, patch]) => (
+          <button key={label} className="btn sm ghost" onClick={() => applyStyle(item.id, patch)}>{label}</button>
+        ))}
+      </div>
+      <div className="btn-row">
+        <button className="btn sm ghost" onClick={() => saveStyleDefault(item.id)}>设为该组件默认</button>
+        {styleDefault !== undefined && !isBlankStyle(styleDefault) && (
+          <button className="btn sm ghost" onClick={() => clearStyleDefault(item.t)}>取消默认</button>
+        )}
+        <button className="btn sm ghost" onClick={() => applyStyleToKind(item.id)}>复制到同类卡片</button>
+      </div>
+    </>
+  )
+}
+
+/** 尺寸段：六档，超出内容能力的档位禁用 */
+const SizeSection = ({ item }: { item: GridItem }) => {
+  const resize = useApp((s) => s.resize)
+  const def = WIDGET_DEFS[item.t]
+  return (
+    <>
+      <div className="sec-title">尺寸</div>
+      <div className="f-row"><label className="f-label">尺寸</label>
+        <div className="cats">{SIZES.map((sz) => {
+          const ok = sizeAllowedFor(item.t, item.config, sz.w, sz.h)
+          const lo = minSizeOf(item.t)
+          return (
+            <div key={`${sz.w}x${sz.h}`}
+              className={`cat${item.w === sz.w && item.h === sz.h ? ' active' : ''}${ok ? '' : ' dis'}`}
+              title={ok
+                ? `${item.w === sz.w && item.h === sz.h ? '当前尺寸 · ' : ''}点选切换`
+                : `「${def.n}」最小 ${lo.w}×${lo.h}${sizeAllowed(item.t, sz.w, sz.h) ? '，当前内容在此档需滚动浏览' : '，此档显示不下'}`}
+              onClick={() => { if (ok) resize(item.id, sz.w, sz.h) }}>{sz.w}×{sz.h}</div>
+          )
+        })}</div>
+      </div>
+      <Hint>
+        尺寸能力 {minSizeOf(item.t).w}×{minSizeOf(item.t).h} – {maxSizeOf(item.t).w}×{maxSizeOf(item.t).h}，
+        内容按当前尺寸等比缩放（自然尺寸 {def.units.w}×{def.units.h} 下与设计稿一致）。
+      </Hint>
+    </>
+  )
+}
+
+/** 专属段：按定义表渲染（多选至少保留一项）；天气另带自动刷新间隔 */
+const KindSection = ({ item }: { item: GridItem }) => {
+  const updateConfig = useApp((s) => s.updateConfig)
   const def = WIDGET_DEFS[item.t]
   const c = { ...def.def, ...item.config }
   const field = (f: WidgetField) => {
@@ -1816,66 +1925,37 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
   }
   return (
     <>
+      {def.fields.length > 0 && <div className="sec-title">专属</div>}
+      {item.t === 'countdown' ? <CountdownSettings item={item} /> : def.fields.map(field)}
+      {item.t === 'clock' && (
+        <SwitchRow l="显示问候语" d="日期行右下再显示「上午好 / 晚上好」"
+          on={bool(c['showGreeting'])} onToggle={() => updateConfig(item.id, { showGreeting: !bool(c['showGreeting']) })} />
+      )}
+      {item.t === 'weather' && <WeatherEveryRow />}
+    </>
+  )
+}
+
+/** 配置表单：通用 → 专属 → 样式 → 尺寸 */
+const CardConfigBody = ({ item }: { item: GridItem }) => (
+  <>
+    <GeneralSection item={item} />
+    <KindSection item={item} />
+    <StyleSection item={item} />
+    <SizeSection item={item} />
+  </>
+)
+
+/** 独立配置弹窗（卡片悬浮「编辑」进入）：标题 + 表单 + 关闭 */
+const EditCardModal = ({ item }: { item: GridItem }) => {
+  const setModal = useApp((s) => s.setModal)
+  const showToast = useApp((s) => s.showToast)
+  const def = WIDGET_DEFS[item.t]
+  return (
+    <>
       <h2>配置 · {def.n}</h2>
       <p className="sub">这张卡片是「{def.n}」组件的实例：位置与尺寸属于布局，下面的字段只改本实例的内容。</p>
-      <div className="sec-title">通用</div>
-      <div className="f-row"><label className="f-label">名称</label>
-        <input className="f-input" value={String(c['label'] ?? '')} placeholder="网址图标用作站点名；文件夹卡显示为卡内名称"
-          onChange={(e) => updateConfig(item.id, { label: e.target.value })} /></div>
-      <SwitchRow l="透明度跟随全局" d="关掉后可单独设置这张卡片的透明度" on={typeof c['opacity'] !== 'number'}
-        onToggle={() => updateConfig(item.id, { opacity: typeof c['opacity'] === 'number' ? null : 0.6 })} />
-      {typeof c['opacity'] === 'number' && (
-        <NumberRow l="单独透明度" min={0} max={100} value={Math.round(Number(c['opacity']) * 100)}
-          unit="%"
-          onInput={(v) => updateConfig(item.id, { opacity: v / 100 })} />
-      )}
-      {/* 样式：所有组件共用的一套实例级排版变量（不写入定义表，故专属项仍守 ≤3 的上限） */}
-      <div className="sec-title">样式</div>
-      <NumberRow l="字号缩放" min={60} max={160} value={Math.round(num(c['fontScale'], 1) * 100)}
-        unit="%"
-        onInput={(v) => updateConfig(item.id, { fontScale: v / 100 })} />
-      <NumberRow l="图标缩放" min={60} max={160} value={Math.round(num(c['iconScale'], 1) * 100)}
-        unit="%"
-        onInput={(v) => updateConfig(item.id, { iconScale: v / 100 })} />
-      <NumberRow l="卡片圆角" min={0} max={28} value={Math.round(num(c['radius'], 16))}
-        unit="px"
-        onInput={(v) => updateConfig(item.id, { radius: v })} />
-      <ColorField label="文字颜色" auto="跟随风格"
-        value={/^#[0-9a-f]{6}$/i.test(String(c['textColor'] ?? '')) ? String(c['textColor']) : '#1f2937'}
-        onAuto={() => updateConfig(item.id, { textColor: '' })} onChange={(x) => updateConfig(item.id, { textColor: x })} />
-      {/* 一键预设 + 默认样式：预设先清空四个样式键再写入，避免上一份残留 */}
-      <div className="btn-row">
-        {STYLE_PRESETS.map(([label, patch]) => (
-          <button key={label} className="btn sm ghost" onClick={() => applyStyle(item.id, patch)}>{label}</button>
-        ))}
-      </div>
-      <div className="btn-row">
-        <button className="btn sm ghost" onClick={() => saveStyleDefault(item.id)}>设为该组件默认</button>
-        {styleDefault !== undefined && !isBlankStyle(styleDefault) && (
-          <button className="btn sm ghost" onClick={() => clearStyleDefault(item.t)}>取消默认</button>
-        )}
-        <button className="btn sm ghost" onClick={() => applyStyleToKind(item.id)}>复制到同类卡片</button>
-      </div>
-      {def.fields.length > 0 && <div className="sec-title">专属</div>}
-      {def.fields.map(field)}
-      <div className="f-row"><label className="f-label">尺寸</label>
-        <div className="cats">{SIZES.map((sz) => {
-          const ok = sizeAllowedFor(item.t, item.config, sz.w, sz.h)
-          const lo = minSizeOf(item.t)
-          return (
-            <div key={`${sz.w}x${sz.h}`}
-              className={`cat${item.w === sz.w && item.h === sz.h ? ' active' : ''}${ok ? '' : ' dis'}`}
-              title={ok
-                ? `${item.w === sz.w && item.h === sz.h ? '当前尺寸 · ' : ''}点选切换`
-                : `「${def.n}」最小 ${lo.w}×${lo.h}${sizeAllowed(item.t, sz.w, sz.h) ? '，当前内容在此档需滚动浏览' : '，此档显示不下'}`}
-              onClick={() => { if (ok) resize(item.id, sz.w, sz.h) }}>{sz.w}×{sz.h}</div>
-          )
-        })}</div>
-      </div>
-      <Hint>
-        引用的小组件：{def.s}。尺寸能力 {minSizeOf(item.t).w}×{minSizeOf(item.t).h} – {maxSizeOf(item.t).w}×{maxSizeOf(item.t).h}，
-        内容按当前尺寸等比缩放（自然尺寸 {def.units.w}×{def.units.h} 下与设计稿一致）；想要别的类型，可在卡片右键菜单里「更换小组件」。
-      </Hint>
+      <CardConfigBody item={item} />
       <div className="btn-row end">
         <button className="btn ghost" onClick={() => setModal(null)}>取消</button>
         <button className="btn" onClick={() => { setModal(null); showToast('修改成功') }}>确认修改</button>
@@ -1887,33 +1967,85 @@ const EditCardModal = ({ item }: { item: GridItem }) => {
 /* ============================== 卡片详情 ============================== */
 
 /**
- * 卡片详情：点卡片（非图标卡）直接展示该组件的核心内容，而不是只能进编辑。
- * 每类给出当前数据下最有意义的视图——数据模型还没有的部分（如农历）如实说明，不造假数据。
- * 底部固定「编辑配置」入口，详情 ↔ 编辑互通。
+ * 卡片详情（概览 / 设置两级）：
+ * - 概览只放核心信息与高频操作，低频配置收进「设置」，面板高度不再被表单撑满；
+ * - 「设置」复用配置表单（通用 / 专属 / 样式 / 尺寸），不再有职责模糊的「编辑配置」按钮；
+ * - 区块内的主操作固定在标题行右侧（SecHead），不随内容落到滚动区外。
  */
 
-/** 待办清单详情：真实清单数据存在卡片 config.items（自由字典，零迁移），可勾选 / 添加 / 删除 */
+/** 详情区块标题行：标题 +（可选）说明 + 右侧高频操作 */
+const SecHead = ({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) => (
+  <div className="dt-sec-head">
+    <span className="dt-sec-title">{title}</span>
+    {sub !== undefined && sub !== '' && <span className="dt-sec-sub">{sub}</span>}
+    {action !== undefined && <div className="dt-sec-act">{action}</div>}
+  </div>
+)
+
+/** 区块说明折叠：低频帮助文案收进「?」，默认不占版面 */
+const HelpTip = ({ children }: { children: React.ReactNode }) => (
+  <details className="dt-help">
+    <summary aria-label="说明">?</summary>
+    <div className="dt-help-body">{children}</div>
+  </details>
+)
+
+/** 行内文本：双击进入编辑，回车 / 失焦保存，Esc 取消（父级控制编辑态，便于行尾铅笔按钮触发） */
+const InlineEditText = ({ value, editing, onStart, onCommit, onCancel, className = 'dt-todo-txt' }: {
+  value: string
+  editing: boolean
+  onStart: () => void
+  onCommit: (v: string) => void
+  onCancel: () => void
+  className?: string
+}) => {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => { if (editing) setDraft(value) }, [editing, value])
+  if (!editing) {
+    return <span className={className} onDoubleClick={onStart} title="双击编辑">{value}</span>
+  }
+  return (
+    <input className="f-input dt-inline" autoFocus value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => onCommit(draft)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') onCommit(draft)
+        else if (e.key === 'Escape') onCancel()
+      }} />
+  )
+}
+
+/** 待办清单详情：清单存在卡片 config.items，可勾选 / 改名 / 删除 / 添加 */
 const TodoDetail = ({ item }: { item: GridItem }) => {
   const updateConfig = useApp((s) => s.updateConfig)
   const c = cfg(item)
   const [items, setItems] = useState<TodoEntry[]>(() => normTodoItems(c['items']))
   const [draft, setDraft] = useState('')
+  const [editIdx, setEditIdx] = useState<number | null>(null)
   const commit = (next: TodoEntry[]): void => {
     setItems(next)
     updateConfig(item.id, { items: next })
   }
+  const saveText = (i: number, v: string): void => {
+    const txt = v.trim()
+    if (txt !== '') commit(items.map((x, j) => (j === i ? { ...x, txt } : x)))
+    setEditIdx(null)
+  }
   const done = items.filter((x) => x.done).length
   return (
     <>
-      <div className="dt-todo-head">{str(c['title'], '待办')} · {done}/{items.length} 已完成</div>
-      <div className="dt-list">
-        {items.length === 0 && <Hint>还没有条目，在下面输入第一条待办（回车添加）。</Hint>}
+      <SecHead title={str(c['title'], '待办')} sub={`${done}/${items.length} 已完成`} />
+      <div className="dt-list flat">
+        {items.length === 0 && <Hint>还没有条目，在下面输入第一条待办。</Hint>}
         {items.map((t, i) => (
           <div className="dt-todo-row" key={`${i}-${t.txt}`}>
             <input type="checkbox" checked={t.done}
               onChange={() => commit(items.map((x, j) => (j === i ? { ...x, done: !x.done } : x)))} />
-            <span className={`dt-todo-txt${t.done ? ' done' : ''}`}>{t.txt}</span>
-            <div className="dt-row-del" title="删除" onClick={() => commit(items.filter((_, j) => j !== i))}>{Icon.trash()}</div>
+            <InlineEditText value={t.txt} editing={editIdx === i} onStart={() => setEditIdx(i)}
+              onCommit={(v) => saveText(i, v)} onCancel={() => setEditIdx(null)}
+              className={`dt-todo-txt${t.done ? ' done' : ''}`} />
+            <div className="dt-row-del always" title="编辑" onClick={() => setEditIdx(i)}>{Icon.edit()}</div>
+            <div className="dt-row-del always" title="删除" onClick={() => commit(items.filter((_, j) => j !== i))}>{Icon.trash()}</div>
           </div>
         ))}
       </div>
@@ -1930,10 +2062,10 @@ const TodoDetail = ({ item }: { item: GridItem }) => {
 }
 
 /**
- * 城市搜索：地理编码（Open-Meteo），候选按人口降序排（真正的城市排前，同名乡镇沉底）。
- * 选中交给 onPick —— 主定位写 weatherCity，其他城市进 weatherCities，由调用方落点。
+ * 城市搜索（全详情唯一一个搜索框）：地理编码（Open-Meteo），候选按人口降序排。
+ * 选中后由结果行上的两个动作决定落点：设为主定位（weatherCity）/ 加入城市列表（weatherCities）。
  */
-const CitySearch = ({ onPick }: { onPick: (h: GeoHit) => void }) => {
+const CitySearch = ({ onPick }: { onPick: (h: GeoHit, act: 'main' | 'add') => void }) => {
   const showToast = useApp((s) => s.showToast)
   const [kw, setKw] = useState('')
   const [hits, setHits] = useState<GeoHit[]>([])
@@ -1946,26 +2078,29 @@ const CitySearch = ({ onPick }: { onPick: (h: GeoHit) => void }) => {
     setBusy(false)
     if (list.length === 0) showToast('没有找到匹配的城市')
   }
-  const pick = (h: GeoHit): void => {
-    onPick(h)
+  const pick = (h: GeoHit, act: 'main' | 'add'): void => {
+    onPick(h, act)
     setHits([])
     setKw('')
   }
   return (
     <>
-      <div className="f-row">
+      <div className="f-row dt-search-row">
         <input className="f-input" placeholder="搜索城市，如 杭州 / Tokyo" value={kw}
           onChange={(e) => setKw(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') void search() }} />
         <button className="btn sm ghost" onClick={() => { void search() }}>{busy ? '搜索中…' : '搜索'}</button>
       </div>
       {hits.length > 0 && (
-        <div className="dt-list" style={{ maxHeight: 160 }}>
+        <div className="dt-list flat">
           {hits.map((h) => (
-            <div className="dt-todo-row" key={`${h.name}-${h.lat}-${h.lon}`} style={{ cursor: 'pointer' }}
-              onClick={() => pick(h)}>
+            <div className="dt-todo-row" key={`${h.name}-${h.lat}-${h.lon}`}>
               <span className="dt-todo-txt">{h.name}</span>
               <span className="dt-host">{[h.admin1, h.country].filter((x) => x !== '').join(' · ')}</span>
+              <div className="dt-city-act">
+                <button className="dt-mini" onClick={() => pick(h, 'main')}>设为主定位</button>
+                <button className="dt-mini" onClick={() => pick(h, 'add')}>加入列表</button>
+              </div>
             </div>
           ))}
         </div>
@@ -1974,25 +2109,26 @@ const CitySearch = ({ onPick }: { onPick: (h: GeoHit) => void }) => {
   )
 }
 
-/** 日历格（月视图 / 周视图共用）：公历日 + 农历（初一显月名）+ 日程点；节日有虚线下划线提示 */
-const CalCell = ({ t, sel, todayKey, hasEv, onPick }: {
+/** 日历格（月视图 / 周视图共用）：公历日 + 农历（初一显月名）+ 日程数量角标；节日有虚线下划线提示 */
+const CalCell = ({ t, sel, todayKey, count, onPick }: {
   t: { y: number; m: number; d: number; out?: boolean }
   sel: string
   todayKey: string
-  hasEv: boolean
+  /** 该天的日程条数：0 不显示角标，一眼看出哪天有安排 */
+  count: number
   onPick: (t: { y: number; m: number; d: number }) => void
 }) => {
   const key = dayKey(t.y, t.m, t.d)
   const lunar = solarToLunar(t.y, t.m, t.d)
   const fest = festivalsOf(t.y, t.m, t.d)
-  const tip = `${t.y}-${p2(t.m)}-${p2(t.d)} ${lunar.monthCn}${lunar.dayCn}${fest.length > 0 ? ` · ${fest.join(' · ')}` : ''}`
+  const tip = `${t.y}-${p2(t.m)}-${p2(t.d)} ${lunar.monthCn}${lunar.dayCn}${fest.length > 0 ? ` · ${fest.join(' · ')}` : ''}${count > 0 ? ` · ${count} 条日程` : ''}`
   return (
     <button type="button" data-tip={tip}
       className={`dt-cal-cell${t.out === true ? ' out' : ''}${key === sel ? ' sel' : ''}${key === todayKey ? ' today' : ''}${fest.length > 0 ? ' fest' : ''}`}
       onClick={() => onPick(t)}>
       <span className="dt-cal-d">{t.d}</span>
       <span className="dt-cal-l">{lunar.day === 1 ? lunar.monthCn : lunar.dayCn}</span>
-      {hasEv && <i className="dt-cal-dot" />}
+      {count > 0 && <i className="dt-cal-badge">{count > 9 ? '9+' : count}</i>}
     </button>
   )
 }
@@ -2017,7 +2153,8 @@ const CalMonthView = ({ y, m, sel, todayKey, events, onPick }: {
     {monthCells(y, m).flat().map((cell) => (
       <CalCell key={dayKey(cell.year, cell.month, cell.day)}
         t={{ y: cell.year, m: cell.month, d: cell.day, out: !cell.inMonth }}
-        sel={sel} todayKey={todayKey} hasEv={events.some((e) => e.date === dayKey(cell.year, cell.month, cell.day))}
+        sel={sel} todayKey={todayKey}
+        count={events.filter((e) => e.date === dayKey(cell.year, cell.month, cell.day)).length}
         onPick={onPick} />
     ))}
   </div>
@@ -2037,7 +2174,7 @@ const CalWeekView = ({ anchor, sel, todayKey, events, onPick }: {
         <CalCell key={dayKey(d.getFullYear(), d.getMonth() + 1, d.getDate())}
           t={{ y: d.getFullYear(), m: d.getMonth() + 1, d: d.getDate() }}
           sel={sel} todayKey={todayKey}
-          hasEv={events.some((e) => e.date === dayKey(d.getFullYear(), d.getMonth() + 1, d.getDate()))}
+          count={events.filter((e) => e.date === dayKey(d.getFullYear(), d.getMonth() + 1, d.getDate())).length}
           onPick={onPick} />
       ))}
     </div>
@@ -2073,25 +2210,36 @@ const CalYearView = ({ y, sel, todayKey, onMonth, onPick }: {
   </div>
 )
 
-/** 选中日期信息（颜色层级：公历日期与星期是重点，农历 / 干支次之，节日 / 宜忌用语义色标签） */
+/**
+ * 选中日期信息（颜色层级：公历日期与星期是重点，农历 / 干支次之）。
+ * 宜忌默认收起：它夹在月历与日程之间会把「写日程」推出折叠线，节日标签仍常显（选日子要用）。
+ */
 const CalSelInfo = ({ selDate, selLunar, selFests, selAlmanac }: {
   selDate: { y: number; m: number; d: number }
   selLunar: ReturnType<typeof solarToLunar>
   selFests: string[]
   selAlmanac: ReturnType<typeof almanacOf>
-}) => (
-  <div className="dt-cal-info">
-    <div className="dt-cal-sel">
-      <span className="dcs-date">{selDate.m}月{selDate.d}日 周{'日一二三四五六'[new Date(selDate.y, selDate.m - 1, selDate.d).getDay()]}</span>
-      <span className="dcs-sub">农历 {selLunar.monthCn}{selLunar.dayCn} · {selLunar.ganZhiYear}{selLunar.zodiac}年 · {selAlmanac.officer}日</span>
+}) => {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="dt-cal-info">
+      <div className="dt-cal-sel">
+        <span className="dcs-date">{selDate.m}月{selDate.d}日 周{'日一二三四五六'[new Date(selDate.y, selDate.m - 1, selDate.d).getDay()]}</span>
+        <span className="dcs-sub">农历 {selLunar.monthCn}{selLunar.dayCn} · {selLunar.ganZhiYear}{selLunar.zodiac}年 · {selAlmanac.officer}日</span>
+        {selFests.map((f) => <span className="dt-tag fest" key={f}>{f}</span>)}
+        <button className={`dt-link dt-almanac-btn${open ? ' open' : ''}`} onClick={() => setOpen((v) => !v)}>
+          宜忌{open ? ' ▴' : ' ▾'}
+        </button>
+      </div>
+      {open && (
+        <div className="dcs-chips">
+          {selAlmanac.good.length > 0 && <span className="dt-tag yi">宜 {selAlmanac.good.join('、')}</span>}
+          {selAlmanac.bad.length > 0 && <span className="dt-tag ji">忌 {selAlmanac.bad.join('、')}</span>}
+        </div>
+      )}
     </div>
-    <div className="dcs-chips">
-      {selFests.map((f) => <span className="dt-tag fest" key={f}>{f}</span>)}
-      {selAlmanac.good.length > 0 && <span className="dt-tag yi">宜 {selAlmanac.good.join('、')}</span>}
-      {selAlmanac.bad.length > 0 && <span className="dt-tag ji">忌 {selAlmanac.bad.join('、')}</span>}
-    </div>
-  </div>
-)
+  )
+}
 
 /**
  * 日历详情：月 / 周 / 年三视图快速定位 + 选中日期的日程。
@@ -2105,6 +2253,7 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
   const c = cfg(item)
   const [events, setEvents] = useState<ScheduleEvent[]>(() => normScheduleEvents(c['events']))
   const [draft, setDraft] = useState('')
+  const [editIdx, setEditIdx] = useState<number | null>(null)
   const [gran, setGran] = useState<'month' | 'week' | 'year'>('month')
   const [view, setView] = useState(() => ({ y: now.getFullYear(), m: now.getMonth() }))
   const [sel, setSel] = useState(() => dayKey(now.getFullYear(), now.getMonth() + 1, now.getDate()))
@@ -2147,6 +2296,12 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
     : gran === 'week'
       ? `${ws.getFullYear()} 年 第 ${isoWeekOf(selTime).week} 周 · ${ws.getMonth() + 1}/${ws.getDate()} – ${we.getMonth() + 1}/${we.getDate()}`
       : `${view.y} 年`
+  const selLabel = `${selDate.m}月${selDate.d}日 周${'日一二三四五六'[selTime.getDay()]}`
+  const saveText = (e: ScheduleEvent, v: string): void => {
+    const text = v.trim()
+    if (text !== '') commit(events.map((x) => (x === e ? { ...x, text } : x)))
+    setEditIdx(null)
+  }
   return (
     <>
       <div className="dt-cal-top">
@@ -2178,30 +2333,35 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
           onPick={(t) => { applyDay(t); setGran('month') }} />
       )}
       <CalSelInfo selDate={selDate} selLunar={selLunar} selFests={selFests} selAlmanac={selAlmanac} />
-      <div className="dt-todo-head">当天日程 · {sel}</div>
-      <div className="f-row">
-        <input className="f-input" placeholder="写下日程或待办，回车添加" value={draft}
+      {/* 主路径：选日子 → 写日程。目标日期固定在输入框左侧，避免加错天 */}
+      <SecHead title="日程" sub={selLabel} />
+      <div className="dt-add-line">
+        <span className="dt-add-date">{selDate.m}/{selDate.d}</span>
+        <input className="f-input" placeholder="写下日程，回车添加" value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             const txt = draft.trim()
             if (e.key === 'Enter' && txt !== '') { commit([...events, { date: sel, text: txt, done: false }]); setDraft('') }
           }} />
       </div>
-      <div className="dt-list" style={{ maxHeight: 160 }}>
+      <div className="dt-list flat">
         {dayList.length === 0 && <Hint>这一天还没有日程。</Hint>}
         {dayList.map((e, i) => (
           <div className="dt-todo-row" key={`${i}-${e.text}`}>
             <input type="checkbox" checked={e.done}
               onChange={() => commit(events.map((x) => (x === e ? { ...x, done: !x.done } : x)))} />
-            <span className={`dt-todo-txt${e.done ? ' done' : ''}`}>{e.text}</span>
-            <div className="dt-row-del" title="删除" onClick={() => commit(events.filter((x) => x !== e))}>{Icon.trash()}</div>
+            <InlineEditText value={e.text} editing={editIdx === i} onStart={() => setEditIdx(i)}
+              onCommit={(v) => saveText(e, v)} onCancel={() => setEditIdx(null)}
+              className={`dt-todo-txt${e.done ? ' done' : ''}`} />
+            <div className="dt-row-del always" title="编辑" onClick={() => setEditIdx(i)}>{Icon.edit()}</div>
+            <div className="dt-row-del always" title="删除" onClick={() => commit(events.filter((x) => x !== e))}>{Icon.trash()}</div>
           </div>
         ))}
       </div>
       {upcoming.length > 0 && (
         <>
-          <div className="dt-todo-head">接下来</div>
-          <div className="dt-list" style={{ maxHeight: 130 }}>
+          <SecHead title="接下来" sub="点一行跳到那天" />
+          <div className="dt-list flat">
             {upcoming.map((e, i) => (
               <div className="dt-todo-row" key={`u${i}-${e.text}`} style={{ cursor: 'pointer' }}
                 onClick={() => {
@@ -2256,388 +2416,466 @@ const FavDetail = () => {
   )
 }
 
-/** 下班倒计时详情的倒数列表管理：节日只读 + 自定义条目（名称 / 目标日期 / 备注）可增删改 */
-const CountdownEntries = ({ item }: { item: GridItem }) => {
+/**
+ * 自定义倒数日行：表单即列表行（改名 / 改日期 / 农历切换 / 删除都在这行里）。
+ * 农历条目只改月 / 日，date 由农历重算（不能拿阳历日期去凑）。
+ */
+const CountdownEntryRow = ({ entry, now, onChange, onDelete }: {
+  entry: CountdownEntry
+  now: Date
+  onChange: (next: CountdownEntry) => void
+  onDelete: () => void
+}) => {
+  const lunar = entry.lunar
+  const setLunar = (field: 'month' | 'day', raw: string): void => {
+    const v = Number(raw)
+    if (!Number.isFinite(v)) return
+    const next = { ...(lunar ?? { month: 1, day: 1 }), [field]: Math.max(1, Math.min(field === 'month' ? 12 : 30, Math.trunc(v))) }
+    onChange({ ...entry, lunar: next, date: nextLunarDate(next, now) ?? entry.date })
+  }
+  /* 关掉农历：把当前算出的日期留在 date 上，条目变成普通阳历倒数日 */
+  const toggle = (): void => {
+    if (lunar === undefined) {
+      const l = { month: 1, day: 1 }
+      onChange({ ...entry, lunar: l, date: nextLunarDate(l, now) ?? entry.date })
+      return
+    }
+    const rest: CountdownEntry = { name: entry.name, date: entry.date }
+    if (entry.note !== undefined) rest.note = entry.note
+    if (entry.created !== undefined) rest.created = entry.created
+    onChange(rest)
+  }
+  return (
+    <div className="cd-edit">
+      <input className="f-input cd-name" value={entry.name} placeholder="名称"
+        onChange={(e) => onChange({ ...entry, name: e.target.value })} />
+      {lunar === undefined ? (
+        <input className="f-input cd-date" value={entry.date} placeholder="2027-01-01"
+          onChange={(e) => onChange({ ...entry, date: e.target.value })} />
+      ) : (
+        <span className="cd-edit-lunar">
+          农历
+          <input className="f-input cd-num" type="number" min={1} max={12} value={lunar.month}
+            onChange={(e) => setLunar('month', e.target.value)} />月
+          <input className="f-input cd-num" type="number" min={1} max={30} value={lunar.day}
+            onChange={(e) => setLunar('day', e.target.value)} />日
+        </span>
+      )}
+      <button className="dt-mini" onClick={toggle}>{lunar === undefined ? '农历' : '阳历'}</button>
+      <div className="dt-row-del always" title="删除" onClick={onDelete}>{Icon.trash()}</div>
+    </div>
+  )
+}
+
+/**
+ * 倒数列表管理：默认只显示前 5 条（展开全部后由面板统一滚动，不再套内嵌滚动条）；
+ * 自定义条目行内可编辑，节日条目可单独隐藏；「?」里是低频说明。
+ */
+const CountdownEntries = ({ item, now }: { item: GridItem; now: Date }) => {
   const updateConfig = useApp((s) => s.updateConfig)
   const c = cfg(item)
-  const [items, setItems] = useState<CountdownEntry[]>(() => normCountdownEntries(c['entries']))
+  const [items, setItems] = useState<CountdownEntry[]>(() => normCountdownEntries(c['entries'], now))
+  const [open, setOpen] = useState(false)
+  const hidden = Array.isArray(c['hiddenFestivals'])
+    ? c['hiddenFestivals'].filter((x): x is string => typeof x === 'string')
+    : []
   const commit = (next: CountdownEntry[]): void => {
     setItems(next)
     updateConfig(item.id, { entries: next })
   }
-  const now = new Date()
-  const rows = upcomingRows(items, bool(c['showFestivals']), now)
-  /* 农历条目编辑：只改月 / 日，date 由农历重算（不能拿阳历日期去凑） */
-  const setLunar = (i: number, field: 'month' | 'day', raw: string): void => {
-    const v = Number(raw)
-    if (!Number.isFinite(v)) return
-    commit(items.map((x, j) => {
-      if (j !== i) return x
-      const cur = x.lunar ?? { month: 1, day: 1 }
-      const next = { ...cur, [field]: Math.max(1, Math.min(field === 'month' ? 12 : 30, Math.trunc(v))) }
-      return { ...x, lunar: next, date: nextLunarDate(next, now) ?? x.date }
-    }))
-  }
-  const toggleLunar = (i: number): void => {
-    commit(items.map((x, j) => {
-      if (j !== i) return x
-      if (x.lunar !== undefined) {
-        /* 关掉农历：把当前算出的日期留在 date 上，条目变成普通阳历倒数日 */
-        const rest: CountdownEntry = { name: x.name, date: x.date }
-        if (x.note !== undefined) rest.note = x.note
-        if (x.created !== undefined) rest.created = x.created
-        return rest
-      }
-      const l = { month: 1, day: 1 }
-      return { ...x, lunar: l, date: nextLunarDate(l, now) ?? x.date }
-    }))
+  const rows = upcomingRows(items, bool(c['showFestivals']), now, hidden)
+  const shown = open ? rows : rows.slice(0, 5)
+  const replaceAt = (i: number, next: CountdownEntry): void => commit(items.map((x, j) => (j === i ? next : x)))
+  const addEntry = (): void => {
+    commit([...items, { name: '新的倒数日', date: `${now.getFullYear() + 1}-01-01`, created: Date.now() }])
+    setOpen(true)
   }
   return (
     <>
-      <div className="dt-todo-head">倒数列表 · 按剩余天数升序（节日自动取下一次发生，跨年自动计算）</div>
-      <div className="dt-list" style={{ maxHeight: 200 }}>
-        {rows.map((r, i) => (
-          <div className="dt-todo-row" key={String(i)}>
-            <span className={`dt-tag${r.festival ? ' fest' : ''}`}>{r.festival ? '节日' : r.lunarLabel !== undefined ? '农历' : '自定义'}</span>
-            <span className="dt-todo-txt" title={r.note ?? ''}>{r.name}{r.note !== undefined ? ` · ${r.note}` : ''}</span>
-            <span className="dt-host">
-              {r.lunarLabel !== undefined ? `${r.lunarLabel} · ` : ''}{r.date} · {Math.abs(r.days)} 天{r.days < 0 ? '前' : ''}
-            </span>
-          </div>
-        ))}
-        {rows.length === 0 && <Hint>列表为空：打开「显示节日倒数」，或在下面添加自定义倒数日。</Hint>}
+      <SecHead title="倒数列表" sub={`${rows.length} 条 · 按剩余天数`} action={
+        <>
+          <button className="btn sm ghost" onClick={addEntry}>+ 添加</button>
+          <HelpTip>
+            节日库：元旦 / 春节 / 清明 / 劳动节 / 端午 / 中秋 / 国庆（农历节日按真实农历换算）。
+            自定义条目可切换「农历」按每年同一农历日循环；改名 / 改日期即时保存。
+          </HelpTip>
+        </>
+      } />
+      <div className="dt-list flat">
+        {shown.length === 0 && <Hint>暂无条目。点右上「+ 添加」新建一条。</Hint>}
+        {shown.map((r) => {
+          if (r.festival) {
+            return (
+              <div className="dt-todo-row" key={`f-${r.name}`}>
+                <span className="dt-tag fest">节日</span>
+                <span className="dt-todo-txt">{r.name}</span>
+                <span className="dt-host">{r.date} · {Math.abs(r.days)} 天{r.days < 0 ? '前' : ''}</span>
+                <button className="dt-mini" onClick={() => updateConfig(item.id, { hiddenFestivals: [...hidden, r.name] })}>隐藏</button>
+              </div>
+            )
+          }
+          const index = r.entryIndex ?? -1
+          const entry = items[index]
+          if (entry === undefined) return null
+          return (
+            <CountdownEntryRow key={`e-${index}`} entry={entry} now={now}
+              onDelete={() => commit(items.filter((_, j) => j !== index))}
+              onChange={(next) => replaceAt(index, next)} />
+          )
+        })}
       </div>
-      <div className="dt-todo-head">自定义倒数日 / 农历纪念日</div>
-      {items.map((e, i) => (
-        <div className="cd-edit" key={i}>
-          <input className="f-input" style={{ flex: 1.2 }} value={e.name} placeholder="名称"
-            onChange={(ev) => commit(items.map((x, j) => (j === i ? { ...x, name: ev.target.value } : x)))} />
-          {e.lunar === undefined ? (
-            <input className="f-input" style={{ flex: 1.1 }} value={e.date} placeholder="2027-01-01"
-              onChange={(ev) => commit(items.map((x, j) => (j === i ? { ...x, date: ev.target.value } : x)))} />
-          ) : (
-            <span className="cd-edit-lunar">
-              农历
-              <input className="f-input cd-num" type="number" min={1} max={12} value={e.lunar.month}
-                onChange={(ev) => setLunar(i, 'month', ev.target.value)} />月
-              <input className="f-input cd-num" type="number" min={1} max={30} value={e.lunar.day}
-                onChange={(ev) => setLunar(i, 'day', ev.target.value)} />日
-            </span>
-          )}
-          <button className="btn sm ghost" onClick={() => toggleLunar(i)}>
-            {e.lunar === undefined ? '改农历' : '改阳历'}
-          </button>
-          <div className="dt-row-del" title="删除" onClick={() => commit(items.filter((_, j) => j !== i))}>{Icon.trash()}</div>
-        </div>
-      ))}
-      <div className="btn-row">
-        <button className="btn sm ghost"
-          onClick={() => commit([...items, { name: '新的倒数日', date: `${new Date().getFullYear() + 1}-01-01`, created: Date.now() }])}>
-          + 添加倒数日
+      {rows.length > 5 && (
+        <button className="dt-more" onClick={() => setOpen((v) => !v)}>
+          {open ? '收起' : `展开全部 ${rows.length} 条`}
         </button>
-        <button className="btn sm ghost"
-          onClick={() => {
-            const l = { month: 1, day: 1 }
-            commit([...items, { name: '新的农历纪念日', date: nextLunarDate(l, now) ?? '2027-01-01', lunar: l }])
-          }}>
-          + 添加农历纪念日
+      )}
+      {hidden.length > 0 && (
+        <button className="dt-more" onClick={() => updateConfig(item.id, { hiddenFestivals: [] })}>
+          恢复隐藏的 {hidden.length} 个节日
         </button>
-      </div>
-      <Hint>
-        节日库：元旦 / 春节 / 清明 / 劳动节 / 端午 / 中秋 / 国庆（农历节日按真实农历换算）；
-        自定义条目可按「农历月日」循环（如每年农历六月廿九的生日），跨年自动取下一年的同一农历日；
-        名称 / 日期 / 备注改完即存。
-      </Hint>
+      )}
     </>
   )
 }
 
-const ItemDetail = ({ item }: { item: GridItem }) => {
-  const setModal = useApp((s) => s.setModal)
-  const showToast = useApp((s) => s.showToast)
+/** 通用输入行（标签 + 单输入框）：详情「设置」页的模式配置共用 */
+const TextRow = ({ label, value, placeholder, onChange }: {
+  label: string; value: string; placeholder: string; onChange: (v: string) => void
+}) => (
+  <div className="f-row"><label className="f-label">{label}</label>
+    <input className="f-input" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} /></div>
+)
+
+/** 多选 chips 行（显示模式 / 天数单位这类短选项） */
+const CatsRow = ({ label, options, active, onPick }: {
+  label: string; options: readonly string[]; active: readonly string[]; onPick: (o: string) => void
+}) => (
+  <div className="f-row"><label className="f-label">{label}</label>
+    <div className="cats">{options.map((o) => (
+      <div key={o} className={`cat${active.includes(o) ? ' active' : ''}`} onClick={() => onPick(o)}>{o}</div>
+    ))}</div>
+  </div>
+)
+
+const COUNTDOWN_MODES_ALL = ['下班倒计时', '倒数日', '纪念日'] as const
+
+/**
+ * 倒计时设置：先选模式，再只显示该模式需要的字段（下班时刻只对应下班倒计时、
+ * 目标日期只对应倒数日……），「多模式轮播」只在真的勾了多个模式时出现。
+ */
+const CountdownSettings = ({ item }: { item: GridItem }) => {
   const updateConfig = useApp((s) => s.updateConfig)
-  const weather = useApp((s) => s.weather)
-  const setSetting = useApp((s) => s.setSetting)
-  /* 天气详情的多城市：清单 + 各城实况（键为城市坐标键） */
-  const weatherCities = useApp((s) => s.settings.weatherCities)
-  const cityWeathers = useApp((s) => s.cityWeathers)
-  const addWeatherCity = useApp((s) => s.addWeatherCity)
-  const removeWeatherCity = useApp((s) => s.removeWeatherCity)
   const c = cfg(item)
-  const def = WIDGET_DEFS[item.t]
-  /* 时钟 / 倒计时详情需要每秒走字；其他类型不受影响（effect 内按类型决定是否启动定时器） */
-  const [now, setNow] = useState(() => new Date())
-  useEffect(() => {
-    if (item.t !== 'clock' && item.t !== 'countdown') return
-    const timer = window.setInterval(() => setNow(new Date()), 1000)
-    return () => window.clearInterval(timer)
-  }, [item.t])
-
-  const openSite = (url: string): void => { void openLink(url, useApp.getState().settings.openMode, 'link') }
-
-  let body: React.ReactNode
-  switch (item.t) {
-    case 'weather': {
-      const d = weather
-      const wdOf = (date: string): string => {
-        const t = Date.parse(date)
-        return Number.isNaN(t) ? date.slice(5) : `周${'日一二三四五六'[new Date(t).getDay()]}`
-      }
-      const city = useApp.getState().settings.weatherCity
-      body = (
-        <>
-          {d === null ? (
-            <Hint>还没有天气数据：请点下方「允许定位」授权浏览器定位；不想授权也可以直接搜索城市。</Hint>
-          ) : (
-            <>
-              <div className="dt-now">
-                <span className="dt-temp">{d.currentTemp}°</span>
-                <div className="dt-now-main">
-                  <span className="dt-cond">{weatherText(d.currentCode)}</span>
-                  <span className="dt-host">{d.place !== '' ? d.place : '当前位置'}</span>
-                </div>
-              </div>
-              <div className="dt-days">
-                {d.daily.map((x, i) => (
-                  <div className={`dt-day${i === 0 ? ' today' : ''}`} key={x.date}>
-                    <span>{i === 0 ? '今天' : wdOf(x.date)}</span>
-                    <span>{weatherText(x.code)}</span>
-                    <span>{x.min}° / {x.max}°</span>
-                  </div>
-                ))}
-              </div>
-              <Hint>
-                坐标来源：{d.source === 'geo' ? '真实定位' : `手选城市（${d.place || '未命名'}）`}；
-                数据时间 {new Date(d.ts).toLocaleString('zh-CN')}。
-              </Hint>
-            </>
-          )}
-          <div className="btn-row">
-            <button className="btn sm ghost" onClick={() => { void useApp.getState().loadWeather(true); showToast('正在请求定位并刷新天气') }}>允许定位</button>
-            <button className="btn sm ghost" onClick={() => { void useApp.getState().loadWeather(); showToast('正在刷新天气') }}>刷新天气</button>
-            {city !== null && (
-              <button className="btn sm ghost" onClick={() => { setSetting('weatherCity', null); void useApp.getState().loadWeather(true) }}>改回定位</button>
-            )}
-          </div>
-          {/* 定位方式（主城市）与其他城市分开：主城市决定天气卡，其他城市只在详情里看实况 */}
-          <div className="sec-title">定位</div>
-          <Hint>
-            默认使用浏览器定位（首次会询问是否允许）。拒绝授权时可以在这里搜索城市作为替代：
-            当前{city === null ? '按真实定位' : `手选 ${city.name}`}。
-          </Hint>
-          <CitySearch onPick={(h) => {
-            setSetting('weatherCity', { name: h.admin1 !== '' ? `${h.name} · ${h.admin1}` : h.name, lat: h.lat, lon: h.lon })
-            void useApp.getState().loadWeather()
-            showToast(`已切换到 ${h.name}`)
-          }} />
-          <div className="dt-todo-head">其他城市</div>
-          <div className="dt-list">
-            {weatherCities.length === 0 && <Hint>还没有其他城市：在下面搜索添加，点击城市行可把它设为主定位。</Hint>}
-            {weatherCities.map((ct, i) => {
-              const w = cityWeathers[cityKeyOf(ct)]
-              return (
-                <div className="dt-row city" key={`${ct.name}-${i}`} title="点击设为主定位城市"
-                  onClick={() => {
-                    setSetting('weatherCity', { ...ct })
-                    void useApp.getState().loadWeather()
-                    showToast(`已切换到 ${ct.name}`)
-                  }}>
-                  <span className="dt-name">{ct.name}</span>
-                  {w === undefined ? (
-                    <span className="dt-host">暂无数据</span>
-                  ) : (
-                    <>
-                      <span className="wc-temp">{w.currentTemp}°</span>
-                      <span className="dt-host">{weatherText(w.currentCode)}</span>
-                      <span className="dt-host">{w.daily[0]?.min ?? '--'}° / {w.daily[0]?.max ?? '--'}°</span>
-                    </>
-                  )}
-                  <div className="dt-row-del" title="移除" onClick={(e) => { e.stopPropagation(); removeWeatherCity(i) }}>{Icon.trash()}</div>
-                </div>
-              )
-            })}
-          </div>
-          <CitySearch onPick={(h) => addWeatherCity({ name: h.admin1 !== '' ? `${h.name} · ${h.admin1}` : h.name, lat: h.lat, lon: h.lon })} />
-        </>
-      )
-      break
-    }
-    case 'clock': {
-      const mode = str(c['timeMode'], '24 小时')
-      const h = now.getHours()
-      const hm = mode === '12 小时' ? `${p2(h % 12 === 0 ? 12 : h % 12)}:${p2(now.getMinutes())}` : `${p2(h)}:${p2(now.getMinutes())}`
-      const time = `${hm}${bool(c['showSeconds']) ? `:${p2(now.getSeconds())}` : ''}${mode === '12 小时' ? (h < 12 ? ' AM' : ' PM') : ''}`
-      body = (
-        <>
-          <div className="dt-clock">
-            <div className="dt-time">{time}</div>
-            <div className="dt-sub">{dateText(now)} · {getGreetingByHour(h)}</div>
-          </div>
-          <SwitchRow l="12 小时制" on={mode === '12 小时'} onToggle={() => updateConfig(item.id, { timeMode: mode === '12 小时' ? '24 小时' : '12 小时' })} />
-          <SwitchRow l="显示秒数" on={bool(c['showSeconds'])} onToggle={() => updateConfig(item.id, { showSeconds: !bool(c['showSeconds']) })} />
-          <SwitchRow l="显示日期" on={bool(c['showDate'])} onToggle={() => updateConfig(item.id, { showDate: !bool(c['showDate']) })} />
-        </>
-      )
-      break
-    }
-    case 'cal': {
-      /* 月历与「选中日期的农历 / 宜忌 / 日程」都在 CalendarSchedule 里：
-         点任意一天切换，翻月会同步换网格，避免这里与它各算一套月历 */
-      body = (
-        <>
-          <CalendarSchedule item={item} now={now} />
-        </>
-      )
-      break
-    }
-    case 'todo':
-      return (
-        <>
-          <h2>待办清单 · 详情</h2>
-          <p className="sub">勾选进度与清单内容会保存在本机。</p>
-          <TodoDetail item={item} />
-          <div className="btn-row end">
-            <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
-            <button className="btn" onClick={() => setModal(null)}>关闭</button>
-          </div>
-        </>
-      )
-    case 'fav':
-      return (
-        <>
-          <h2>收藏夹 · 详情</h2>
-          <p className="sub">{str(c['folder'], '收藏夹')} · 点击任意书签按「打开方式」设置跳转</p>
-          <FavDetail />
-          <div className="btn-row end">
-            <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
-            <button className="btn" onClick={() => setModal(null)}>关闭</button>
-          </div>
-        </>
-      )
-    case 'countdown': {
-      /* 三种计时模式可同时启用（config.modes），卡上按顺序轮播；各模式各有独立配置 */
-      const modes = normModes(c['modes'], c['mode'])
-      const mode = modes[0] ?? '下班倒计时'
-      const dateStr = str(c['date'], '2027-01-01')
-      const annDateStr = str(c['annDate'], dateStr)
-      const days = mode === '下班倒计时' ? null : daysUntil(mode === '纪念日' ? annDateStr : dateStr, now)
-      const at = str(c['at'], '18:00').split(':')
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Number(at[0]) || 18, Number(at[1]) || 0, 0)
-      const left = Math.floor((end.getTime() - now.getTime()) / 1000)
-      const passed = left < 0
-      const a = Math.abs(left)
-      const t = `${p2(Math.floor(a / 3600))}:${p2(Math.floor(a / 60) % 60)}:${p2(a % 60)}`
-      const unit = str(c['unitLabel'], '天')
-      const past = days === null ? null : Math.abs(days)
-      const annNum = past === null ? null
-        : unit === '周' ? Math.floor(past / 7)
-        : unit === '月' ? Math.floor(past / 30)
-        : unit === '年' ? Math.floor(past / 365)
-        : past
-      /* 下次周年：起始日期的月 / 日，下一个还没到来的那天（沿用旧纪念日卡的信息，合并后收进详情） */
-      const md = /^\d{4}-(\d{2})-(\d{2})$/.exec(annDateStr.trim())
-      const nextAnn = md === null ? null : new Date(now.getFullYear(), Number(md[1]) - 1, Number(md[2]))
-      if (nextAnn !== null && days !== null && days < 0) nextAnn.setFullYear(nextAnn.getFullYear() + 1)
-      const nextAnnText = nextAnn === null
-        ? ''
-        : `${nextAnn.getFullYear()}-${p2(nextAnn.getMonth() + 1)}-${p2(nextAnn.getDate())}`
-      const toggleMode = (m: string): void => {
-        const next = modes.includes(m as never) ? modes.filter((x) => x !== m) : [...modes, m]
-        /* 至少留一个模式：全取消时把刚点的那个留下 */
-        const kept = next.length > 0 ? next : [m]
-        updateConfig(item.id, { modes: ['下班倒计时', '倒数日', '纪念日'].filter((x) => kept.includes(x)) })
-      }
-      body = (
-        <>
-          <div className="dt-clock">
-            <div className="dt-sub">
-              {mode === '纪念日' ? `${str(c['title'], '与MiNa相识')} · ${annDateStr}` : mode === '倒数日' ? `距离目标日 · ${dateStr}` : `${passed ? '已过目标时刻' : '距目标时刻'}（今天 ${str(c['at'], '18:00')}）`}
-            </div>
-            <div className="dt-time">
-              {mode === '下班倒计时' ? t : mode === '纪念日' ? (annNum === null ? '--' : annNum) : days === null ? '--' : Math.abs(days)}
-              {mode !== '下班倒计时' && <span className="dt-unit">{mode === '纪念日' ? unit : days !== null && days < 0 ? '天前' : '天'}</span>}
-            </div>
-            {mode === '倒数日' && (
-              <div className="dt-sub">{days === null ? '日期未设置，请在编辑配置里填写' : days > 0 ? `还有 ${days} 天到达目标日` : days === 0 ? '就是今天' : `目标日已过去 ${-days} 天`}</div>
-            )}
-            {mode === '纪念日' && (
-              <div className="dt-sub">{days === null || nextAnnText === ''
-                ? '日期未设置，请在编辑配置里填写'
-                : `${days <= 0 ? `已过去 ${past} 天` : `还有 ${past} 天到达起始日`} · 距下次周年 ${nextAnnText} 还有 ${daysUntil(nextAnnText, now)} 天`}</div>
-            )}
-          </div>
-          <div className="f-row"><label className="f-label">显示模式</label>
-            <div className="cats">
-              {['下班倒计时', '倒数日', '纪念日'].map((m) => (
-                <div key={m} className={`cat${modes.includes(m as never) ? ' active' : ''}`} onClick={() => toggleMode(m)}>{m}</div>
-              ))}
-            </div>
-          </div>
-          <SwitchRow l="多模式轮播" d="同时勾选多个模式时，卡片按顺序轮换显示（每 6 秒换一个）"
-            on={bool(c['rotate'])} onToggle={() => updateConfig(item.id, { rotate: !bool(c['rotate']) })} />
-          {modes.includes('下班倒计时') && (
-            <div className="f-row"><label className="f-label">下班时刻</label>
-              <input className="f-input" value={str(c['at'], '18:00')} placeholder="18:00"
-                onChange={(e) => updateConfig(item.id, { at: e.target.value })} />
-            </div>
-          )}
-          {modes.includes('倒数日') && (
-            <div className="f-row"><label className="f-label">目标日期</label>
-              <input className="f-input" value={str(c['date'], '2027-01-01')} placeholder="2027-01-01"
-                onChange={(e) => updateConfig(item.id, { date: e.target.value })} />
-            </div>
-          )}
-          {modes.includes('纪念日') && (
-            <>
-              <div className="f-row"><label className="f-label">起始日期</label>
-                <input className="f-input" value={str(c['annDate'], '2020-05-20')} placeholder="2020-05-20"
-                  onChange={(e) => updateConfig(item.id, { annDate: e.target.value })} />
-              </div>
-              <div className="f-row"><label className="f-label">纪念日标题</label>
-                <input className="f-input" value={str(c['title'])} placeholder="与MiNa相识"
-                  onChange={(e) => updateConfig(item.id, { title: e.target.value })} />
-              </div>
-              <div className="f-row"><label className="f-label">天数单位</label>
-                <div className="cats">{['天', '周', '月', '年'].map((u) => (
-                  <div key={u} className={`cat${u === unit ? ' active' : ''}`} onClick={() => updateConfig(item.id, { unitLabel: u })}>{u}</div>
-                ))}</div>
-              </div>
-            </>
-          )}
-          <CountdownEntries item={item} />
-          <SwitchRow l="显示节日倒数" on={bool(c['showFestivals'])} onToggle={() => updateConfig(item.id, { showFestivals: !bool(c['showFestivals']) })} />
-        </>
-      )
-      break
-    }
-    case 'group': {
-      const apps = (Array.isArray(c['apps']) ? c['apps'] : []).filter((x): x is string => typeof x === 'string')
-      body = (
-        <div className="dt-list">
-          {apps.map((n) => (
-            <div className="dt-row" key={n} onClick={() => {
-              const url = siteUrlOf(n)
-              if (url !== null) openSite(url)
-              else showToast(`「${n}」没有内置网址，可编辑后直接打开`)
-            }}>
-              <SiteIcon url={siteUrlOf(n) ?? ''} name={n} cls="dt-ico" fs={13} size={30} />
-              <span className="dt-name">{n}</span>
-            </div>
-          ))}
-        </div>
-      )
-      break
-    }
-    default:
-      body = <Hint>该类型暂无详情视图。</Hint>
+  const modes = normModes(c['modes'], c['mode'])
+  const patch = (v: Record<string, unknown>): void => updateConfig(item.id, v)
+  const toggle = (m: string): void => {
+    const next = modes.includes(m as never) ? modes.filter((x) => x !== m) : [...modes, m]
+    /* 至少留一个模式：全取消时把刚点的那个留下 */
+    patch({ modes: COUNTDOWN_MODES_ALL.filter((x) => next.includes(x)) })
   }
   return (
     <>
-      <h2>{def.n} · 详情</h2>
-      <p className="sub">{def.s}</p>
-      {body}
+      <CatsRow label="显示模式" options={COUNTDOWN_MODES_ALL} active={modes} onPick={toggle} />
+      {modes.length > 1 && (
+        <SwitchRow l="多模式轮播" d="卡片按顺序轮换显示（每 6 秒一个）；关掉则固定第一个"
+          on={bool(c['rotate'])} onToggle={() => patch({ rotate: !bool(c['rotate']) })} />
+      )}
+      {modes.includes('下班倒计时') && (
+        <TextRow label="下班时刻" value={str(c['at'], '18:00')} placeholder="18:00" onChange={(v) => patch({ at: v })} />
+      )}
+      {modes.includes('倒数日') && (
+        <TextRow label="目标日期" value={str(c['date'], '2027-01-01')} placeholder="2027-01-01" onChange={(v) => patch({ date: v })} />
+      )}
+      {modes.includes('纪念日') && (
+        <>
+          <TextRow label="起始日期" value={str(c['annDate'], '2020-05-20')} placeholder="2020-05-20" onChange={(v) => patch({ annDate: v })} />
+          <TextRow label="纪念日标题" value={str(c['title'])} placeholder="与MiNa相识" onChange={(v) => patch({ title: v })} />
+          <CatsRow label="天数单位" options={['天', '周', '月', '年']} active={[str(c['unitLabel'], '天')]}
+            onPick={(u) => patch({ unitLabel: u })} />
+        </>
+      )}
+      <SwitchRow l="显示节日倒数" on={bool(c['showFestivals'])} onToggle={() => patch({ showFestivals: !bool(c['showFestivals']) })} />
+    </>
+  )
+}
+
+/** 天气实况主行：温度大字 > 天气现象 > 地名（层级即信息优先级） */
+const WeatherNow = ({ d, toF, showRange }: { d: WeatherData; toF: boolean; showRange: boolean }) => {
+  const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
+  const range = `${conv(d.daily[0]?.min ?? 0)}°/${conv(d.daily[0]?.max ?? 0)}°`
+  return (
+    <div className="dt-now">
+      <span className="dt-temp">{conv(d.currentTemp)}°</span>
+      <div className="dt-now-main">
+        <span className="dt-cond">{weatherText(d.currentCode)}{showRange ? ` ${range}` : ''}</span>
+        <span className="dt-host">{d.source === 'geo' ? (d.place !== '' ? d.place : '当前位置') : `手选城市 · ${d.place}`}</span>
+      </div>
+    </div>
+  )
+}
+
+/** 未来 7 天：刷新与「x 分钟前更新」都固定在标题行右侧 */
+const WeatherForecast = ({ d, toF, now }: { d: WeatherData; toF: boolean; now: Date }) => {
+  const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
+  const wdOf = (date: string): string => {
+    const t = Date.parse(date)
+    return Number.isNaN(t) ? date.slice(5) : `周${'日一二三四五六'[new Date(t).getDay()]}`
+  }
+  return (
+    <>
+      <SecHead title="未来 7 天" action={
+        <>
+          <span className="dt-sec-sub">{relTimeText(d.ts, now)}更新</span>
+          <button className="btn sm ghost" onClick={() => { void useApp.getState().loadWeather(true) }}>刷新</button>
+        </>
+      } />
+      <div className="dt-days week">
+        {d.daily.map((x, i) => (
+          <div className={`dt-day${i === 0 ? ' today' : ''}`} key={x.date}>
+            <span>{i === 0 ? '今天' : wdOf(x.date)}</span>
+            <span>{weatherText(x.code)}</span>
+            <span>{conv(x.min)}° / {conv(x.max)}°</span>
+          </div>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/** 其他城市行：实况数值 + 常显「设为主 / 删除」（不再靠悬停才看得见操作） */
+const WeatherCityRow = ({ ct, w, isMain, onMain, onRemove }: {
+  ct: CityPick
+  w: WeatherData | undefined
+  isMain: boolean
+  onMain: () => void
+  onRemove: () => void
+}) => (
+  <div className="dt-row city" title="点击设为主定位" onClick={() => { if (!isMain) onMain() }}>
+    <span className="dt-name">{ct.name}</span>
+    {w === undefined ? (
+      <span className="dt-host">暂无数据</span>
+    ) : (
+      <>
+        <span className="wc-temp">{w.currentTemp}°</span>
+        <span className="dt-host">{weatherText(w.currentCode)}</span>
+        <span className="dt-host">{w.daily[0]?.min ?? '--'}° / {w.daily[0]?.max ?? '--'}°</span>
+      </>
+    )}
+    <div className="dt-city-act">
+      <button className="dt-mini" disabled={isMain} onClick={(e) => { e.stopPropagation(); onMain() }}>
+        {isMain ? '主城市' : '设为主'}
+      </button>
+      <button className="dt-mini danger" onClick={(e) => { e.stopPropagation(); onRemove() }}>删除</button>
+    </div>
+  </div>
+)
+
+/**
+ * 其他城市：整块只有一个搜索框（点「添加城市」展开），
+ * 结果行上直接给出「设为主定位 / 加入列表」两个动作，行内常驻「设为主 / 删除」。
+ */
+const WeatherCities = ({ main }: { main: CityPick | null }) => {
+  const cities = useApp((s) => s.settings.weatherCities)
+  const cityWeathers = useApp((s) => s.cityWeathers)
+  const setSetting = useApp((s) => s.setSetting)
+  const showToast = useApp((s) => s.showToast)
+  const addCity = useApp((s) => s.addWeatherCity)
+  const removeCity = useApp((s) => s.removeWeatherCity)
+  const [adding, setAdding] = useState(false)
+  const mainKey = main === null ? '' : cityKeyOf(main)
+  const setMain = (ct: CityPick): void => {
+    setSetting('weatherCity', { ...ct })
+    void useApp.getState().loadWeather()
+    showToast(`已切换到 ${ct.name}`)
+  }
+  const pick = (h: GeoHit, act: 'main' | 'add'): void => {
+    const city: CityPick = { name: h.admin1 !== '' ? `${h.name} · ${h.admin1}` : h.name, lat: h.lat, lon: h.lon }
+    if (act === 'main') {
+      setMain(city)
+      setAdding(false)
+      return
+    }
+    addCity(city)
+  }
+  return (
+    <>
+      <SecHead title="其他城市" sub={cities.length > 0 ? `${cities.length}/8` : ''} action={
+        <button className="dt-link" onClick={() => setAdding((v) => !v)}>{adding ? '收起搜索' : '+ 添加城市'}</button>
+      } />
+      {adding && <CitySearch onPick={pick} />}
+      {cities.length === 0 ? (
+        <div className="dt-empty-line">还没有其他城市。</div>
+      ) : (
+        <div className="dt-list flat">
+          {cities.map((ct, i) => (
+            <WeatherCityRow key={`${ct.name}-${i}`} ct={ct} w={cityWeathers[cityKeyOf(ct)]}
+              isMain={cityKeyOf(ct) === mainKey} onMain={() => setMain(ct)} onRemove={() => removeCity(i)} />
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
+/** 天气状态行：来源 / 自动刷新间隔 + 只在需要时出现的定位入口（已授权时不再挂「允许定位」） */
+const WeatherStatus = ({ d, city }: { d: WeatherData | null; city: CityPick | null }) => {
+  const every = useApp((s) => s.settings.weatherEvery)
+  const setSetting = useApp((s) => s.setSetting)
+  const relocate = (): void => { void useApp.getState().loadWeather(true) }
+  return (
+    <div className="dt-stat">
+      <span>{d === null ? '未获取天气' : d.source === 'geo' ? '真实定位' : `手选城市 · ${d.place}`}</span>
+      <span>{every > 0 ? `${every} 分钟自动刷新` : '自动刷新关闭'}</span>
+      {d !== null && city === null && d.source === 'geo' && <button className="dt-link" onClick={relocate}>重新定位</button>}
+      {city !== null && (
+        <button className="dt-link" onClick={() => { setSetting('weatherCity', null); relocate() }}>改回定位</button>
+      )}
+    </div>
+  )
+}
+
+const WeatherOverview = ({ item, now }: { item: GridItem; now: Date }) => {
+  const weather = useApp((s) => s.weather)
+  const city = useApp((s) => s.settings.weatherCity)
+  const c = cfg(item)
+  const toF = str(c['unit'], '摄氏 °C') === '华氏 °F'
+  return (
+    <>
+      {weather === null ? (
+        <div className="dt-empty">
+          <span>还没有天气数据</span>
+          <button className="btn sm" onClick={() => { void useApp.getState().loadWeather(true) }}>允许定位</button>
+        </div>
+      ) : (
+        <>
+          <WeatherNow d={weather} toF={toF} showRange={bool(c['showRange'])} />
+          <WeatherForecast d={weather} toF={toF} now={now} />
+        </>
+      )}
+      <WeatherCities main={city} />
+      <WeatherStatus d={weather} city={city} />
+    </>
+  )
+}
+
+/** 时钟：日期与问候语各自独立开关，想只留日期也能做到 */
+const ClockOverview = ({ item, now }: { item: GridItem; now: Date }) => {
+  const c = cfg(item)
+  const mode = str(c['timeMode'], '24 小时')
+  const h = now.getHours()
+  const hm = mode === '12 小时' ? `${p2(h % 12 === 0 ? 12 : h % 12)}:${p2(now.getMinutes())}` : `${p2(h)}:${p2(now.getMinutes())}`
+  const time = `${hm}${bool(c['showSeconds']) ? `:${p2(now.getSeconds())}` : ''}${mode === '12 小时' ? (h < 12 ? ' AM' : ' PM') : ''}`
+  const sub = [bool(c['showDate']) ? dateText(now) : '', bool(c['showGreeting']) ? getGreetingByHour(h) : '']
+    .filter((x) => x !== '').join(' · ')
+  return (
+    <div className="dt-clock">
+      {mode !== '隐藏' && <div className="dt-time">{time}</div>}
+      {sub !== '' && <div className="dt-sub">{sub}</div>}
+    </div>
+  )
+}
+
+/** 倒计时：主模式大卡 + 其余模式并列小卡（点一下切换主卡，不必等轮播） */
+const CountdownOverview = ({ item, now }: { item: GridItem; now: Date }) => {
+  const c = cfg(item)
+  const modes = normModes(c['modes'], c['mode'])
+  const [pick, setPick] = useState('')
+  const mode = modes.includes(pick as CountdownMode) ? pick as CountdownMode : (modes[0] ?? '下班倒计时')
+  const main = readoutOf(mode, c, now, str)
+  return (
+    <>
+      <div className="dt-clock">
+        <div className="dt-sub">{main.hint}{main.sub !== '' ? ` · ${main.sub}` : ''}</div>
+        <div className="dt-time">{main.value}{main.unit !== '' && <span className="dt-unit">{main.unit}</span>}</div>
+      </div>
+      {modes.length > 1 && (
+        <div className="dt-modes">
+          {modes.map((m) => {
+            const r = readoutOf(m, c, now, str)
+            return (
+              <button key={m} className={`dt-mode${m === mode ? ' on' : ''}`} onClick={() => setPick(m)}
+                title={`切换到「${m}」`}>
+                <span>{m}</span>
+                <b>{r.value}{r.unit}</b>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      <CountdownEntries item={item} now={now} />
+    </>
+  )
+}
+
+/** 图标格容器的概览：点一行打开对应站点 */
+const GroupOverview = ({ apps }: { apps: string[] }) => {
+  const showToast = useApp((s) => s.showToast)
+  const openSite = (url: string): void => { void openLink(url, useApp.getState().settings.openMode, 'link') }
+  return (
+    <div className="dt-list flat">
+      {apps.length === 0 && <Hint>容器里还没有图标，可在「设置」或右键菜单里添加。</Hint>}
+      {apps.map((n) => (
+        <div className="dt-row" key={n} onClick={() => {
+          const url = siteUrlOf(n)
+          if (url !== null) openSite(url)
+          else showToast(`「${n}」没有内置网址，可编辑后直接打开`)
+        }}>
+          <SiteIcon url={siteUrlOf(n) ?? ''} name={n} cls="dt-ico" fs={13} size={30} />
+          <span className="dt-name">{n}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** 概览主体：每类只给当前数据下最有意义的核心视图 */
+const WidgetOverview = ({ item, now }: { item: GridItem; now: Date }) => {
+  const c = cfg(item)
+  switch (item.t) {
+    case 'weather': return <WeatherOverview item={item} now={now} />
+    case 'clock': return <ClockOverview item={item} now={now} />
+    /* 月历与「选中日期的农历 / 宜忌 / 日程」都在 CalendarSchedule 里：
+       点任意一天切换，翻月会同步换网格，避免这里与它各算一套月历 */
+    case 'cal': return <CalendarSchedule item={item} now={now} />
+    case 'todo': return <TodoDetail item={item} />
+    case 'fav': return <FavDetail />
+    case 'countdown': return <CountdownOverview item={item} now={now} />
+    case 'group': return <GroupOverview apps={(Array.isArray(c['apps']) ? c['apps'] : []).filter((x): x is string => typeof x === 'string')} />
+    default: return <Hint>该类型暂无详情视图。</Hint>
+  }
+}
+
+const ItemDetail = ({ item }: { item: GridItem }) => {
+  const setModal = useApp((s) => s.setModal)
+  const [tab, setTab] = useState<'overview' | 'settings'>('overview')
+  const [now, setNow] = useState(() => new Date())
+  /* 时钟 / 倒计时每秒走字；天气要算「x 分钟前更新」，30 秒一刷；其余类型与「设置」页不建定时器
+     （设置页有输入框，每秒重渲染会打断输入节奏） */
+  useEffect(() => {
+    if (tab !== 'overview') return
+    const fast = item.t === 'clock' || item.t === 'countdown'
+    if (!fast && item.t !== 'weather') return
+    const timer = window.setInterval(() => setNow(new Date()), fast ? 1000 : 30_000)
+    return () => window.clearInterval(timer)
+  }, [item.t, tab])
+  const def = WIDGET_DEFS[item.t]
+  const body = <WidgetOverview item={item} now={now} />
+  return (
+    <>
+      <div className="dt-head">
+        <h2>{def.n} · 详情</h2>
+        <div className="dt-seg" role="tablist">
+          <button className={tab === 'overview' ? 'on' : ''} onClick={() => setTab('overview')}>概览</button>
+          <button className={tab === 'settings' ? 'on' : ''} onClick={() => setTab('settings')}>设置</button>
+        </div>
+      </div>
+      {tab === 'overview' ? body : (
+        <>
+          <p className="sub">{def.s}。位置与尺寸属于布局，下面的设置只改这个实例。</p>
+          <CardConfigBody item={item} />
+        </>
+      )}
       <div className="btn-row end">
-        <button className="btn ghost" onClick={() => setModal('editItem')}>编辑配置</button>
         <button className="btn" onClick={() => setModal(null)}>关闭</button>
       </div>
     </>
