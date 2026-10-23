@@ -735,7 +735,7 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .dt-row-del.always{opacity:1}
 .dt-row-del + .dt-row-del{margin-left:0}
 /* 天气：7 天预报一行排开（窄屏按可用宽度自然压缩） */
-.dt-days.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.dt-days.week{display:grid;grid-template-columns:repeat(auto-fit,minmax(72px,1fr));gap:6px}
 .dt-days.week .dt-day{padding:8px 2px;min-width:0}
 .dt-days.week .dt-day span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dt-almanac-btn{margin-left:auto;font-size:var(--fs-xs)}

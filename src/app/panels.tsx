@@ -20,7 +20,7 @@ import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
-import { addDays, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, relTimeText, startOfWeek, type TodoEntry } from '../core/utils'
+import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, relTimeText, startOfWeek, type TodoEntry } from '../core/utils'
 import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { cityKeyOf, searchCities, weatherText, type GeoHit, type WeatherData } from '../core/weather'
@@ -2775,6 +2775,18 @@ const ClockOverview = ({ item, now }: { item: GridItem; now: Date }) => {
   )
 }
 
+/** 纪念日的下一次周年（起始日的月 / 日，已过则顺延一年） */
+const nextAnniversaryOf = (c: Record<string, unknown>, now: Date): string => {
+  const md = /^\d{4}-(\d{2})-(\d{2})$/.exec(str(c['annDate'], str(c['date'], '2020-05-20')).trim())
+  if (md === null) return ''
+  const d = new Date(now.getFullYear(), Number(md[1]) - 1, Number(md[2]))
+  if (dayStartOf(d) < dayStartOf(now)) d.setFullYear(d.getFullYear() + 1)
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`
+}
+
+/** 当日零点（只用于比较日期先后，避免时分秒影响「已过」判断） */
+const dayStartOf = (d: Date): number => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+
 /** 倒计时：主模式大卡 + 其余模式并列小卡（点一下切换主卡，不必等轮播） */
 const CountdownOverview = ({ item, now }: { item: GridItem; now: Date }) => {
   const c = cfg(item)
@@ -2782,11 +2794,14 @@ const CountdownOverview = ({ item, now }: { item: GridItem; now: Date }) => {
   const [pick, setPick] = useState('')
   const mode = modes.includes(pick as CountdownMode) ? pick as CountdownMode : (modes[0] ?? '下班倒计时')
   const main = readoutOf(mode, c, now, str)
+  const nextAnn = mode === '纪念日' ? nextAnniversaryOf(c, now) : ''
   return (
     <>
       <div className="dt-clock">
         <div className="dt-sub">{main.hint}{main.sub !== '' ? ` · ${main.sub}` : ''}</div>
         <div className="dt-time">{main.value}{main.unit !== '' && <span className="dt-unit">{main.unit}</span>}</div>
+        {mode === '下班倒计时' && <div className="dt-sub">目标时刻 {str(c['at'], '18:00')}</div>}
+        {nextAnn !== '' && <div className="dt-sub">距下次周年 {nextAnn} 还有 {daysUntil(nextAnn, now)} 天</div>}
       </div>
       {modes.length > 1 && (
         <div className="dt-modes">
