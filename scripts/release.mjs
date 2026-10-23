@@ -54,11 +54,12 @@ function main() {
 
   // 1. 打包 dist → dist.zip（先清理旧包）
   if (existsSync(DIST_ZIP)) rmSync(DIST_ZIP, { force: true });
+  /* _metadata 是 Chrome 加载已解压扩展时生成的运行时目录（DNR 规则集索引），
+     不属于构建产物，打进发布包会让用户拿到与 Chrome 版本绑定的旧索引 */
   if (process.platform === 'win32') {
-    run('powershell', ['-NoProfile', '-Command',
-      `Compress-Archive -Force -Path '${DIST}\\*' -DestinationPath '${DIST_ZIP}'`]);
+    run('tar', ['-a', '-c', '-f', DIST_ZIP, '-C', DIST, '--exclude=_metadata', '.']);
   } else {
-    run('zip', ['-r', '-q', DIST_ZIP, '.'], { cwd: DIST });
+    run('zip', ['-r', '-q', DIST_ZIP, '.', '-x', '_metadata/*'], { cwd: DIST });
   }
   console.log('[release] 已打包 dist.zip');
 
