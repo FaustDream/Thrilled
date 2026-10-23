@@ -507,7 +507,7 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .status-row .link:hover{text-decoration:underline}
 .sec-title{font-size:var(--fs-lg);font-weight:500;margin:24px 0 10px}
 /* 高级设置默认折叠：首屏只留名称 / 功能开关 / 尺寸；样式与低频批量操作收进这里 */
-.cfg-adv{margin:14px 0 2px;border-top:1px solid color-mix(in srgb,var(--panel-text) 16%,transparent)}
+.cfg-adv{margin:14px 0 2px}
 .cfg-adv summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;
   font-size:var(--fs-md);font-weight:500;color:var(--panel-text);cursor:pointer}
 .cfg-adv summary::-webkit-details-marker{display:none}
@@ -997,18 +997,19 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .modal .f-row{margin-bottom:10px}
 .modal .sec-title{margin:18px 0 8px}
 .modal .cats{margin:8px 0}
-/* 组件设置：统一成「分组 + 行分隔线」的节奏。文本框、开关、数字、颜色一律同一条底线，
-   组内末行去掉线，组与组之间留 16px——不再一半有横线、一半靠空白硬撑 */
-.modal .cfg-group{--cfg-line:color-mix(in srgb,var(--panel-text) 22%,transparent);margin-top:16px}
+/* 组件设置：只靠分组间距与行内边距分层，不再画横线 */
+.modal .cfg-group{margin-top:16px}
 .modal .cfg-form>.cfg-group:first-child{margin-top:4px}
 .modal .cfg-group .sec-title{margin:0 0 4px}
 .modal .cfg-group>.f-row,
 .modal .cfg-group>.switch-row,
 .modal .cfg-group>.num-row,
-.modal .cfg-group>.color-field{margin:0;padding:8px 0;border-bottom:1px solid var(--cfg-line)}
+.modal .cfg-group>.color-field{margin:0;padding:8px 0}
+.modal .cfg-group .switch-row,
+.modal .cfg-group .num-row,
+.modal .cfg-group .cfg-reset-cell{border-bottom:0}
 .modal .cfg-group .num-grid .num-row,
-.modal .cfg-group .cfg-reset-cell{padding:8px 0;border-bottom-color:var(--cfg-line)}
-.modal .cfg-group>:last-child{border-bottom:0}
+.modal .cfg-group .cfg-reset-cell{padding:8px 0}
 .modal .cfg-group>.btn-row{margin-top:10px;padding-top:2px}
 .modal .cfg-adv-body.cfg-group{margin-top:0}
 .log-line{min-height:28px}
