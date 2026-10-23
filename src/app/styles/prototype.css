@@ -469,6 +469,13 @@ html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
    改为**贴住下方危险卡片**：空白全部留在上方，状态行成为危险区的引导行 */
 .pane-band{flex:1 1 auto;min-height:32px;display:flex;align-items:flex-end;justify-content:center;
   padding-bottom:10px}
+/* 设置抽屉不画横线分隔（与组件配置弹窗同一口径）：头部 / 页签的底线与卡片内的行分隔线一并去掉，
+   区块之间只靠卡片间距、组标题与行内边距分层；卡片自身的描边保留 */
+.dw[data-panel='setting'] .dw-head,
+.dw[data-panel='setting'] .dw-tabs,
+.dw[data-panel='setting'] .switch-row,
+.dw[data-panel='setting'] .num-row,
+.dw[data-panel='setting'] .eng-row{border-bottom:0}
 
 /* ============ 11. 表单与通用控件 ============ */
 .f-row{margin-bottom:14px}

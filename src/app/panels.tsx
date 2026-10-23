@@ -1438,6 +1438,11 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '5.27', d: '2026-10-23', items: [
+      { k: '调整', s: '设置里不再有横线分隔', d: '设置抽屉的头部底线、页签底线与卡片内各行的分隔线一并去掉，只保留卡片间距、组标题与行内边距；组件配置弹窗已是同一口径。' },
+    ],
+  },
+  {
     v: '5.26', d: '2026-10-23', items: [
       { k: '优化', s: 'Wallpaper Gallery 的缩略图恢复显示', d: '站方图片 CDN 加了 Cloudflare 防盗链，只接受壁纸站点的 Referer；扩展里页面的默认 Referer 被拒（全部 403）。现在由扩展的 DNR 静态规则给该 CDN 补上站点 Referer，缩略图与原图都能正常加载。' },
     ],
@@ -1776,7 +1781,7 @@ export const Drawer = memo(function Drawer() {
   return (
     <>
       <div className={`dw-mask${drawer ? ' show' : ''}`} onClick={() => setDrawer(null)} />
-      <div className={`dw${drawer ? ' open' : ''}`}>
+      <div className={`dw${drawer ? ' open' : ''}`} data-panel={drawer ?? undefined}>
         <div className={`dw-head${sub === '' ? ' solo' : ''}`}>
           <div>
             <div className="dw-title">{title}</div>
