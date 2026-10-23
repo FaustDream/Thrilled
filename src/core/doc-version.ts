@@ -12,9 +12,25 @@ export interface VersionedDoc {
   updatedAt?: string | null;
 }
 
-/** 是否需要在载入前备份：文档版本缺失或与当前版本不同 */
+/**
+ * 版本号归一化为三段式（主.次.修订）
+ *
+ * 两段式 A.B 是迁移前的写法，等价于 A.0.B（5.27 ≡ 5.0.27）；一段式补成 A.0.0。
+ * 前导零一并抹掉（5.0.027 → 5.0.27）。无法解析的字符串原样返回，仍按字符串比较。
+ */
+export const normalizeVersion = (v: string | null | undefined): string => {
+  if (typeof v !== 'string') return '';
+  const m = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?$/.exec(v.trim());
+  if (m === null) return v;
+  const major = Number(m[1]);
+  if (m[3] !== undefined) return `${major}.${Number(m[2])}.${Number(m[3])}`;
+  if (m[2] !== undefined) return `${major}.0.${Number(m[2])}`;
+  return `${major}.0.0`;
+};
+
+/** 是否需要在载入前备份：文档版本缺失或与当前版本不同（两段式 / 三段式按归一化后比较） */
 export const needsUpgradeBackup = (doc: VersionedDoc, currentVersion: string): boolean =>
-  doc.appVersion !== currentVersion;
+  normalizeVersion(doc.appVersion) !== normalizeVersion(currentVersion);
 
 /** 快照是否比当前文档更旧；任一方缺时间戳时返回 false（不阻断恢复） */
 export const isSnapshotOlder = (snapshot: VersionedDoc, current: VersionedDoc): boolean => {

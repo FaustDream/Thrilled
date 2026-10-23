@@ -13,7 +13,7 @@ export const BACKUP_DOC_KEY = 'thrilled:v4:doc:backup' as const;
 /** 已为哪个版本留过更新前备份（同一版本只备份一次，避免每次启动重复覆盖） */
 export const BACKUP_VERSION_KEY = 'thrilled:v4:doc:backup-version' as const;
 /** 当前扩展版本（随文档落盘，用于识别版本升级并自动备份） */
-export const APP_VERSION = '5.27' as const;
+export const APP_VERSION = '5.0.27' as const;
 /** v3 → v4 一次性迁移标记键 */
 export const MIGRATED_KEY = 'thrilled:v4:migrated' as const;
 /** 一次性布局修正标记键（v4.1 迁移的多图标页合并，store/hydrate） */
