@@ -11,3 +11,4 @@ AGENTS.md
 BUG_FIXES.md
 .playwright-cli/
 .idea/
+tests/
