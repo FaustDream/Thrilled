@@ -507,7 +507,7 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .status-row .link:hover{text-decoration:underline}
 .sec-title{font-size:var(--fs-lg);font-weight:500;margin:24px 0 10px}
 /* 高级设置默认折叠：首屏只留名称 / 功能开关 / 尺寸；样式与低频批量操作收进这里 */
-.cfg-adv{margin:10px 0 2px;border-top:1px solid var(--line)}
+.cfg-adv{margin:14px 0 2px;border-top:1px solid color-mix(in srgb,var(--panel-text) 16%,transparent)}
 .cfg-adv summary{list-style:none;display:flex;align-items:center;gap:8px;min-height:44px;
   font-size:var(--fs-md);font-weight:500;color:var(--panel-text);cursor:pointer}
 .cfg-adv summary::-webkit-details-marker{display:none}
