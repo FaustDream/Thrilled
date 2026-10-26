@@ -7,8 +7,8 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, type CtxState, type DrawerKey } from './store'
-import { CELL, COLS, GRID_LEFT, GRID_TOP, PAGE_W, ROWS, SNAP_ALIGN_PX, STAGE_W, insetOf, itemBox, nearOnAxis, snapAxis } from '../shared/grid'
-import type { AxisSnap } from '../shared/grid'
+import { CELL, COLS, GRID_LEFT, GRID_TOP, PAGE_W, ROWS, SNAP_ALIGN_PX, insetOf, itemBox, nearOnAxis, snapAxis, stageFitOf } from '../shared/grid'
+import type { AxisSnap, StageFit } from '../shared/grid'
 import { naturalBoxOf } from '../shared/widget-defs'
 import { stage } from './stage'
 import { WidgetView, SiteIcon, cfg, str, styleVarsOf } from './widgets'
@@ -550,18 +550,22 @@ export const App = () => {
     return () => clearInterval(t)
   }, [])
   useEffect(() => {
-    /* 舞台铺满窗口：设计像素 = 窗口/缩放；窗口小于设计尺寸时整体等比缩小（origin 左上，无居中偏移） */
+    /* 舞台铺满窗口：设计像素 = 窗口/缩放；窗口小于设计尺寸时整体等比缩小（origin 左上，无居中偏移）。
+       窗口尺寸还不可用（内嵌浏览器自由尺寸 / 首帧竞态）时沿用上一次的有效结果，
+       绝不能让 s 落到 0——那会让 stage.w 变成 NaN、舞台锁死在 scale(0)（见 stageFitOf） */
+    let last: StageFit | undefined
     const fit = () => {
-      const s = Math.min(1, window.innerWidth / STAGE_W, window.innerHeight / 945)
+      const f = stageFitOf(window.innerWidth, window.innerHeight, last)
+      last = f
       const el = stageRef.current
       if (el) {
-        el.style.width = `${window.innerWidth / s}px`
-        el.style.height = `${window.innerHeight / s}px`
-        el.style.transform = `scale(${s})`
+        el.style.width = `${f.w}px`
+        el.style.height = `${f.h}px`
+        el.style.transform = `scale(${f.s})`
       }
-      stage.w = window.innerWidth / s
-      stage.h = window.innerHeight / s
-      stage.scale = s
+      stage.w = f.w
+      stage.h = f.h
+      stage.scale = f.s
       /* 舞台宽写进 CSS 变量：抽屉 / 弹窗的宽度上限要用它兜底（100% 指舞台宽，不是窗口宽） */
       document.documentElement.style.setProperty('--stage-w', `${stage.w}px`)
       /* 抽屉宽度：窄窗口下占满整个舞台（否则 440 设计像素缩到手机上只剩一条窄缝） */
@@ -569,9 +573,9 @@ export const App = () => {
       /* 舞台尺寸变了：缓存的屏幕 rect 作废（拖拽中每帧都要用它换算格坐标） */
       stageBoxRef.current = null
       /* 缩放 / 视口变了：壁纸取样点的换算比例跟着变（值与上次相同则不触发重渲染） */
-      setFit((p) => (p.w === window.innerWidth && p.h === window.innerHeight && p.s === s
+      setFit((p) => (p.w === window.innerWidth && p.h === window.innerHeight && p.s === f.s
         ? p
-        : { w: window.innerWidth, h: window.innerHeight, s }))
+        : { w: window.innerWidth, h: window.innerHeight, s: f.s }))
       const r = window.innerWidth / Math.max(1, window.innerHeight)
       setVpRatio((p) => (p > 0 && Math.abs(r - p) / p <= 0.01 ? p : r))
     }

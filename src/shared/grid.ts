@@ -32,6 +32,32 @@ export const STAGE_H = 945;
 /** 每种模式最多页数（04 §5.1：应用最多添加 5 页） */
 export const MAX_PAGES = 5;
 
+/** 舞台铺满窗口后的尺寸与缩放 */
+export interface StageFit {
+  /** 缩放（0 < s ≤ 1）：窗口小于设计尺寸时整体等比缩小 */
+  s: number;
+  /** 舞台设计宽（= 窗口宽 / s） */
+  w: number;
+  /** 舞台设计高（= 窗口高 / s） */
+  h: number;
+}
+
+/**
+ * 由窗口尺寸算舞台缩放。
+ *
+ * 窗口还没被宿主布局出来时 innerWidth / innerHeight 可能是 0（内嵌浏览器自由尺寸、
+ * 首帧竞态）。这时不能照公式算：`s = min(1, 0/1920, 0/945) = 0`，接着 `0 / 0` 得 NaN，
+ * 写进 transform 就是 `scale(NaN)`（浏览器按 scale(0) 渲染）——整页缩成一个点，
+ * 而且之后没有事件把它救回来。所以尺寸非正时沿用上一次的有效结果（首次调用回退出厂设计尺寸）。
+ */
+export const stageFitOf = (vw: number, vh: number, prev?: StageFit): StageFit => {
+  const valid = Number.isFinite(vw) && Number.isFinite(vh) && vw > 0 && vh > 0;
+  if (!valid) return prev ?? { s: 1, w: STAGE_W, h: STAGE_H };
+  const s = Math.min(1, vw / STAGE_W, vh / STAGE_H);
+  return { s, w: vw / s, h: vh / s };
+};
+
+
 /** 卡片尺寸档位（单位数，仅六档） */
 export const SIZES: readonly { w: number; h: number }[] = [
   { w: 2, h: 2 }, { w: 2, h: 4 }, { w: 4, h: 2 }, { w: 4, h: 4 }, { w: 8, h: 4 }, { w: 8, h: 2 },
