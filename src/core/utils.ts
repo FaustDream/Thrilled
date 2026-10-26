@@ -156,6 +156,37 @@ export function normTodoItems(v: unknown): TodoEntry[] {
 }
 
 
+/* ===== 笔记 ===== */
+
+/** 笔记条目（存在卡片 config.items 里；pinned = 置顶，卡上排在前面） */
+export interface NoteEntry {
+  txt: string;
+  pinned: boolean;
+}
+
+/** 单卡条数上限（与待办同一口径，防脏数据撑爆配置） */
+const NOTE_MAX = 100;
+/** 单条字数上限：一行一句，长了就不该塞在这张卡上 */
+const NOTE_TEXT_MAX = 200;
+
+/** 笔记条目归一化：非数组 / 空白文本一律丢弃，超长截断，置顶按布尔取值 */
+export function normNoteItems(v: unknown): NoteEntry[] {
+  if (!Array.isArray(v)) return [];
+  const out: NoteEntry[] = [];
+  for (const raw of v) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const txt = typeof (raw as { txt?: unknown }).txt === 'string' ? (raw as { txt: string }).txt.trim() : '';
+    if (txt === '') continue;
+    out.push({ txt: txt.slice(0, NOTE_TEXT_MAX), pinned: (raw as { pinned?: unknown }).pinned === true });
+    if (out.length >= NOTE_MAX) break;
+  }
+  return out;
+}
+
+/** 卡片上的显示顺序：置顶的排前面，组内保持录入顺序（sort 稳定） */
+export const notesInShowOrder = (items: readonly NoteEntry[]): NoteEntry[] =>
+  [...items].sort((a, b) => Number(b.pinned) - Number(a.pinned));
+
 /* ===== 搜索历史 ===== */
 
 /**

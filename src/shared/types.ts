@@ -16,6 +16,7 @@ export type WidgetKind =
   | 'cal'
   | 'weather'
   | 'todo'
+  | 'note'
   | 'countdown'
   | 'fav'
   | 'icon'
@@ -336,6 +337,11 @@ export interface StoredDoc {
   history: string[];
   /** 首次引导已完成（首次安装为空白页，完成引导后不再显示） */
   welcomed: boolean;
+  /**
+   * 日历里的旧条目是否已搬进「笔记」（v5.0.33 一次性迁移）。
+   * 标记放在文档里而不是本机：导出 / 目录同步到别的设备时，那份数据也只搬一次。
+   */
+  notesSeeded?: boolean;
   /** 上次备份时间（本地记录） */
   backupTime: string | null;
   /** 最近一次写入时间（ISO）：本地目录快照与内存数据比较新旧，避免旧快照覆盖新数据 */

@@ -6,7 +6,7 @@
  * 主题令牌与 CSS 变量体系（--g-alpha / --ga-* / --blur-*）对齐，见 docs/v4/02-UI规格.md §6.4。
  */
 import { create } from 'zustand'
-import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc, seedBirthdays } from './layout'
+import { ARRANGE_ALL_KINDS, ARRANGE_KINDS, DEFAULT_PAGES, SAMPLE_PAGES, arrangePages, clonePages, crossPlan, dropPlan, mergeIconPages, packPage, prunePages, readLayoutDoc, reorderIconsByWeight, seedBirthdays } from './layout'
 import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
@@ -17,6 +17,8 @@ import { initStorage, kvGetRaw, kvSetRaw, loadBackupDoc, loadDoc, saveBackupDoc,
 import { markActiveWallpaper } from '../core/wallpaper'
 import { needsUpgradeBackup } from '../core/doc-version'
 import { applyV3EngineSet, migrateV3, readV3EnginePrefs, type MigrationResult } from '../core/migrate'
+import { seedNotesFromCalendar } from '../core/note-seed'
+import { cardWeightOf, clearUsage, readUsage } from './usage'
 import { APP_VERSION, BACKUP_VERSION_KEY, BIRTHDAY_SEED_KEY, ENGINE_RESTORE_KEY, LAYOUT_MERGE_KEY } from '../shared/constants'
 import { DEFAULT_SHORTCUTS } from '../shared/shortcuts'
 import { withGlobalBlur, withGlobalGlass } from '../shared/visual'
@@ -86,6 +88,8 @@ interface AppState {
   hydrated: boolean
   /** 首次访问欢迎弹窗已展示（持久化） */
   welcomed: boolean
+  /** 日历旧条目是否已搬进笔记（持久化在文档里，见 core/note-seed） */
+  notesSeeded: boolean
   settings: AppSettings
   /** 单套页面（隐私模式已并入标准模式） */
   pages: ModePages
@@ -176,6 +180,8 @@ interface AppState {
   remove: (id: string) => void
   /** 手动整理（空白处右键「整理图标」）：把所有页的图标类卡片依次前移到最靠前的空位（跨页） */
   arrange: () => void
+  /** 手动整理（右键「按使用频率整理本页」）：本页图标按 30 天打开次数降序补位，组件钉住不动 */
+  arrangeByUsage: () => void
   swapKind: (id: string, kind: WidgetKind) => void
   /** 批量落位网址图标（收藏夹导入 / 批量添加共用） */
   placeMany: (entries: { label: string; url: string }[]) => number
@@ -232,6 +238,7 @@ const buildDoc = (s: AppState) => ({
   skins: s.skins,
   history: s.history,
   welcomed: s.welcomed,
+  notesSeeded: s.notesSeeded,
   backupTime: s.backupTime,
   updatedAt: new Date().toISOString(),
   appVersion: APP_VERSION,
@@ -328,16 +335,22 @@ const doHydrate = async (): Promise<void> => {
   const loaded = loadDoc()
   const toasts: string[] = []
   let doc: StoredDoc
+  /* 笔记迁移改过数据：载入后要立刻落一次盘（否则关掉标签页等于白搬） */
+  let notesChanged = false
   if (loaded !== null) {
     /* 版本升级：先把旧文档整份留底，再继续载入（数据不会因为升级被动过） */
     if (backupIfUpgraded(loaded)) toasts.push('已自动备份更新前的数据')
     const { doc: mergedDoc, merged } = withLayoutMerge(loaded)
     const { doc: restoredDoc, restored } = await withEngineRestore(mergedDoc)
     const { doc: seededDoc, seeded } = withBirthdaySeed(restoredDoc)
-    doc = seededDoc
+    /* 日历里的旧条目搬进笔记（标记随文档走，跨设备 / 跨版本只搬一次，见 core/note-seed） */
+    const noteSeed = seedNotesFromCalendar(seededDoc)
+    doc = noteSeed.doc
+    notesChanged = noteSeed.changed
     if (merged) toasts.push('已把原来的多个图标页合并为一页')
     if (restored) toasts.push('已恢复 v3 的搜索引擎设置')
     if (seeded) toasts.push('已添加两条农历生日')
+    if (noteSeed.notes > 0) toasts.push(`已把日历里的 ${noteSeed.notes} 条条目搬到笔记`)
   } else {
     let migrated: MigrationResult | null = null
     try {
@@ -380,14 +393,18 @@ const doHydrate = async (): Promise<void> => {
     history: doc.history,
     backupTime: doc.backupTime,
     welcomed: doc.welcomed,
+    notesSeeded: doc.notesSeeded === true,
     hydrated: true,
     ...(toasts.length > 0 ? { toast: toasts.join('；') } : {}),
   })
+  /* 迁移改过数据就立刻落一次盘：否则关掉标签页等于白搬，下次启动会再算一遍 */
+  if (notesChanged) scheduleSave()
 }
 
 export const useApp = create<AppState>()((set, get) => ({
   hydrated: false,
   welcomed: false,
+  notesSeeded: false,
   settings: { ...DEFAULT_SETTINGS, glass: { ...DEFAULT_SETTINGS.glass }, blur: { ...DEFAULT_SETTINGS.blur } },
   pages: clonePages(DEFAULT_PAGES),
   cur: 0,
@@ -703,6 +720,19 @@ export const useApp = create<AppState>()((set, get) => ({
   }),
 
   /* 手动整理（空白处右键「整理图标」）：自动只管删除后那一下，存量页面里已有的空洞靠这里一次理顺（跨页） */
+  arrangeByUsage: () => set((s) => {
+    const page = s.pages[s.cur] ?? []
+    const movable = page.filter((x) => ARRANGE_KINDS.has(x.t))
+    if (movable.length < 2) return { toast: '本页没有可整理的图标' }
+    const usage = readUsage()
+    /* 次数降序；次数相同按原位置，避免每次整理结果都不一样 */
+    const result = reorderIconsByWeight(page, (it) => cardWeightOf(it, usage))
+    if (result.moved === 0) return { toast: '本页图标已经按使用频率排好了' }
+    const pages = [...s.pages]
+    pages[s.cur] = result.page
+    return { pages, toast: `已按使用频率整理 ${result.moved} 个图标` }
+  }),
+
   arrange: () => set((s) => {
     const done = arrangePages(s.pages)
     if (done === null) return { toast: '没有连续的空位可用，未做整理' }
@@ -738,6 +768,8 @@ export const useApp = create<AppState>()((set, get) => ({
     return true
   },
   restoreDefault: (opts) => set((s) => {
+    /* 布局换掉后原有的使用记录（按卡片 id / 站点记）全部失效，一起清掉 */
+    clearUsage()
     const pages = clonePages(opts?.sample === true ? SAMPLE_PAGES : DEFAULT_PAGES)
     const next: Partial<AppState> = {
       pages,
@@ -852,6 +884,7 @@ export const useApp = create<AppState>()((set, get) => ({
     if (layout) {
       next.pages = clonePages(DEFAULT_PAGES)
       next.cur = 0
+      clearUsage()
     }
     if (skins) {
       next.skins = cloneSkins(BUILTIN_SKINS)

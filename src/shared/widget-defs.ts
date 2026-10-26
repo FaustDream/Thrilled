@@ -26,7 +26,7 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
     fields: [
       { k: 'showMonth', l: '显示年月', t: 'bool' },
       { k: 'showLunar', l: '显示农历与宜忌', t: 'bool' },
-      { k: 'showSchedule', l: '显示日程与待办', t: 'bool' },
+      { k: 'showSchedule', l: '显示未来日程', t: 'bool' },
     ],
     /* 节日与农历同开同关（同一个 showLunar）；日程存 config.events（见 core/schedule） */
     def: { showMonth: true, showLunar: true, showSchedule: true, events: [] },
@@ -62,6 +62,11 @@ export const WIDGET_DEFS: Record<WidgetKind, WidgetDefinition> = {
       modes: ['下班倒计时'], rotate: true, at: '18:00', date: '2027-01-01', annDate: '2020-05-20',
       title: '与MiNa相识', unitLabel: '天', showFestivals: true, hiddenFestivals: [],
     },
+  },
+  note: {
+    t: 'note', n: '笔记', g: '记', c: '#A78BFA', s: '一行一句，随手记下（可置顶）', units: { w: 4, h: 2 }, min: { w: 4, h: 2 },
+    fields: [{ k: 'title', l: '标题', t: 'text', ph: '笔记' }],
+    def: { title: '笔记', items: [] },
   },
   fav: {
     t: 'fav', n: '收藏夹', g: '藏', c: '#F59E0B', s: '管理浏览器书签收藏夹', units: { w: 2, h: 4 },
@@ -107,11 +112,13 @@ export const fromLegacyKind = (t: string, config: Record<string, unknown>): { t:
 
 /**
  * 不进组件库的类型（用户要求从组件库里去掉）：
- * 待办清单 / 收藏夹 / 图标文件夹 / 图标格容器 / 网站图标——后三类与网站图标都不是「小组件」，
+ * 收藏夹 / 图标文件夹 / 图标格容器 / 网站图标——后三类与网站图标都不是「小组件」，
  * 新建入口在添加抽屉（「自定义」页签）。这些类型仍是合法的卡片类型——
  * 已放好的照常渲染、编辑、删除，只是不再出现在组件库与默认大小面板里。
+ *
+ * v5.0.33 起「待办清单」回到组件库：笔记拆成独立组件后两者是一对，缺了待办的入口反而不对称。
  */
-export const LIBRARY_EXCLUDED: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['todo', 'fav', 'folder', 'group', 'icon']);
+export const LIBRARY_EXCLUDED: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['fav', 'folder', 'group', 'icon']);
 
 /** 全部类型清单（定义表生成；渲染 / 更换组件 / 导入校验用，不受组件库过滤影响） */
 export const WIDGET_LIST: readonly WidgetDefinition[] = Object.keys(WIDGET_DEFS).map((k) => WIDGET_DEFS[k as WidgetKind]);

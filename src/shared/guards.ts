@@ -337,6 +337,7 @@ export const parseStoredDoc = (v: unknown, kinds: ReadonlySet<string>): StoredDo
     skins: normalizeSkins(),
     history: Array.isArray(o['history']) ? o['history'].filter((h): h is string => typeof h === 'string').slice(0, 20) : [],
     welcomed: boolish(o['welcomed'], false),
+    notesSeeded: boolish(o['notesSeeded'], false),
     backupTime: typeof o['backupTime'] === 'string' ? o['backupTime'] : null,
     updatedAt: typeof o['updatedAt'] === 'string' ? o['updatedAt'] : null,
     appVersion: typeof o['appVersion'] === 'string' ? o['appVersion'] : null,

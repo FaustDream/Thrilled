@@ -28,7 +28,9 @@ import { getWallpaper, type BgData } from '../core/wallpaper'
 import { GLASS_ALPHA_FACTOR, GLASS_FADED_KEYS, PAGE_EDGE_MS, PAGE_EDGE_PX, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN_DELTA, WALLPAPER_BLUR_COVER_THRESHOLD, WALLPAPER_BLUR_PX, WALLPAPER_FOCUS_RATIO_TOLERANCE } from '../shared/constants'
 import { crossPlan } from './layout'
 import { SHORTCUT_DEFS, comboOf, isBareCombo } from '../shared/shortcuts'
-import { bookmarkHits, flattenGroups, indexPages, searchAll, type SearchHit } from './search-index'
+import { bookmarkHits, cardLabelOf, flattenGroups, indexPages, recentHits, searchAll, type SearchHit } from './search-index'
+import { runSearchAction, searchActionHits } from './search-actions'
+import { recentUsage, recordUsage, usageKeyOfCard, usageKeyOfUrl } from './usage'
 import { collectBookmarks, readBookmarkTree, type BookmarkEntry } from '../core/bookmark-importer'
 import { HOLD_MS, holdVerdict } from '../shared/hold'
 import { DOCK_ICON_METRICS } from '../shared/dock'
@@ -73,16 +75,36 @@ const openByMode = (st: ReturnType<typeof useApp.getState>, url: string, kind: '
  * 执行一条搜索命中（面板点击与回车共用）。
  * 面板显隐归组件管，这里只负责动作本身。
  */
+const openCardById = (st: ReturnType<typeof useApp.getState>, cardId: string): void => {
+  useApp.setState({ itemId: cardId })
+  st.setModal('itemDetail')
+}
+
 const runHit = (hit: SearchHit): void => {
   const st = useApp.getState()
-  if (hit.kind === 'app' || hit.kind === 'bookmark') {
-    if (hit.url === '') st.showToast('这个应用还没有配置网址')
-    else openByMode(st, hit.url, 'link')
+  if (hit.kind === 'app' || hit.kind === 'bookmark' || hit.kind === 'recent') {
+    if (hit.url === '') {
+      /* 「最近打开」里的卡片记录没有地址：直接开卡片详情 */
+      if (hit.kind === 'recent' && hit.cardId !== '') {
+        recordUsage(usageKeyOfCard(hit.cardId), { label: hit.label, kind: 'card', url: '', cardId: hit.cardId })
+        openCardById(st, hit.cardId)
+        return
+      }
+      st.showToast('这个应用还没有配置网址')
+      return
+    }
+    /* 记一次打开：「最近打开」与「按使用频率整理」都吃这份记录（见 app/usage） */
+    recordUsage(usageKeyOfUrl(hit.url), { label: hit.label, kind: 'app', url: hit.url, cardId: hit.cardId })
+    openByMode(st, hit.url, 'link')
     return
   }
   if (hit.kind === 'card') {
-    useApp.setState({ itemId: hit.cardId })
-    st.setModal('itemDetail')
+    recordUsage(usageKeyOfCard(hit.cardId), { label: hit.label, kind: 'card', url: '', cardId: hit.cardId })
+    openCardById(st, hit.cardId)
+    return
+  }
+  if (hit.kind === 'action') {
+    runSearchAction(hit.key)
     return
   }
   /* 历史 / 「搜索这条」：填回输入框再按回车那条路走，打开方式等设置全部沿用 */
@@ -462,6 +484,8 @@ export const App = () => {
 
   /* ---------- 搜索面板：应用 / 卡片 / 书签 / 搜索历史（检索规则见 app/search-index） ---------- */
   const pageIndex = useMemo(() => indexPages(pages), [pages])
+  /* 动作清单是常量，只需建一次 */
+  const actionIndex = useMemo(() => searchActionHits(), [])
   const groups = useMemo(
     () =>
       searchAll(
@@ -470,11 +494,14 @@ export const App = () => {
           apps: pageIndex.apps,
           cards: pageIndex.cards,
           bookmarks: bookmarkHits(bookmarks),
+          actions: actionIndex,
+          /* 最近打开只在面板打开时读一次（localStorage 同步读，不进渲染热路径） */
+          recent: historyOpen ? recentHits(recentUsage(5)) : [],
           history: settings.searchHistory ? history : [],
         },
         engine?.name ?? '',
       ),
-    [query, pageIndex, bookmarks, settings.searchHistory, history, engine?.name],
+    [query, pageIndex, bookmarks, actionIndex, settings.searchHistory, history, engine?.name, historyOpen],
   )
   const hits = useMemo(() => flattenGroups(groups), [groups])
   /* data-act 委托只注册一次，读不到最新渲染的闭包：命中列表走 ref 镜像给点击用 */
@@ -748,10 +775,16 @@ export const App = () => {
         case 'ctx-blocked': st.showToast(v); st.openCtx(null); break
         /* 空白处右键「整理图标」：把当前页的图标类卡片依次前移补位（组件钉住不动） */
         case 'arrange': st.arrange(); st.openCtx(null); break
+        /* 空白处右键「按使用频率整理本页」：按 30 天打开次数降序补位 */
+        case 'arrange-usage': st.arrangeByUsage(); st.openCtx(null); break
         case 'dock-app': {
           st.openCtx(null)
-          if (v !== '') openByMode(st, v, 'link')
-          else st.showToast('未配置网址，右键图标可补充链接')
+          if (v !== '') {
+            /* Dock 的名字在菜单数据里，这里按地址反查（找不到就退回域名） */
+            const name = st.settings.dockApps.find((a) => a.url === v)?.name ?? ''
+            recordUsage(usageKeyOfUrl(v), { label: name === '' ? v : name, kind: 'app', url: v, cardId: '' })
+            openByMode(st, v, 'link')
+          } else st.showToast('未配置网址，右键图标可补充链接')
           break
         }
         case 'dock-rename': case 'dock-url': case 'dock-remove': case 'dock-config':
@@ -788,6 +821,7 @@ export const App = () => {
             break
           }
           /* 小组件详情：天气看预报、日历看月历、待办勾任务、收藏夹浏览书签……编辑入口仍在悬浮 ··· */
+          recordUsage(usageKeyOfCard(item.id), { label: cardLabelOf(item), kind: 'card', url: '', cardId: item.id })
           st.setModal('itemDetail')
           break
         }

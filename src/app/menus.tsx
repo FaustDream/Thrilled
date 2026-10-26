@@ -95,9 +95,11 @@ const BlankMenu = () => (
     <div className="ctx-item" data-act="drawer-open" data-v="add"><span>打开添加面板</span></div>
     <div className="ctx-item" data-act="drawer-open" data-v="personal"><span>打开个性化</span></div>
     <div className="ctx-item" data-act="drawer-open" data-v="setting"><span>打开设置</span></div>
-    {/* 工具组：手动整理（自动整理只发生在删除后，存量页面里已有的空洞靠这里补） */}
+    {/* 工具组：手动整理（自动整理只发生在删除后，存量页面里已有的空洞靠这里补）；
+        第二项按「最近 30 天打开次数」重排本页图标，组件仍钉住不动 */}
     <div className="ctx-sep" />
     <div className="ctx-item" data-act="arrange"><span>整理图标</span></div>
+    <div className="ctx-item" data-act="arrange-usage"><span>按使用频率整理本页</span></div>
   </>
 )
 

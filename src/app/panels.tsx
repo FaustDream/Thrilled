@@ -20,7 +20,8 @@ import { siteUrlOf, NAVI } from './brands'
 import { downloadJson, buildLayoutDoc, restoreSnapshot } from '../core/export'
 import { uploadWallpaper, getWallpaper, type BgData } from '../core/wallpaper'
 import { readBookmarkTree, collectBookmarks, type BookmarkEntry } from '../core/bookmark-importer'
-import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normTodoItems, relTimeText, startOfWeek, type TodoEntry } from '../core/utils'
+import { clearUsage, recordUsage, usageKeyOfUrl } from './usage'
+import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normNoteItems, normTodoItems, notesInShowOrder, relTimeText, startOfWeek, type NoteEntry, type TodoEntry } from '../core/utils'
 import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
 import { cityKeyOf, searchCities, weatherText, type GeoHit, type WeatherData } from '../core/weather'
@@ -1390,6 +1391,8 @@ const SettingResetCard = () => {
     })
     if (!ok) return
     await resetAllData()
+    /* 使用记录不属于文档，但属于「本机数据」，一起清掉 */
+    clearUsage()
   }
   return (
     <SecCard danger t="重置与清理" info={`两项都只作用于本机数据且不可撤销：\n清除本地数据 = 删除本机全部数据（含壁纸）\n一键重置 = 全量清空，不可撤销`}>
@@ -1437,6 +1440,26 @@ interface LogVersion {
 
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
+  {
+    v: '5.0.36', d: '2026-10-26', items: [
+      { k: '新增', s: '右键可按使用频率整理本页', d: '空白处右键多了一项：本页图标按最近 30 天的打开次数降序重排，点得多的挪到靠前的格子；组件（时钟 / 日历 / 待办…）一张都不动，每个图标占的格子也不变，只是换了位置。只在你点的时候执行，不会自动重排——否则第二天东西自己跑位更麻烦。' },
+    ],
+  },
+  {
+    v: '5.0.35', d: '2026-10-26', items: [
+      { k: '新增', s: '面板空输入先给「最近打开」', d: '点过的站点与卡片会记一次本机使用（只存次数与最后时间，30 天滚动清掉），点开搜索框不用打字，最近 5 个就在第一组，回车直达。这份记录不进配置、不随导出、不参与同步，一键重置或清除本地数据时一起清。' },
+    ],
+  },
+  {
+    v: '5.0.34', d: '2026-10-26', items: [
+      { k: '新增', s: '搜索面板可以直接执行动作', d: '面板最后多了一组「动作」：输「壁纸」回车就打开壁纸页，输「极简」切模式，输「导出」直接下载布局 JSON；整理图标、清空搜索历史、打开设置 / 个性化 / 添加面板、一键重置（仍走确认弹窗）都在里面。动作排在应用与书签之后，回车默认还是先打开命中的卡片，不会手快改设置。' },
+    ],
+  },
+  {
+    v: '5.0.33', d: '2026-10-26', items: [
+      { k: '新增', s: '新组件「笔记」，日历不再管待办', d: '一行一句的纯文本清单，可置顶（置顶的排在卡面最前），详情里跟待办一样能改能删能回车新增。日历里那条「日程与待办」拆开：日历只留未来日程（去掉了勾选框，「已完成」也不再显示），待办回到组件库与笔记并列。升级后第一次打开会把日历里的旧条目全量搬进一张笔记卡（没有就新建一张放第一页空位），已办的从日历删掉；这份数据换机器、换版本只会搬一次。' },
+    ],
+  },
   {
     v: '5.0.32', d: '2026-10-26', items: [
       { k: '新增', s: '搜索框就是命令面板', d: '往下拉面板原先只放搜索历史，现在输入即按组出结果：应用（含图标格里的每个站）、卡片、书签、搜索历史，最后永远有一条「搜索这条」。↑↓ 选择、回车执行、Esc 收起；命中卡片名直接回车就打开它，找东西不用再翻页。名称与域名都参与匹配，同一个站不会在「应用」和「书签」里出现两次。' },
@@ -2099,6 +2122,58 @@ const InlineEditText = ({ value, editing, onStart, onCommit, onCancel, className
   )
 }
 
+/**
+ * 笔记详情：一行一条纯文本，可置顶 / 改名 / 删除 / 添加。
+ * 与待办的区别是「没有完成态」——笔记只是记下来，不需要勾。
+ */
+const NoteDetail = ({ item }: { item: GridItem }) => {
+  const updateConfig = useApp((s) => s.updateConfig)
+  const c = cfg(item)
+  const [items, setItems] = useState<NoteEntry[]>(() => normNoteItems(c['items']))
+  const [draft, setDraft] = useState('')
+  const [editIdx, setEditIdx] = useState<number | null>(null)
+  const commit = (next: NoteEntry[]): void => {
+    setItems(next)
+    updateConfig(item.id, { items: next })
+  }
+  const saveText = (i: number, v: string): void => {
+    const txt = v.trim()
+    if (txt !== '') commit(items.map((x, j) => (j === i ? { ...x, txt } : x)))
+    setEditIdx(null)
+  }
+  const pinned = items.filter((x) => x.pinned).length
+  return (
+    <>
+      <SecHead title={str(c['title'], '笔记')} sub={pinned > 0 ? `${pinned} 条置顶 · 共 ${items.length} 条` : `共 ${items.length} 条`} />
+      <div className="dt-list flat">
+        {items.length === 0 && <Hint>还没有内容，在下面输入第一条笔记。</Hint>}
+        {notesInShowOrder(items).map((n) => {
+          const i = items.indexOf(n)
+          return (
+            <div className="dt-todo-row" key={`${i}-${n.txt}`}>
+              <div className={`dt-row-del always${n.pinned ? ' on' : ''}`} title={n.pinned ? '取消置顶' : '置顶'}
+                onClick={() => commit(items.map((x, j) => (j === i ? { ...x, pinned: !x.pinned } : x)))}>{Icon.pin()}</div>
+              <InlineEditText value={n.txt} editing={editIdx === i} onStart={() => setEditIdx(i)}
+                onCommit={(v) => saveText(i, v)} onCancel={() => setEditIdx(null)}
+                className="dt-todo-txt" />
+              <div className="dt-row-del always" title="编辑" onClick={() => setEditIdx(i)}>{Icon.edit()}</div>
+              <div className="dt-row-del always" title="删除" onClick={() => commit(items.filter((_, j) => j !== i))}>{Icon.trash()}</div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="f-row">
+        <input className="f-input" placeholder="输入一句笔记，回车添加" value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            const txt = draft.trim()
+            if (e.key === 'Enter' && txt !== '') { commit([...items, { txt, pinned: false }]); setDraft('') }
+          }} />
+      </div>
+    </>
+  )
+}
+
 /** 待办清单详情：清单存在卡片 config.items，可勾选 / 改名 / 删除 / 添加 */
 const TodoDetail = ({ item }: { item: GridItem }) => {
   const updateConfig = useApp((s) => s.updateConfig)
@@ -2432,11 +2507,9 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
         {dayList.length === 0 && <Hint>这一天还没有日程。</Hint>}
         {dayList.map((e, i) => (
           <div className="dt-todo-row" key={`${i}-${e.text}`}>
-            <input type="checkbox" checked={e.done}
-              onChange={() => commit(events.map((x) => (x === e ? { ...x, done: !x.done } : x)))} />
             <InlineEditText value={e.text} editing={editIdx === i} onStart={() => setEditIdx(i)}
               onCommit={(v) => saveText(e, v)} onCancel={() => setEditIdx(null)}
-              className={`dt-todo-txt${e.done ? ' done' : ''}`} />
+              className="dt-todo-txt" />
             <div className="dt-row-del always" title="编辑" onClick={() => setEditIdx(i)}>{Icon.edit()}</div>
             <div className="dt-row-del always" title="删除" onClick={() => commit(events.filter((x) => x !== e))}>{Icon.trash()}</div>
           </div>
@@ -2444,7 +2517,7 @@ const CalendarSchedule = ({ item, now }: { item: GridItem; now: Date }) => {
       </div>
       {upcoming.length > 0 && (
         <>
-          <SecHead title="接下来" sub="点一行跳到那天" />
+          <SecHead title="未来日程" sub="点一行跳到那天" />
           <div className="dt-list flat">
             {upcoming.map((e, i) => (
               <div className="dt-todo-row" key={`u${i}-${e.text}`} style={{ cursor: 'pointer' }}
@@ -2983,17 +3056,20 @@ const CountdownOverview = ({ item, now }: { item: GridItem; now: Date }) => {
   )
 }
 
-/** 图标格容器的概览：点一行打开对应站点 */
-const GroupOverview = ({ apps }: { apps: string[] }) => {
+/** 图标格容器的概览：点一行打开对应站点（顺手记一次使用，供「最近打开」） */
+const GroupOverview = ({ apps, itemId }: { apps: string[]; itemId: string }) => {
   const showToast = useApp((s) => s.showToast)
-  const openSite = (url: string): void => { void openLink(url, useApp.getState().settings.openMode, 'link') }
+  const openSite = (name: string, url: string): void => {
+    recordUsage(usageKeyOfUrl(url), { label: name, kind: 'app', url, cardId: itemId })
+    void openLink(url, useApp.getState().settings.openMode, 'link')
+  }
   return (
     <div className="dt-list flat">
       {apps.length === 0 && <Hint>容器里还没有图标，可在「设置」或右键菜单里添加。</Hint>}
       {apps.map((n) => (
         <div className="dt-row" key={n} onClick={() => {
           const url = siteUrlOf(n)
-          if (url !== null) openSite(url)
+          if (url !== null) openSite(n, url)
           else showToast(`「${n}」没有内置网址，可编辑后直接打开`)
         }}>
           <SiteIcon url={siteUrlOf(n) ?? ''} name={n} cls="dt-ico" fs={13} size={30} />
@@ -3014,9 +3090,10 @@ const WidgetOverview = ({ item, now }: { item: GridItem; now: Date }) => {
        点任意一天切换，翻月会同步换网格，避免这里与它各算一套月历 */
     case 'cal': return <CalendarSchedule item={item} now={now} />
     case 'todo': return <TodoDetail item={item} />
+    case 'note': return <NoteDetail item={item} />
     case 'fav': return <FavDetail />
     case 'countdown': return <CountdownOverview item={item} now={now} />
-    case 'group': return <GroupOverview apps={(Array.isArray(c['apps']) ? c['apps'] : []).filter((x): x is string => typeof x === 'string')} />
+    case 'group': return <GroupOverview apps={(Array.isArray(c['apps']) ? c['apps'] : []).filter((x): x is string => typeof x === 'string')} itemId={item.id} />
     default: return <Hint>该类型暂无详情视图。</Hint>
   }
 }

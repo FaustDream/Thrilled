@@ -475,3 +475,45 @@ export const packPage = (page: readonly GridItem[]): GridItem[] | null => {
     return p === undefined || (p.c === x.c && p.r === x.r) ? x : { ...x, c: p.c, r: p.r };
   });
 };
+
+/**
+ * 本页图标按权重重排（「按使用频率整理」，纯函数，可单测）。
+ *
+ * 和 packPage 不是一回事：packPage 只把空洞补上，页面本来就排满时**什么都不会动**；
+ * 这里是把图标类卡片占用的那些格子按阅读顺序重新分配——权重高的先挑，
+ * 于是整页图标换了位置但占的地方不变，组件一张都不动。
+ * 尺寸不同（2×2 图标与 4×4 容器混排）时挑格子会跳过放不下的，放不下就留在原位。
+ *
+ * @param weightOf 卡片权重（打开次数），相同时按原位置决定先后
+ */
+export const reorderIconsByWeight = (
+  page: readonly GridItem[],
+  weightOf: (it: GridItem) => number,
+): { page: GridItem[]; moved: number } => {
+  const icons = page.filter((x) => ARRANGE_KINDS.has(x.t));
+  if (icons.length < 2) return { page: [...page], moved: 0 };
+  const others = page.filter((x) => !ARRANGE_KINDS.has(x.t));
+  const slots = icons.map((x) => ({ c: x.c, r: x.r })).sort((a, b) => a.r - b.r || a.c - b.c);
+  const sorted = [...icons].sort((a, b) => weightOf(b) - weightOf(a) || a.r - b.r || a.c - b.c);
+  const taken: { c: number; r: number; w: number; h: number }[] = others.map((x) => ({ c: x.c, r: x.r, w: x.w, h: x.h }));
+  const used = new Set<number>();
+  const out: GridItem[] = [...others];
+  let moved = 0;
+  for (const it of sorted) {
+    let pos: { c: number; r: number } | null = null;
+    for (let i = 0; i < slots.length && pos === null; i++) {
+      if (used.has(i)) continue;
+      const s = slots[i];
+      if (s === undefined) continue;
+      if (s.c + it.w > COLS || s.r + it.h > ROWS) continue;
+      if (taken.some((o) => overlaps(o, { c: s.c, r: s.r, w: it.w, h: it.h }))) continue;
+      used.add(i);
+      pos = s;
+    }
+    const at = pos ?? { c: it.c, r: it.r };
+    taken.push({ c: at.c, r: at.r, w: it.w, h: it.h });
+    if (at.c !== it.c || at.r !== it.r) moved++;
+    out.push(at.c === it.c && at.r === it.r ? it : { ...it, c: at.c, r: at.r });
+  }
+  return { page: out, moved };
+};

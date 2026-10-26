@@ -300,6 +300,9 @@ body,#root{background-color:transparent}
 .td-txt{font-size:calc(12 * var(--u));white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--card-text)}
 .td-txt.done{text-decoration:line-through;color:var(--card-sub)}
 .td-more,.td-empty{font-size:calc(11 * var(--u));color:var(--card-sub)}
+/* 笔记卡：置顶标记是行首一个小圆点（只占 4px，不挤文字） */
+.td-pin{width:calc(4 * var(--u));height:calc(4 * var(--u));border-radius:50%;flex:0 0 auto;
+  background:var(--accent);opacity:.9}
 
 /* 图标文件夹（名称在图标下方，可关） */
 .w-folder{display:flex;flex-direction:column;align-items:center;justify-content:center;

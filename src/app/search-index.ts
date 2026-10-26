@@ -12,10 +12,11 @@ import { brandOf, siteUrlOf } from './brands'
 import { cfgOf, WIDGET_DEFS } from '../shared/widget-defs'
 import { hostOf } from '../core/utils'
 import type { BookmarkEntry } from '../core/bookmark-importer'
+import type { UsageEntry } from './usage'
 import type { GridItem, WidgetKind } from '../shared/types'
 
 /** 命中类型：决定回车时怎么执行 */
-export type HitKind = 'app' | 'card' | 'bookmark' | 'history' | 'search';
+export type HitKind = 'app' | 'card' | 'bookmark' | 'action' | 'recent' | 'history' | 'search';
 
 /** 一条命中 */
 export interface SearchHit {
@@ -31,6 +32,8 @@ export interface SearchHit {
   cardId: string;
   /** 搜索历史词（history） */
   term: string;
+  /** 参与匹配但不上屏的别名（动作用：换壁纸 / 背景…），没有给空串 */
+  alt: string;
   /** 左侧方形字形的字与底色（沿用品牌色口径） */
   glyph: string;
   color: string;
@@ -45,9 +48,10 @@ export interface SearchGroup {
 const APP_LIMIT = 6;
 const CARD_LIMIT = 3;
 const BOOKMARK_LIMIT = 3;
+const ACTION_LIMIT = 5;
 
 /** 有详情视图、值得在面板里单独出现的卡片类型（icon / group 已拆成具体应用；folder 没有详情视图） */
-const CARD_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['clock', 'cal', 'weather', 'todo', 'countdown', 'fav']);
+const CARD_KINDS: ReadonlySet<WidgetKind> = new Set<WidgetKind>(['clock', 'cal', 'weather', 'todo', 'note', 'countdown', 'fav']);
 
 const lower = (s: string): string => s.trim().toLowerCase();
 
@@ -65,10 +69,10 @@ export const scoreOf = (text: string, q: string): number => {
   return Math.max(10, 60 - at);
 };
 
-/** 组内检索 + 排序 + 截断（label 权重高于 sub） */
+/** 组内检索 + 排序 + 截断（label 权重最高，别名次之，右侧说明只做辅助） */
 const matchList = (hits: readonly SearchHit[], q: string, limit: number): SearchHit[] =>
   hits
-    .map((h, i) => ({ h, i, s: Math.max(scoreOf(h.label, q), scoreOf(h.sub, q) * 0.5) }))
+    .map((h, i) => ({ h, i, s: Math.max(scoreOf(h.label, q), scoreOf(h.alt, q) * 0.7, scoreOf(h.sub, q) * 0.5) }))
     .filter((x) => x.s > 0)
     .sort((a, b) => b.s - a.s || a.i - b.i)
     .slice(0, limit)
@@ -91,7 +95,7 @@ const appNamesOf = (item: GridItem): string[] => {
 
 const appHit = (key: string, label: string, url: string, sub: string): SearchHit => {
   const brand = brandOf(label);
-  return { key, kind: 'app', label, sub, url, cardId: '', term: '', glyph: brand.glyph, color: brand.color };
+  return { key, kind: 'app', label, sub, url, cardId: '', term: '', alt: '', glyph: brand.glyph, color: brand.color };
 };
 
 /**
@@ -130,6 +134,7 @@ export const indexPages = (pages: readonly GridItem[][]): { apps: SearchHit[]; c
         url: '',
         cardId: item.id,
         term: '',
+        alt: '',
         glyph: def.g,
         color: def.c,
       });
@@ -148,9 +153,31 @@ export const bookmarkHits = (entries: readonly BookmarkEntry[]): SearchHit[] =>
     url: e.url,
     cardId: '',
     term: '',
+    alt: '',
     glyph: '签',
     color: '#F59E0B',
   }));
+
+/**
+ * 使用记录 → 「最近打开」命中（空输入时的第一组）。
+ * 键前缀 recent:，执行时按 kind 走「开站点」或「开卡片详情」。
+ */
+export const recentHits = (items: readonly { key: string; entry: UsageEntry }[]): SearchHit[] =>
+  items.map(({ key, entry }) => {
+    const brand = brandOf(entry.label);
+    return {
+      key: `recent:${key}`,
+      kind: 'recent',
+      label: entry.label,
+      sub: entry.kind === 'card' ? '卡片' : hostOf(entry.url),
+      url: entry.url,
+      cardId: entry.cardId,
+      term: '',
+      alt: '',
+      glyph: entry.kind === 'card' ? '卡' : brand.glyph,
+      color: entry.kind === 'card' ? '#64748B' : brand.color,
+    };
+  });
 
 /** 搜索历史 → 命中 */
 export const historyHits = (history: readonly string[]): SearchHit[] =>
@@ -162,6 +189,7 @@ export const historyHits = (history: readonly string[]): SearchHit[] =>
     url: '',
     cardId: '',
     term,
+    alt: '',
     glyph: '史',
     color: '',
   }));
@@ -175,6 +203,7 @@ const searchHit = (term: string, engineName: string): SearchHit => ({
   url: '',
   cardId: '',
   term,
+  alt: '',
   glyph: '搜',
   color: '',
 });
@@ -184,6 +213,10 @@ export interface SearchSource {
   apps: readonly SearchHit[];
   cards: readonly SearchHit[];
   bookmarks: readonly SearchHit[];
+  /** 可执行动作（见 app/search-actions）：排在书签之后、搜索行之前 */
+  actions?: readonly SearchHit[];
+  /** 最近打开（见 app/usage）：只在空输入时作为第一组出现 */
+  recent?: readonly SearchHit[];
   history: readonly string[];
 }
 
@@ -195,16 +228,22 @@ export const searchAll = (raw: string, src: SearchSource, engineName = ''): Sear
   const q = lower(raw);
   const groups: SearchGroup[] = [];
   if (q === '') {
+    /* 空输入：先给最近打开（省掉翻页找站），再给搜索历史 */
+    const recent = src.recent ?? [];
+    if (recent.length > 0) groups.push({ title: '最近打开', hits: [...recent] });
     const hits = historyHits(src.history);
-    return hits.length === 0 ? [] : [{ title: '搜索历史', hits }];
+    if (hits.length > 0) groups.push({ title: '搜索历史', hits });
+    return groups;
   }
   const apps = matchList(src.apps, q, APP_LIMIT);
   const cards = matchList(src.cards, q, CARD_LIMIT);
   const takenUrls = new Set(apps.map((h) => h.url).filter((u) => u !== ''));
   const bookmarks = matchList(src.bookmarks, q, BOOKMARK_LIMIT + 3).filter((h) => !takenUrls.has(h.url)).slice(0, BOOKMARK_LIMIT);
+  const actions = matchList(src.actions ?? [], q, ACTION_LIMIT);
   if (apps.length > 0) groups.push({ title: '应用', hits: apps });
   if (cards.length > 0) groups.push({ title: '卡片', hits: cards });
   if (bookmarks.length > 0) groups.push({ title: '书签', hits: bookmarks });
+  if (actions.length > 0) groups.push({ title: '动作', hits: actions });
   if (groups.length === 0) {
     /* 一片空白时给历史，至少不让人对着空面板发愣 */
     const hits = historyHits(src.history);

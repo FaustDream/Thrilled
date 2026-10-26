@@ -11,7 +11,7 @@ import { skinRuntime } from './skin-runtime'
 import { WIDGET_DEFS } from '../shared/widget-defs'
 import { GROUP_GAP, GROUP_PAD, groupBoxOf, groupGrid, groupOverflows } from '../shared/grid'
 import { normStyle } from '../shared/widget-style'
-import { normTodoItems } from '../core/utils'
+import { normNoteItems, normTodoItems, notesInShowOrder } from '../core/utils'
 import { normCountdownEntries, upcomingRows } from '../core/festivals'
 import { normModes, readoutOf, rotateMode } from '../core/countdown'
 import { eventsOn, dayKey, normScheduleEvents } from '../core/schedule'
@@ -238,7 +238,6 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
       const events = normScheduleEvents(c['events'])
       const today = dayKey(y, mo, d)
       const todayEvents = eventsOn(events, today)
-      const doneCount = todayEvents.filter((e) => e.done).length
       return (
         <div className="w-cal" style={{ position: 'absolute', inset: 0 }}>
           <div className="cal-bar">
@@ -265,12 +264,11 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
             {bool(c['showSchedule']) && todayEvents.length > 0 && (
               <div className="cal-events">
                 {todayEvents.slice(0, 2).map((e, i) => (
-                  <div className={`cal-ev${e.done ? ' done' : ''}`} key={`${i}-${e.text}`}>
+                  <div className="cal-ev" key={`${i}-${e.text}`}>
                     <i className="cal-ev-dot" />{e.text}
                   </div>
                 ))}
                 {todayEvents.length > 2 && <div className="cal-empty">还有 {todayEvents.length - 2} 项</div>}
-                {doneCount > 0 && <div className="cal-empty">{doneCount}/{todayEvents.length} 已完成</div>}
               </div>
             )}
           </div>
@@ -309,6 +307,35 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
                   </div>
                 ))}
                 {items.length > shown.length && <div className="td-more">还有 {items.length - shown.length} 项，点击查看</div>}
+              </>
+            )}
+          </div>
+        </div>
+      )
+    }
+    case 'note': {
+      /* 笔记卡：一行一句，置顶的排前面；卡的交互只有「点开详情」，卡上不勾选也没有按钮 */
+      const items = normNoteItems(c['items'])
+      const maxRows = item.h >= 4 ? 4 : 2
+      const shown = notesInShowOrder(items).slice(0, maxRows)
+      return (
+        <div className="w-todo2" style={{ position: 'absolute', inset: 0, justifyContent: 'stretch' }}>
+          <div className="td-panel">
+            <div className="td-head">
+              <span className="td-title">{str(c['title'], '笔记')}</span>
+              <span className="td-count">{items.length}</span>
+            </div>
+            {items.length === 0 ? (
+              <div className="td-empty">暂无笔记 · 点击卡片添加</div>
+            ) : (
+              <>
+                {shown.map((t, i) => (
+                  <div className="td-row" key={`${i}-${t.txt}`}>
+                    {t.pinned && <span className="td-pin" title="已置顶" />}
+                    <span className="td-txt">{t.txt}</span>
+                  </div>
+                ))}
+                {items.length > shown.length && <div className="td-more">还有 {items.length - shown.length} 条，点击查看</div>}
               </>
             )}
           </div>

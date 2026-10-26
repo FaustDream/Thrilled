@@ -25,6 +25,8 @@ export const reloadDocIntoStore = (): void => {
     skins: doc.skins,
     history: doc.history,
     backupTime: doc.backupTime,
+    welcomed: doc.welcomed,
+    notesSeeded: doc.notesSeeded === true,
   })
 }
 
