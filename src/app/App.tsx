@@ -1072,9 +1072,8 @@ export const App = () => {
         style={{ ['--search-top' as string]: `${settings.searchTop}px`, ['--search-font' as string]: `${settings.searchFontSize}px` }}>
 
       {/* 网格对齐线：铺满整个舞台（图案与卡片网格对齐，见 .grid-lines 的背景偏移），
-          在壁纸之上、卡片与控件之下，且不拦截指针；设置开启时常显，
-          长按进入拖拽（drag.moved）时强制显示——这也是「已进入移动模式」的视觉反馈之一 */}
-      {(settings.gridLines || (drag !== null && drag.moved)) && <div className="grid-lines" />}
+          在壁纸之上、卡片与控件之下，且不拦截指针。完全由设置开关决定，拖拽中也不强制显示 */}
+      {settings.gridLines && <div className="grid-lines" />}
 
       {/* 翻页画布：拖拽中翻页提速（跨页拖拽时 0.42s 的滑动会明显拖慢节奏，见 prototype.css） */}
       <div id="pager" data-drag={drag !== null && drag.moved ? '1' : '0'}

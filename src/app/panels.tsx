@@ -1310,10 +1310,10 @@ const SettingGeneralTab = () => {
           ))}
         </div>
       </SecCard>
-      <SecCard t="对齐辅助" info="拖拽卡片时以网格为基准落位（卡片始终落在格上）；若与同页其它卡片的边缘或中心接近，则优先吸附到对齐位置——拖拽中会显示贯穿参考线并高亮目标卡片，没有可对齐的卡片时按最近的网格格落位。">
+      <SecCard t="对齐辅助" info="拖拽卡片时以网格为基准落位（卡片始终落在格上）；若与同页其它卡片的边缘或中心接近，则优先吸附到对齐位置，没有可对齐的卡片时按最近的网格格落位。下面三项分别控制吸附与两种线的显示。">
         <SwitchRow l="组件吸附" d="与其它卡片的边缘 / 中心对齐时优先吸附过去（阈值约 0.3 格）" on={s.snapItems} onToggle={() => setSetting('snapItems', !s.snapItems)} />
         <SwitchRow l="显示对齐参考线" d="吸附到其它卡片时显示贯穿参考线并高亮目标卡片" on={s.showGuides} onToggle={() => setSetting('showGuides', !s.showGuides)} />
-        <SwitchRow l="显示网格对齐线" d="按 24×10 网格常显对齐线；拖拽与添加组件时强制显示" on={s.gridLines} onToggle={() => setSetting('gridLines', !s.gridLines)} />
+        <SwitchRow l="显示网格对齐线" d="按 24×10 网格常显对齐线；关闭后拖拽时也不再显示" on={s.gridLines} onToggle={() => setSetting('gridLines', !s.gridLines)} />
       </SecCard>
       <SecCard t="图标名称" info="网站图标的字形相似或重复时用来辨认每个图标代表哪个站点。悬停提示默认开启且不受下面的开关影响，这里只决定「要不要让名称常显出来」。">
         <SwitchRow l="图标显示名称" d="在图标下方常显站点名称；关闭时仍可悬停图标查看名称与域名"
@@ -1437,6 +1437,12 @@ interface LogVersion {
 
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
+  {
+    v: '5.0.28', d: '2026-10-26', items: [
+      { k: '优化', s: '关闭网格对齐线后拖拽不再显示', d: '「显示网格对齐线」此前只在常显时受开关控制，拖拽卡片时会被强制打开——用户关掉开关后移动卡片仍然看到整屏格线。现在这一项完全由开关决定，拖拽时不再强制显示；「显示对齐参考线」与「组件吸附」两个开关的行为不变。' },
+      { k: '优化', s: '更新记录只显示最近 3 个版本', d: '更新记录默认只列最近 3 次更新，更早的版本收进列表底部的「展开更早的 N 个版本」，需要时再展开、可再收起，避免整页历史把设置面板撑得很长。' },
+    ],
+  },
   {
     v: '5.0.27', d: '2026-10-23', items: [
       { k: '调整', s: '版本号改为三段式', d: '从本版起版本号写成「主.次.修订」，原来的 5.27 记作 5.0.27；日常改动仍只递增最后一位，旧的两段式版本号按 5.27 ≡ 5.0.27 识别，不会多触发一次更新前备份。' },
@@ -1697,13 +1703,19 @@ const CHANGELOG: readonly LogVersion[] = [
   },
 ]
 
-/** 更新记录列表：版本表头单行（当前版本默认展开、旧版本折叠成一行），条目细节点击展开 */
+/** 更新记录默认只列最近几次；更早的版本收进「展开更早的更新」 */
+const LOG_RECENT = 3
+
+/** 更新记录列表：默认只显示最近 3 个版本，其余折叠；版本表头单行（当前版本默认展开、旧版本折叠成一行），条目细节点击展开 */
 const ChangeLog = () => {
   const [openV, setOpenV] = useState<string>(CHANGELOG[0]?.v ?? '')
   const [openItem, setOpenItem] = useState<string>('')
+  const [showAll, setShowAll] = useState(false)
+  const versions = showAll ? CHANGELOG : CHANGELOG.slice(0, LOG_RECENT)
+  const hidden = CHANGELOG.length - versions.length
   return (
     <div className="log-list">
-      {CHANGELOG.map((ver, i) => {
+      {versions.map((ver, i) => {
         const open = openV === ver.v
         return (
           <div className="log-ver" key={ver.v}>
@@ -1734,6 +1746,16 @@ const ChangeLog = () => {
           </div>
         )
       })}
+      {hidden > 0 && (
+        <button className="btn sm ghost wide log-more" onClick={() => setShowAll(true)}>
+          展开更早的 {hidden} 个版本
+        </button>
+      )}
+      {showAll && CHANGELOG.length > LOG_RECENT && (
+        <button className="btn sm ghost wide log-more" onClick={() => setShowAll(false)}>
+          收起更早的版本
+        </button>
+      )}
     </div>
   )
 }

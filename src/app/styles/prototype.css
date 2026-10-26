@@ -1040,6 +1040,8 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
   border-right:4px solid transparent;border-top:5px solid var(--panel-sub);opacity:.6;
   display:inline-block;transition:transform .18s var(--ease)}
 .log-caret.open{transform:rotate(180deg)}
+/* 更早版本的折叠按钮：整宽幽灵按钮，与版本行拉开一点距离，不抢版本表头的视觉重量 */
+.log-more{margin-top:8px;color:var(--panel-sub)}
 .toast{position:absolute;left:50%;bottom:160px;transform:translate(-50%,14px);background:rgba(15,23,42,.9);
   color:#fff;font-size:var(--fs-md);padding:10px 18px;border-radius:var(--r-md);opacity:0;pointer-events:none;
   transition:opacity .2s var(--ease),transform .2s var(--ease);z-index:var(--z-toast);white-space:nowrap}
