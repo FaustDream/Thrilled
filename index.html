@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Thrilled</title>
+<!-- 首帧启动层：解析阶段同步读上次的主题底色与壁纸缩略图并铺满，先于首次绘制执行。
+     MV3 CSP 禁止内联脚本，故走同源的 public/boot.js（经典脚本，解析阻塞）。
+     必须排在样式表之前，否则首帧已经画完才上色，就是「白屏一闪」。 -->
+<script src="/boot.js"></script>
 </head>
 <body>
 <div id="root"></div>

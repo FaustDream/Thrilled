@@ -34,9 +34,13 @@
 }
 *{box-sizing:border-box}
 #stage svg{display:block;max-width:100%;max-height:100%}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#10151b;
+html,body{margin:0;padding:0;height:100%;overflow:hidden;background-color:#10151b;
   font-family:'PingFang SC','Microsoft YaHei','Hiragino Sans GB',system-ui,-apple-system,'Segoe UI',sans-serif;
   -webkit-font-smoothing:antialiased;user-select:none}
+/* 首帧壁纸占位：public/boot.js 在解析阶段把缩略图写成 html 的 background-image。
+   background-color 是兜底色（皮肤 --mask-color 会覆盖它），background-image 只由占位图使用，
+   故 html 必须保持不透明、body / #root 必须透明，否则占位图被盖住看不到 */
+body,#root{background-color:transparent}
 #stage{position:absolute;left:0;top:0;width:1920px;height:945px;transform-origin:top left;overflow:hidden;
   background:transparent;color:var(--panel-text)}
 /* 壁纸层与遮罩统一由全窗口的 .wall-layer / .wall-mask 承担（见第18 节），此处不再重复绘制 */

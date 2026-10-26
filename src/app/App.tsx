@@ -19,7 +19,7 @@ import { IconTip } from './tip'
 import { Drawer, Modal } from './panels'
 import { DialogHost, askInput } from './dialog'
 import { Icon } from './icons'
-import { writeBootBg } from './boot-theme'
+import { makeLqip, writeBootBg, writeBootLqip } from './boot-theme'
 import { setSkinRuntime } from './skin-runtime'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
@@ -117,6 +117,15 @@ const dockMenuAct = (name: string, v: string): boolean => {
 
 /** 拖拽刚结束的这一次 click 不触发卡片打开 */
 let suppressItemClick = false
+
+/**
+ * 真壁纸解码完成后撤掉首帧占位图（铺在 <html> 上的 backgroundImage，见 boot-theme / public/boot.js）。
+ * 模块级常量：引用稳定，memo 化的卡片与 img 不会因为回调变化重渲染。
+ */
+const clearBootLqip = (): void => {
+  const html = document.documentElement
+  html.style.backgroundImage = 'none'
+}
 
 /** 浮层卡不需要按下行为；用模块级常量保证引用稳定（memo 友好） */
 const noop = (): void => { /* 拖拽中的卡片不接手势 */ }
@@ -488,8 +497,10 @@ export const App = () => {
     rt.setProperty('--minimal-fill', minimalLight ? 'rgba(15,23,42,.05)' : 'rgba(0,0,0,.06)')
     /* 品牌色字形的落点底色：写入 runtime，供 TileGlyph 在渲染期同步挑墨色（见 app/skin-runtime） */
     setSkinRuntime({ tileBg: tokens['--tile-bg'] ?? '#ffffff', cardBg: tokens['--card-bg'] ?? '#ffffff' })
-    document.body.style.background = maskColor
-    document.documentElement.style.background = maskColor
+    /* 只写 html 的 backgroundColor：根元素的背景会自动传播到整个画布，body 必须保持透明，
+       否则不透明的 body 会盖住首帧占位壁纸（占位图是 html 的 backgroundImage，见 boot-theme）。
+       也不用 background 简写——那会把 backgroundImage 一起清掉，真壁纸解码完之前又回到纯色 */
+    document.documentElement.style.backgroundColor = maskColor
     /* 记下底色：下次打开新标签页时，配置读出来之前先用它铺底，避免先闪默认浅色 */
     writeBootBg(maskColor)
   }, [skins, settings, toneGrid])
@@ -499,10 +510,19 @@ export const App = () => {
     let alive = true
     if (settings.wallpaperRef === null) {
       setCustomWall(null)
+      /* 换成纯底色（或移除壁纸）：清掉首帧占位图，下次打开直接用底色，不残留上一张 */
+      writeBootLqip('')
       return
     }
     void getWallpaper(settings.wallpaperRef).then((bg) => {
-      if (alive) setCustomWall(bg)
+      if (!alive) return
+      setCustomWall(bg)
+      /* 记下缩略占位：下次打开新标签页时，真壁纸解码完成之前先铺这张，避免中间那段纯色 */
+      if (bg !== null && bg.type === 'image') {
+        void makeLqip(bg.data).then((lqip) => { if (alive && lqip !== '') writeBootLqip(lqip) })
+      } else {
+        writeBootLqip('')
+      }
     })
     return () => { alive = false }
   }, [settings.wallpaperRef])
@@ -1059,12 +1079,15 @@ export const App = () => {
       {/* 全窗口壁纸层（固定定位，缩放白边不可见）+ 遮罩 */}
       <div className="wall-layer">
         {customWall !== null && customWall.type === 'image' && (
-          /* object-fit:cover 负责等比填满不留黑边；object-position 由焦点算法给出，避免主体被居中裁掉 */
+          /* object-fit:cover 负责等比填满不留黑边；object-position 由焦点算法给出，避免主体被居中裁掉。
+             解码完成（onLoad）后撤掉 <html> 上的首帧占位图：两张图在视觉上几乎一致，交接看不出来 */
           <img className="wall-img" src={customWall.data} alt=""
-            style={{ objectPosition: `${Math.round(settings.wallFocus.x)}% ${Math.round(settings.wallFocus.y)}%` }} />
+            style={{ objectPosition: `${Math.round(settings.wallFocus.x)}% ${Math.round(settings.wallFocus.y)}%` }}
+            onLoad={clearBootLqip} />
         )}
         {customWall !== null && customWall.type === 'video' && (
-          <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline />
+          <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline
+            onLoadedData={clearBootLqip} />
         )}
       </div>
       <div className="wall-mask" />
