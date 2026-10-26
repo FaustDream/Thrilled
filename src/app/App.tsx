@@ -19,7 +19,7 @@ import { IconTip } from './tip'
 import { Drawer, Modal } from './panels'
 import { DialogHost, askInput } from './dialog'
 import { Icon } from './icons'
-import { makeLqip, writeBootBg, writeBootLqip } from './boot-theme'
+import { makeLqip, writeBootBg, writeBootFocus, writeBootLqip } from './boot-theme'
 import { setSkinRuntime } from './skin-runtime'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
@@ -119,12 +119,20 @@ const dockMenuAct = (name: string, v: string): boolean => {
 let suppressItemClick = false
 
 /**
- * 真壁纸解码完成后撤掉首帧占位图（铺在 <html> 上的 backgroundImage，见 boot-theme / public/boot.js）。
- * 模块级常量：引用稳定，memo 化的卡片与 img 不会因为回调变化重渲染。
+ * 撤掉首帧占位图（铺在 <html> 上的 backgroundImage，见 boot-theme / public/boot.js）。
+ *
+ * 在真壁纸淡入结束后调用：占位图这时已经整张被不透明的真壁纸盖住，撤掉看不见；
+ * 提前撤就是硬切，观感上页面会「跳」一下。模块级函数：引用稳定，memo 化的 img 不受影响。
  */
 const clearBootLqip = (): void => {
-  const html = document.documentElement
-  html.style.backgroundImage = 'none'
+  document.documentElement.style.backgroundImage = 'none'
+}
+
+/** 彻底不要占位图了（移除壁纸 / 引用失效）：本页立刻撤掉，下次启动也不再铺 */
+const clearBootWall = (): void => {
+  clearBootLqip()
+  writeBootLqip('')
+  writeBootFocus(null)
 }
 
 /** 浮层卡不需要按下行为；用模块级常量保证引用稳定（memo 友好） */
@@ -510,8 +518,7 @@ export const App = () => {
     let alive = true
     if (settings.wallpaperRef === null) {
       setCustomWall(null)
-      /* 换成纯底色（或移除壁纸）：清掉首帧占位图，下次打开直接用底色，不残留上一张 */
-      writeBootLqip('')
+      clearBootWall()
       return
     }
     void getWallpaper(settings.wallpaperRef).then((bg) => {
@@ -520,8 +527,12 @@ export const App = () => {
       /* 记下缩略占位：下次打开新标签页时，真壁纸解码完成之前先铺这张，避免中间那段纯色 */
       if (bg !== null && bg.type === 'image') {
         void makeLqip(bg.data).then((lqip) => { if (alive && lqip !== '') writeBootLqip(lqip) })
-      } else {
+      } else if (bg !== null) {
         writeBootLqip('')
+      } else {
+        /* 引用指向的记录已不在（换过设备 / 清过历史）：本页就没有壁纸了，
+           占位图留在 <html> 上会一直显示上一张，必须一起撤掉 */
+        clearBootWall()
       }
     })
     return () => { alive = false }
@@ -545,6 +556,8 @@ export const App = () => {
       if (!alive) return
       focusFor.current = ref
       setWallFocus(f)
+      /* 焦点同时记进启动占位：占位图按同一套百分比裁切，真壁纸淡入时画面才不会滑动 */
+      writeBootFocus(f)
     })
     return () => { alive = false }
   }, [customWall, vpRatio, settings.wallFocus, settings.wallpaperRef, setWallFocus])
@@ -1080,14 +1093,15 @@ export const App = () => {
       <div className="wall-layer">
         {customWall !== null && customWall.type === 'image' && (
           /* object-fit:cover 负责等比填满不留黑边；object-position 由焦点算法给出，避免主体被居中裁掉。
-             解码完成（onLoad）后撤掉 <html> 上的首帧占位图：两张图在视觉上几乎一致，交接看不出来 */
+             真图按 wall-reveal 淡入，压在同裁切的首帧占位图上：交接是「变清晰」而不是硬切；
+             动画结束（占位图已被完全盖住）再撤掉 <html> 上的占位图 */
           <img className="wall-img" src={customWall.data} alt=""
             style={{ objectPosition: `${Math.round(settings.wallFocus.x)}% ${Math.round(settings.wallFocus.y)}%` }}
-            onLoad={clearBootLqip} />
+            onAnimationEnd={clearBootLqip} />
         )}
         {customWall !== null && customWall.type === 'video' && (
           <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline
-            onLoadedData={clearBootLqip} />
+            onAnimationEnd={clearBootLqip} />
         )}
       </div>
       <div className="wall-mask" />

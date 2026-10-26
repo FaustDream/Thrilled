@@ -1304,6 +1304,12 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .wall-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .wall-mask{position:fixed;inset:0;z-index:0;background:var(--mask-color);opacity:var(--wp-mask);pointer-events:none}
 .wall-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+/* 真壁纸在首帧占位图之上淡入：占位图铺在 <html> 上（见 public/boot.js），与真图同裁切，
+   所以这里只是把「虚一点」溶解成「清晰」，不出现位移 / 闪白 / 硬切。
+   不写 fill-mode：动画没有延迟，第一帧本来就是透明；真出了意外（动画被禁用）也只是直接显示图片，
+   不会因为 both 把 opacity 锁在 0 上导致壁纸永远看不见。动画结束由 onAnimationEnd 撤占位图 */
+@keyframes wall-reveal{from{opacity:0}to{opacity:1}}
+.wall-img,.wall-video{animation:wall-reveal .26s var(--ease)}
 #stage{z-index:1}
 
 /* ============ 18.5 在线壁纸应用反馈（阶段进度 + 循环等待） ============ */

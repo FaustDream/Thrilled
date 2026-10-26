@@ -24,12 +24,14 @@
   try {
     var bg = localStorage.getItem('thrilled:boot:bg');
     var lqip = localStorage.getItem('thrilled:boot:lqip');
+    /* 裁剪焦点与真壁纸的 object-position 是同一套百分比，交接时画面不会滑动 */
+    var focus = localStorage.getItem('thrilled:boot:focus');
     /* 只写 backgroundColor：backgroundImage 留给占位壁纸，两者互不覆盖 */
     if (bg) html.style.backgroundColor = bg;
     if (lqip) {
       html.style.backgroundImage = 'url("' + lqip + '")';
       html.style.backgroundSize = 'cover';
-      html.style.backgroundPosition = 'center';
+      html.style.backgroundPosition = focus || 'center';
       html.style.backgroundRepeat = 'no-repeat';
     }
   } catch (e) {
