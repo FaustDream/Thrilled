@@ -19,7 +19,8 @@ import { IconTip } from './tip'
 import { Drawer, Modal } from './panels'
 import { DialogHost, askInput } from './dialog'
 import { Icon } from './icons'
-import { makeLqip, writeBootBg, writeBootFocus, writeBootLqip } from './boot-theme'
+import { writeBootBg } from './boot-theme'
+import { dropBootWallpaper, readBootWallpaper } from './wallpaper-preload'
 import { setSkinRuntime } from './skin-runtime'
 import { openLink, buildSearchUrl } from '../core/link-opener'
 import { buildLayoutDoc, downloadJson } from '../core/export'
@@ -118,23 +119,6 @@ const dockMenuAct = (name: string, v: string): boolean => {
 /** 拖拽刚结束的这一次 click 不触发卡片打开 */
 let suppressItemClick = false
 
-/**
- * 撤掉首帧占位图（铺在 <html> 上的 backgroundImage，见 boot-theme / public/boot.js）。
- *
- * 在真壁纸淡入结束后调用：占位图这时已经整张被不透明的真壁纸盖住，撤掉看不见；
- * 提前撤就是硬切，观感上页面会「跳」一下。模块级函数：引用稳定，memo 化的 img 不受影响。
- */
-const clearBootLqip = (): void => {
-  document.documentElement.style.backgroundImage = 'none'
-}
-
-/** 彻底不要占位图了（移除壁纸 / 引用失效）：本页立刻撤掉，下次启动也不再铺 */
-const clearBootWall = (): void => {
-  clearBootLqip()
-  writeBootLqip('')
-  writeBootFocus(null)
-}
-
 /** 浮层卡不需要按下行为；用模块级常量保证引用稳定（memo 友好） */
 const noop = (): void => { /* 拖拽中的卡片不接手势 */ }
 
@@ -220,7 +204,9 @@ export const App = () => {
   useEffect(() => { dragLive.current = drag !== null }, [drag])
   /* 本次按下是否已被判为「想拖但没按住」而作废：按下时清零，松手时据此吃掉那次 click */
   const holdAbort = useRef(false)
-  const [customWall, setCustomWall] = useState<BgData | null>(null)
+  /* 首屏直接取启动预载好的壁纸（见 main.tsx / app/wallpaper-preload）：
+     第一个画面就是壁纸本身，不存在「先底色 / 先糊图，再换成壁纸」的中间态 */
+  const [customWall, setCustomWall] = useState<BgData | null>(() => readBootWallpaper(settings.wallpaperRef))
   /* 视口宽高比（只在变化超过 1% 时更新，避免 resize 抖动触发无谓重渲染） */
   const [vpRatio, setVpRatio] = useState(() => window.innerWidth / Math.max(1, window.innerHeight))
   /* 壁纸明暗图（补丁 38）：自定义壁纸降采样成灰度矩阵，用来取「每张卡片背后那块壁纸的亮度」。
@@ -505,9 +491,8 @@ export const App = () => {
     rt.setProperty('--minimal-fill', minimalLight ? 'rgba(15,23,42,.05)' : 'rgba(0,0,0,.06)')
     /* 品牌色字形的落点底色：写入 runtime，供 TileGlyph 在渲染期同步挑墨色（见 app/skin-runtime） */
     setSkinRuntime({ tileBg: tokens['--tile-bg'] ?? '#ffffff', cardBg: tokens['--card-bg'] ?? '#ffffff' })
-    /* 只写 html 的 backgroundColor：根元素的背景会自动传播到整个画布，body 必须保持透明，
-       否则不透明的 body 会盖住首帧占位壁纸（占位图是 html 的 backgroundImage，见 boot-theme）。
-       也不用 background 简写——那会把 backgroundImage 一起清掉，真壁纸解码完之前又回到纯色 */
+    /* 只写 html 的 backgroundColor：根元素的背景会自动传播到整个画布（body / #root 必须保持透明）。
+       别用 background 简写：那会连 html 上的其它背景属性一起重置 */
     document.documentElement.style.backgroundColor = maskColor
     /* 记下底色：下次打开新标签页时，配置读出来之前先用它铺底，避免先闪默认浅色 */
     writeBootBg(maskColor)
@@ -518,23 +503,15 @@ export const App = () => {
     let alive = true
     if (settings.wallpaperRef === null) {
       setCustomWall(null)
-      clearBootWall()
       return
     }
-    void getWallpaper(settings.wallpaperRef).then((bg) => {
-      if (!alive) return
-      setCustomWall(bg)
-      /* 记下缩略占位：下次打开新标签页时，真壁纸解码完成之前先铺这张，避免中间那段纯色 */
-      if (bg !== null && bg.type === 'image') {
-        void makeLqip(bg.data).then((lqip) => { if (alive && lqip !== '') writeBootLqip(lqip) })
-      } else if (bg !== null) {
-        writeBootLqip('')
-      } else {
-        /* 引用指向的记录已不在（换过设备 / 清过历史）：本页就没有壁纸了，
-           占位图留在 <html> 上会一直显示上一张，必须一起撤掉 */
-        clearBootWall()
-      }
-    })
+    /* 首屏这张已由启动预载读好并渲染（见 app/wallpaper-preload）：再读一次只是浪费一次 IndexedDB，
+       况且读完再 setState 会让整页多渲染一轮。缓存一次性丢弃，之后换壁纸照常走下面的读取 */
+    if (readBootWallpaper(settings.wallpaperRef) !== null) {
+      dropBootWallpaper()
+      return
+    }
+    void getWallpaper(settings.wallpaperRef).then((bg) => { if (alive) setCustomWall(bg) })
     return () => { alive = false }
   }, [settings.wallpaperRef])
   /* 壁纸渲染不用 CSS 变量：外部壁纸落库为 base64 dataURL（可达数 MB），
@@ -556,8 +533,6 @@ export const App = () => {
       if (!alive) return
       focusFor.current = ref
       setWallFocus(f)
-      /* 焦点同时记进启动占位：占位图按同一套百分比裁切，真壁纸淡入时画面才不会滑动 */
-      writeBootFocus(f)
     })
     return () => { alive = false }
   }, [customWall, vpRatio, settings.wallFocus, settings.wallpaperRef, setWallFocus])
@@ -1093,15 +1068,12 @@ export const App = () => {
       <div className="wall-layer">
         {customWall !== null && customWall.type === 'image' && (
           /* object-fit:cover 负责等比填满不留黑边；object-position 由焦点算法给出，避免主体被居中裁掉。
-             真图按 wall-reveal 淡入，压在同裁切的首帧占位图上：交接是「变清晰」而不是硬切；
-             动画结束（占位图已被完全盖住）再撤掉 <html> 上的占位图 */
+             启动时这张图已经解码好（见 app/wallpaper-preload），所以挂载第一帧就是清晰的它 */
           <img className="wall-img" src={customWall.data} alt=""
-            style={{ objectPosition: `${Math.round(settings.wallFocus.x)}% ${Math.round(settings.wallFocus.y)}%` }}
-            onAnimationEnd={clearBootLqip} />
+            style={{ objectPosition: `${Math.round(settings.wallFocus.x)}% ${Math.round(settings.wallFocus.y)}%` }} />
         )}
         {customWall !== null && customWall.type === 'video' && (
-          <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline
-            onAnimationEnd={clearBootLqip} />
+          <video className="wall-video" src={customWall.data} autoPlay loop muted playsInline />
         )}
       </div>
       <div className="wall-mask" />

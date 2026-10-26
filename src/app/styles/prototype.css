@@ -37,9 +37,8 @@
 html,body{margin:0;padding:0;height:100%;overflow:hidden;background-color:#10151b;
   font-family:'PingFang SC','Microsoft YaHei','Hiragino Sans GB',system-ui,-apple-system,'Segoe UI',sans-serif;
   -webkit-font-smoothing:antialiased;user-select:none}
-/* 首帧壁纸占位：public/boot.js 在解析阶段把缩略图写成 html 的 background-image。
-   background-color 是兜底色（皮肤 --mask-color 会覆盖它），background-image 只由占位图使用，
-   故 html 必须保持不透明、body / #root 必须透明，否则占位图被盖住看不到 */
+/* 底色画在 html 上（public/boot.js 在解析阶段写入，皮肤 --mask-color 随后覆盖），
+   它的背景会自动传播到整个画布，故 body / #root 必须保持透明，否则盖住这层底色 */
 body,#root{background-color:transparent}
 #stage{position:absolute;left:0;top:0;width:1920px;height:945px;transform-origin:top left;overflow:hidden;
   background:transparent;color:var(--panel-text)}
@@ -1304,12 +1303,8 @@ input[type='color'].f-input{padding:3px 6px;cursor:pointer}
 .wall-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .wall-mask{position:fixed;inset:0;z-index:0;background:var(--mask-color);opacity:var(--wp-mask);pointer-events:none}
 .wall-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-/* 真壁纸在首帧占位图之上淡入：占位图铺在 <html> 上（见 public/boot.js），与真图同裁切，
-   所以这里只是把「虚一点」溶解成「清晰」，不出现位移 / 闪白 / 硬切。
-   不写 fill-mode：动画没有延迟，第一帧本来就是透明；真出了意外（动画被禁用）也只是直接显示图片，
-   不会因为 both 把 opacity 锁在 0 上导致壁纸永远看不见。动画结束由 onAnimationEnd 撤占位图 */
-@keyframes wall-reveal{from{opacity:0}to{opacity:1}}
-.wall-img,.wall-video{animation:wall-reveal .26s var(--ease)}
+/* 壁纸不做淡入 / 淡出：启动时已解码好，挂载第一帧就是清晰的壁纸，
+   任何渐变都会被人眼当成「页面在这里变了一下」 */
 #stage{z-index:1}
 
 /* ============ 18.5 在线壁纸应用反馈（阶段进度 + 循环等待） ============ */

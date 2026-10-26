@@ -9,8 +9,9 @@ import { App } from './App'
 import { ErrorBoundary } from './ErrorBoundary'
 import { initPlatform, startFileConfigRestore } from './platform'
 import { startCrossTabSync } from './cross-tab'
-import { hydrate } from './store'
+import { hydrate, useApp } from './store'
 import { applyBootBg } from './boot-theme'
+import { preloadWallpaper } from './wallpaper-preload'
 import './styles/prototype.css'
 
 /* 首帧先铺上次主题的底色：配置读出来之前页面已经开始绘制，
@@ -25,6 +26,9 @@ const host = document.getElementById('root')
  * 先等配置就绪再挂载：否则首屏会用出厂默认值渲染一遍（默认主题、默认布局），
  * 等存储读回来再整体替换，观感就是「先默认、1–2 秒后跳变」。
  * 读 chrome.storage 通常只有几十毫秒，期间看到的是主题底色而不是默认界面。
+ *
+ * 壁纸同样在挂载前读好并解码：它是几 MB 的 dataURL，晚一步就必然出现一次
+ * 「底色 → 壁纸」的跳变。宁可界面晚几十毫秒出来，也不要让人看见换背景的那一刻。
  */
 const boot = async (): Promise<void> => {
   try {
@@ -32,6 +36,7 @@ const boot = async (): Promise<void> => {
   } catch {
     /* 读取失败也要渲染：store 里是出厂默认值，页面至少可用 */
   }
+  await preloadWallpaper(useApp.getState().settings.wallpaperRef)
   if (host === null) return
   createRoot(host).render(
     <StrictMode>

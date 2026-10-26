@@ -7,7 +7,10 @@
  * 它还负责铺一层最小兜底样式：开发模式（Vite）的 CSS 由 JS 注入，页面首帧完全没有样式表，
  * 不兜底就是纯白底；生产构建的样式表虽然会被解析阻塞加载，但下载期间同样是白屏。
  *
- * 与 src/app/boot-theme.ts 共用同一组存储键，键名改动要同步两处。
+ * 只负责底色：壁纸是几 MB 的 dataURL，同步链路拿不到，硬铺一张缩略图会让整页先糊一下；
+ * 壁纸改为在挂载界面之前读出来并解码（见 src/app/wallpaper-preload.ts），首个画面就是它。
+ *
+ * 与 src/app/boot-theme.ts 共用同一个存储键，键名改动要同步两处。
  */
 (function () {
   var html = document.documentElement;
@@ -23,17 +26,7 @@
 
   try {
     var bg = localStorage.getItem('thrilled:boot:bg');
-    var lqip = localStorage.getItem('thrilled:boot:lqip');
-    /* 裁剪焦点与真壁纸的 object-position 是同一套百分比，交接时画面不会滑动 */
-    var focus = localStorage.getItem('thrilled:boot:focus');
-    /* 只写 backgroundColor：backgroundImage 留给占位壁纸，两者互不覆盖 */
     if (bg) html.style.backgroundColor = bg;
-    if (lqip) {
-      html.style.backgroundImage = 'url("' + lqip + '")';
-      html.style.backgroundSize = 'cover';
-      html.style.backgroundPosition = focus || 'center';
-      html.style.backgroundRepeat = 'no-repeat';
-    }
   } catch (e) {
     /* 存储不可用：保持上面的兜底底色 */
   }
