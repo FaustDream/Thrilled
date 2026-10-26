@@ -28,6 +28,8 @@ import { getWallpaper, type BgData } from '../core/wallpaper'
 import { GLASS_ALPHA_FACTOR, GLASS_FADED_KEYS, PAGE_EDGE_MS, PAGE_EDGE_PX, WHEEL_PAGE_COOLDOWN_MS, WHEEL_MIN_DELTA, WALLPAPER_BLUR_COVER_THRESHOLD, WALLPAPER_BLUR_PX, WALLPAPER_FOCUS_RATIO_TOLERANCE } from '../shared/constants'
 import { crossPlan } from './layout'
 import { SHORTCUT_DEFS, comboOf, isBareCombo } from '../shared/shortcuts'
+import { bookmarkHits, flattenGroups, indexPages, searchAll, type SearchHit } from './search-index'
+import { collectBookmarks, readBookmarkTree, type BookmarkEntry } from '../core/bookmark-importer'
 import { HOLD_MS, holdVerdict } from '../shared/hold'
 import { DOCK_ICON_METRICS } from '../shared/dock'
 import { computeWallFocus } from '../core/wallpaper-focus'
@@ -65,6 +67,28 @@ const resolveSiteUrl = (item: GridItem): string | null => {
 /** 打开链接（mode 缺省时用设置里的全局打开方式） */
 const openByMode = (st: ReturnType<typeof useApp.getState>, url: string, kind: 'search' | 'link', mode?: OpenMode): void => {
   void openLink(url, mode ?? st.settings.openMode, kind)
+}
+
+/**
+ * 执行一条搜索命中（面板点击与回车共用）。
+ * 面板显隐归组件管，这里只负责动作本身。
+ */
+const runHit = (hit: SearchHit): void => {
+  const st = useApp.getState()
+  if (hit.kind === 'app' || hit.kind === 'bookmark') {
+    if (hit.url === '') st.showToast('这个应用还没有配置网址')
+    else openByMode(st, hit.url, 'link')
+    return
+  }
+  if (hit.kind === 'card') {
+    useApp.setState({ itemId: hit.cardId })
+    st.setModal('itemDetail')
+    return
+  }
+  /* 历史 / 「搜索这条」：填回输入框再按回车那条路走，打开方式等设置全部沿用 */
+  const el = document.getElementById('searchInput') as HTMLInputElement | null
+  if (el !== null) el.value = hit.term
+  runSearch('enter')
 }
 
 /**
@@ -197,6 +221,12 @@ export const App = () => {
   const weather = useApp((s) => s.weather)
   const [now, setNow] = useState(() => new Date())
   const [historyOpen, setHistoryOpen] = useState(false)
+  /* 搜索框当前输入：只用于算结果面板，输入框本身仍是非受控（中文输入法组字期间不能被打断） */
+  const [query, setQuery] = useState('')
+  /* 键盘选中的第几条命中：↑↓ 在摊平后的列表上走 */
+  const [sel, setSel] = useState(0)
+  /* 浏览器书签：面板需要时读一次，进程内缓存（收藏夹详情是每次挂载重读） */
+  const [bookmarks, setBookmarks] = useState<readonly BookmarkEntry[]>([])
   const [pillOpen, setPillOpen] = useState(false)
   const [drag, setDrag] = useState<DragState | null>(null)
   /* 只注册一次的键盘处理要读到最新的拖拽态（拖拽中按 Esc 取消），故用 ref 镜像 */
@@ -429,6 +459,48 @@ export const App = () => {
 
   const engine = engines.find((e) => e.id === settings.engineId) ?? engines[0]
   const visibleEngines = engines.filter((e) => !e.hidden)
+
+  /* ---------- 搜索面板：应用 / 卡片 / 书签 / 搜索历史（检索规则见 app/search-index） ---------- */
+  const pageIndex = useMemo(() => indexPages(pages), [pages])
+  const groups = useMemo(
+    () =>
+      searchAll(
+        query,
+        {
+          apps: pageIndex.apps,
+          cards: pageIndex.cards,
+          bookmarks: bookmarkHits(bookmarks),
+          history: settings.searchHistory ? history : [],
+        },
+        engine?.name ?? '',
+      ),
+    [query, pageIndex, bookmarks, settings.searchHistory, history, engine?.name],
+  )
+  const hits = useMemo(() => flattenGroups(groups), [groups])
+  /* data-act 委托只注册一次，读不到最新渲染的闭包：命中列表走 ref 镜像给点击用 */
+  const hitsRef = useRef<SearchHit[]>([])
+  useEffect(() => { hitsRef.current = hits }, [hits])
+  /* 书签只读一次：getTree 在按键回调里反复调用会明显拖慢输入 */
+  useEffect(() => {
+    if (typeof chrome === 'undefined' || chrome.bookmarks === undefined) return
+    let alive = true
+    void readBookmarkTree().then((tree) => { if (alive && tree !== null) setBookmarks(collectBookmarks(tree)) })
+    return () => { alive = false }
+  }, [])
+
+  /**
+   * 执行命中并收起面板（回车与点击共用）。
+   * 打开类动作顺手清空输入并失焦：面板收起后页面应当是干净的，不该留一个待提交的词。
+   */
+  const applyHit = (hit: SearchHit | undefined): void => {
+    setHistoryOpen(false)
+    if (hit === undefined) { runSearch('enter'); return }
+    runHit(hit)
+    if (hit.kind === 'history' || hit.kind === 'search') return
+    setQuery('')
+    setSel(0)
+    if (inputRef.current !== null) { inputRef.current.value = ''; inputRef.current.blur() }
+  }
   const dockApps = settings.dockApps
   /* Dock 图标档位：三档尺寸集中定义在 shared/dock，CSS 只读这里给出的变量 */
   const dockM = DOCK_ICON_METRICS[settings.dockIconSize]
@@ -662,8 +734,8 @@ export const App = () => {
         case 'eng-set': st.setEngine(v); st.showToast('该搜索引擎正在使用中'); break
         case 'eng-hide': st.toggleEngineHidden(v); break
         case 'search-go': runSearch('btn'); setHistoryOpen(false); break
-        /* 历史条目等价于「填好词再回车」，按回车的方式打开 */
-        case 'sp-pick': if (inputRef.current) inputRef.current.value = v; runSearch('enter'); setHistoryOpen(false); break
+        /* 面板任意一条命中：执行动作见 runHit（应用 / 卡片 / 书签 / 历史 / 搜索） */
+        case 'sp-open': applyHit(hitsRef.current.find((x) => x.key === v)); break
         case 'sp-del': useApp.setState({ history: st.history.filter((h) => h !== v) }); break
         /* 面板右上角「清除全部」：一次清空搜索历史（面板随之收起，输入框保留已输入内容） */
         case 'sp-clear': st.clearHistory(); setHistoryOpen(false); break
@@ -1184,22 +1256,46 @@ export const App = () => {
             placeholder={settings.searchPlaceholder.trim() === '' ? `${engine?.name ?? ''} 搜索` : settings.searchPlaceholder}
             autoComplete="off" spellCheck={false}
             onFocus={() => setHistoryOpen(true)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch('enter'); setHistoryOpen(false) } }} />
+            onInput={(e) => { setQuery((e.target as HTMLInputElement).value); setSel(0); setHistoryOpen(true) }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') { e.preventDefault(); setHistoryOpen(false); return }
+              if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                if (hits.length === 0) return
+                e.preventDefault()
+                setSel((i) => (e.key === 'ArrowDown' ? (i + 1) % hits.length : (i - 1 + hits.length) % hits.length))
+                return
+              }
+              if (e.key !== 'Enter') return
+              e.preventDefault()
+              /* 空输入不认「历史第一条」，否则回车会把上次的词又搜一遍 */
+              applyHit(query.trim() === '' ? undefined : hits[sel])
+            }} />
           {!settings.hideBtn && (
             <span className="search-go-btn" data-act="search-go" title="搜索">{Icon.search()}</span>
           )}
         </div>
       </div>
-      {settings.searchHistory && historyOpen && history.length > 0 && (
+      {/* 搜索面板：分组结果（应用 / 卡片 / 书签 / 历史 / 搜索），↑↓ 与鼠标悬停共用同一个选中项 */}
+      {historyOpen && groups.length > 0 && (
         <div className="search-panel show" id="searchPanel" onMouseLeave={() => setHistoryOpen(false)}>
-          <div className="sp-head">
-            <span>搜索历史</span>
-            <span className="sp-clear" data-act="sp-clear">清除全部</span>
-          </div>
-          {history.map((h) => (
-            <div className="sp-row" key={h} data-act="sp-pick" data-v={h}>
-              {Icon.search()}<span className="t">{h}</span>
-              {settings.historyItemDel && <span className="sp-del" data-act="sp-del" data-v={h}>{Icon.close()}</span>}
+          {groups.map((g) => (
+            <div key={g.title}>
+              <div className="sp-head">
+                <span>{g.title}</span>
+                {g.title === '搜索历史' && <span className="sp-clear" data-act="sp-clear">清除全部</span>}
+              </div>
+              {g.hits.map((h) => (
+                <div className={`sp-row${hits[sel]?.key === h.key ? ' on' : ''}`} key={h.key}
+                  data-act="sp-open" data-v={h.key}
+                  onMouseEnter={() => { const i = hits.findIndex((x) => x.key === h.key); if (i >= 0) setSel(i) }}>
+                  <span className="sp-ico" style={h.color === '' ? undefined : { background: h.color }}>{h.glyph}</span>
+                  <span className="t">{h.label}</span>
+                  {h.sub !== '' && <span className="sp-sub">{h.sub}</span>}
+                  {h.kind === 'history' && settings.historyItemDel && (
+                    <span className="sp-del" data-act="sp-del" data-v={h.term}>{Icon.close()}</span>
+                  )}
+                </div>
+              ))}
             </div>
           ))}
         </div>

@@ -67,7 +67,8 @@ body,#root{background-color:transparent}
   width:min(var(--search-width,880px),calc(var(--stage-w,1920px) - 32px));
   background:color-mix(in srgb,var(--panel-bg) calc(var(--g-alpha) * var(--ga-panel) * 100%),transparent);
   backdrop-filter:blur(var(--blur-panel));
-  border-radius:var(--r-lg);box-shadow:0 18px 48px rgba(8,15,30,.24);padding:6px 0;display:none;z-index:var(--z-pop)}
+  border-radius:var(--r-lg);box-shadow:0 18px 48px rgba(8,15,30,.24);padding:6px 0;display:none;z-index:var(--z-pop);
+  max-height:min(52vh,560px);overflow:auto;overscroll-behavior:contain}
 .search-panel.show{display:block}
 .sp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
   font-size:var(--fs-md);font-weight:700;color:var(--panel-text);padding:8px 16px 4px}
@@ -87,6 +88,14 @@ body,#root{background-color:transparent}
 .sp-del svg{width:13px;height:13px}
 .sp-row:hover .sp-del{opacity:1}
 .sp-del:hover{background:var(--line);color:var(--bad,#b91c1c)}
+/* 结果行左侧的方形字形：有品牌色就用品牌色，历史 / 「搜索这条」这类没有品牌色的落回弱底 */
+.sp-ico{width:20px;height:20px;flex:0 0 auto;border-radius:var(--r-xs);display:flex;align-items:center;
+  justify-content:center;font-size:var(--fs-2xs);font-weight:700;color:#fff;background:var(--line)}
+/* 右侧说明（域名 / 所在卡片 / 引擎名）：弱化、可省略，不抢名称 */
+.sp-sub{flex:0 0 auto;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:var(--fs-xs);color:var(--panel-sub)}
+/* 键盘选中与鼠标悬停同一套高亮：↑↓ 和指针看到的是同一行 */
+.sp-row.on{background:var(--menu-hover)}
 
 /* 搜索引擎下拉（点击搜索框左侧引擎图标展开；与搜索历史面板互斥） */
 .engine-panel{position:absolute;top:calc(var(--search-top,44px) + 62px);width:242px;max-height:642px;overflow:auto;padding:6px;
