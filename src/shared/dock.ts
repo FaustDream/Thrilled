@@ -31,5 +31,17 @@ export const dockAppsWith = (apps: readonly DockApp[], label: string, url: strin
   return { ok: true, apps: [...apps, { name: label, url }] };
 };
 
+/**
+ * 拖拽换位：把第 from 个快捷方式插到 before 处（before 是**移除前**的插入下标，0..长度）。
+ * 插到自己的前一位或后一位都等于原地不动，返回内容相同的数组。
+ */
+export const dockMoveTo = (apps: readonly DockApp[], from: number, before: number): DockApp[] => {
+  const next = [...apps];
+  const [moved] = next.splice(from, 1);
+  if (moved === undefined) return [...apps];
+  next.splice(from < before ? before - 1 : before, 0, moved);
+  return next;
+};
+
 /** 重复添加的提示文案（三处共用） */
 export const DOCK_DUP_TEXT = '该站点已在 Dock 中';

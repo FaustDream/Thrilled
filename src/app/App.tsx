@@ -5,7 +5,7 @@
  * 平台行为：打开链接走 core/link-opener（打开方式设置），壁纸走 core/wallpaper（IndexedDB）。
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
+import type { CSSProperties, DragEvent as ReactDragEvent, PointerEvent as ReactPointerEvent } from 'react'
 import { useApp, skinTokensOf, markWelcomed, type CtxState, type DrawerKey } from './store'
 import { CELL, COLS, GRID_LEFT, GRID_TOP, PAGE_W, ROWS, SNAP_ALIGN_PX, insetOf, itemBox, nearOnAxis, snapAxis, stageFitOf } from '../shared/grid'
 import type { AxisSnap, StageFit } from '../shared/grid'
@@ -33,7 +33,7 @@ import { runSearchAction, searchActionHits } from './search-actions'
 import { recentUsage, recordUsage, usageKeyOfCard, usageKeyOfUrl } from './usage'
 import { collectBookmarks, readBookmarkTree, type BookmarkEntry } from '../core/bookmark-importer'
 import { HOLD_MS, holdVerdict } from '../shared/hold'
-import { DOCK_ICON_METRICS } from '../shared/dock'
+import { DOCK_ICON_METRICS, dockMoveTo } from '../shared/dock'
 import { computeWallFocus } from '../core/wallpaper-focus'
 import { buildToneGrid, boxUv, toneAt, type ToneGrid } from '../core/walltone'
 import { coverFix, fixForInk, hexLum, pickInk } from '../shared/luma'
@@ -165,6 +165,11 @@ const dockMenuAct = (name: string, v: string): boolean => {
 /** 拖拽刚结束的这一次 click 不触发卡片打开 */
 let suppressItemClick = false
 
+/** Dock 图标刚被拖拽换位：紧随的那次 click 不再当成「打开站点」 */
+let dockDroppedAt = 0
+/** 换位后忽略 click 的时间窗（松手到补发 click 只有一瞬，给足容差即可） */
+const DOCK_CLICK_GUARD_MS = 300
+
 /** 浮层卡不需要按下行为；用模块级常量保证引用稳定（memo 友好） */
 const noop = (): void => { /* 拖拽中的卡片不接手势 */ }
 
@@ -286,6 +291,10 @@ export const App = () => {
   /* 松手后的「飞回落位」（FLIP 第一步）：卡片先按这个平移偏移渲染，下一帧偏移去掉，
      由 .item 自带的 transform 过渡（.2s 弹簧）把它贴到新格上——结束时的顺滑感主要来自这里 */
   const [fly, setFly] = useState<{ id: string; dx: number; dy: number } | null>(null)
+  /* Dock 快捷方式拖拽换位：dragging 是正在拖的下标，dropAt 是当前插入位（0..数量）。
+     走 HTML5 原生拖拽，与卡片那套长按指针拖拽互不共用状态 */
+  const [dockDragging, setDockDragging] = useState<number | null>(null)
+  const [dockDropAt, setDockDropAt] = useState<number | null>(null)
 
   /* 拖拽中的指针位置：pointermove 只记最新坐标，真正的计算合并到 rAF 里做一次
      （高刷新率屏 / 高回报率鼠标一秒能派发几百个事件，逐个算就是几百次全树渲染）。
@@ -531,6 +540,60 @@ export const App = () => {
   const dockApps = settings.dockApps
   /* Dock 图标档位：三档尺寸集中定义在 shared/dock，CSS 只读这里给出的变量 */
   const dockM = DOCK_ICON_METRICS[settings.dockIconSize]
+
+  /* ---------- Dock 快捷方式拖拽换位（HTML5 原生拖拽：拖影与位移交给浏览器） ---------- */
+  const dockDragStart = (e: ReactDragEvent<HTMLDivElement>, i: number): void => {
+    setDockDragging(i)
+    e.dataTransfer.effectAllowed = 'move'
+    /* 空数据在部分内核里不算有效拖动，必须写点东西 */
+    e.dataTransfer.setData('text/plain', String(i))
+  }
+
+  /**
+   * 指针落在快捷栏的哪个插入位（0..数量）：按每个图标的中线比较。
+   * 整条栏都算落区，拖过最右一个图标（落在分隔线、功能键上）也按「排到末尾」处理。
+   */
+  const dockInsertAt = (clientX: number, bar: HTMLElement): number => {
+    const apps = bar.querySelector<HTMLElement>('.dock-apps')
+    if (apps === null) return dockApps.length
+    const mids = Array.from(apps.children, (el) => {
+      const r = el.getBoundingClientRect()
+      return r.left + r.width / 2
+    })
+    const hit = mids.findIndex((mid) => clientX < mid)
+    return hit === -1 ? mids.length : hit
+  }
+
+  const dockDragOver = (e: ReactDragEvent<HTMLDivElement>): void => {
+    if (dockDragging === null) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    const at = dockInsertAt(e.clientX, e.currentTarget)
+    setDockDropAt((p) => (p === at ? p : at))
+  }
+
+  /** 提交换位：before 是移除前的插入下标（0..长度）；顺序没变就不写 store */
+  const commitDockDrop = (from: number, before: number): void => {
+    setDockDragging(null)
+    setDockDropAt(null)
+    const next = dockMoveTo(dockApps, from, before)
+    if (next.every((a, i) => a === dockApps[i])) return
+    dockDroppedAt = performance.now()
+    useApp.getState().setSetting('dockApps', next)
+  }
+
+  const dockDropOnBar = (e: ReactDragEvent<HTMLDivElement>): void => {
+    if (dockDragging === null) return
+    e.preventDefault()
+    commitDockDrop(dockDragging, dockInsertAt(e.clientX, e.currentTarget))
+  }
+
+  /** 某个图标该画哪一侧的落点竖线：被拖的那一个本身不画 */
+  const dockDropSide = (i: number): string => {
+    if (dockDropAt === null || dockDragging === i) return ''
+    if (dockDropAt === i) return ' drop-before'
+    return dockDropAt === i + 1 ? ' drop-after' : ''
+  }
 
   /* ---------- 启动：天气 + 首次引导标记（配置已在挂载前载入） ---------- */
   useEffect(() => {
@@ -779,6 +842,8 @@ export const App = () => {
         case 'arrange-usage': st.arrangeByUsage(); st.openCtx(null); break
         case 'dock-app': {
           st.openCtx(null)
+          /* 拖拽换位松手后浏览器可能补发一次 click：那不是「打开」，直接吃掉 */
+          if (performance.now() - dockDroppedAt < DOCK_CLICK_GUARD_MS) break
           if (v !== '') {
             /* Dock 的名字在菜单数据里，这里按地址反查（找不到就退回域名） */
             const name = st.settings.dockApps.find((a) => a.url === v)?.name ?? ''
@@ -1381,12 +1446,16 @@ export const App = () => {
           '--dock-box': `${dockM.box}px`,
           '--dock-fn': `${dockM.fn}px`,
         } as CSSProperties}>
-          <div className="dock-bar">
+          <div className="dock-bar" onDragOver={dockDragOver} onDrop={dockDropOnBar}>
             <div className="dock-apps">
               {dockApps.map((app, i) => (
-                /* 名称与域名挂成提示数据（悬停气泡，见 app/tip.tsx）；不再用原生 title，避免双重气泡 */
-                <div className="dock-item" key={`dock-${i}`} data-act="dock-app" data-v={app.url} data-idx={String(i)}
-                  data-tip={app.name} data-tip-host={hostOf(app.url)} aria-label={app.name}>
+                /* 名称与域名挂成提示数据（悬停气泡，见 app/tip.tsx）；不再用原生 title，避免双重气泡。
+                   可拖拽换位：落点按整条快捷栏上的图标中线算，松手即重排并写进配置 */
+                <div className={`dock-item${dockDragging === i ? ' dragging' : ''}${dockDropSide(i)}`}
+                  key={`dock-${i}`} data-act="dock-app" data-v={app.url} data-idx={String(i)}
+                  data-tip={app.name} data-tip-host={hostOf(app.url)} aria-label={app.name}
+                  draggable onDragStart={(e) => dockDragStart(e, i)}
+                  onDragEnd={() => { setDockDragging(null); setDockDropAt(null) }}>
                   <div className={`dock-icon${settings.dockIcon === 'circle' ? ' circle' : ''}`}>
                     <SiteIcon url={app.url} name={app.name} cls="dock-favicon" fs={dockM.fs} size={dockM.ico} />
                   </div>
