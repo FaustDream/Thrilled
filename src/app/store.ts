@@ -11,7 +11,7 @@ import { MAX_PAGES, findSlot, isLegalSize, overlaps } from '../shared/grid'
 import { WIDGET_DEFS, cfgOf, minSizeOf, sizeAllowed, sizeAllowedFor } from '../shared/widget-defs'
 import { BUILTIN_ENGINES } from '../shared/types'
 import { BUILTIN_SKINS, DEFAULT_SETTINGS } from '../shared/defaults'
-import { getCityWeather, getWeather, cityKeyOf, type GeoStatus, type WeatherData } from '../core/weather'
+import { getCityWeather, getWeather, cityKeyOf, readWeatherCache, type GeoStatus, type WeatherData } from '../core/weather'
 import { pushHistory } from '../core/utils'
 import { initStorage, kvGetRaw, kvSetRaw, loadBackupDoc, loadDoc, saveBackupDoc, saveDoc } from '../core/storage'
 import { markActiveWallpaper } from '../core/wallpaper'
@@ -192,11 +192,12 @@ interface AppState {
   /** 恢复更新前自动备份的文档（没有备份返回 false） */
   restoreBackup: () => boolean
   /**
-   * 刷新天气：默认按设置里的定位方式（真实定位 / 手选城市）取数据。
-   * force = true 时跳过缓存并重新请求定位权限（用户点「允许定位」/「刷新」后走这里）；
-   * quiet = true 时失败不弹提示（自动刷新用，避免后台反复打扰）。
+   * 刷新天气：先把上次缓存亮出来，再按设置里的定位方式（真实定位 / 手选城市）取新数据。
+   * force = true 时跳过 30min 缓存直接请求；
+   * quiet = true 时失败不弹提示（自动刷新用，避免后台反复打扰）；
+   * relocate = true 时重新向浏览器要定位（只有「允许定位 / 重新定位」入口才传）。
    */
-  loadWeather: (force?: boolean, quiet?: boolean) => Promise<void>
+  loadWeather: (force?: boolean, quiet?: boolean, relocate?: boolean) => Promise<void>
   /** 拉取「其他城市」清单的实况（各自带缓存；主定位不动；force 跳过缓存） */
   loadCityWeathers: (force?: boolean) => Promise<void>
   /** 天气详情：添加一个其他城市（同名 / 同坐标去重，上限 8 个） */
@@ -385,6 +386,8 @@ const doHydrate = async (): Promise<void> => {
       }
     }
   }
+  /* 天气缓存先落进 store：新标签页首帧就按上次数据渲染，不必等定位 / 网络 */
+  const cachedWeather = readWeatherCache(doc.settings.weatherCity)
   useApp.setState({
     settings: doc.settings,
     pages: doc.pages,
@@ -394,6 +397,8 @@ const doHydrate = async (): Promise<void> => {
     backupTime: doc.backupTime,
     welcomed: doc.welcomed,
     notesSeeded: doc.notesSeeded === true,
+    weather: cachedWeather,
+    geoStatus: cachedWeather === null ? 'unavailable' : 'ok',
     hydrated: true,
     ...(toasts.length > 0 ? { toast: toasts.join('；') } : {}),
   })
@@ -828,11 +833,22 @@ export const useApp = create<AppState>()((set, get) => ({
     return true
   },
 
-  loadWeather: async (force = false, quiet = false) => {
-    /* 定位方式以设置为准：手选城市优先，否则走真实定位 */
-    const data = await getWeather(get().settings.weatherCity, force)
-    set({ weather: data, geoStatus: data === null ? 'denied' : 'ok' })
-    if (force && !quiet && data === null) set({ toast: '未获得定位权限：请在浏览器允许定位，或在天气卡配置里手选城市' })
+  loadWeather: async (force = false, quiet = false, relocate = false) => {
+    const city = get().settings.weatherCity
+    /* 先把上次缓存亮出来：新标签页打开即可见，网络 / 定位在后面补 */
+    const cached = readWeatherCache(city)
+    if (cached !== null && get().weather?.ts !== cached.ts) set({ weather: cached, geoStatus: 'ok' })
+    const data = await getWeather(city, force, relocate)
+    if (data !== null) {
+      set({ weather: data, geoStatus: 'ok' })
+    } else {
+      /* 失败不清空已有数据：能显示旧数据就继续显示，只有彻底没有数据时才提示允许定位 */
+      const hasData = get().weather !== null
+      set({ geoStatus: 'denied' })
+      if (force && !quiet) {
+        set({ toast: hasData ? '定位失败，仍显示上次的天气' : '未获得定位权限：请在浏览器允许定位，或在天气卡配置里手选城市' })
+      }
+    }
     /* 其他城市的实况顺带刷新（各自有 30min 缓存，重复调用开销可忽略） */
     void get().loadCityWeathers(force)
   },

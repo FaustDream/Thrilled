@@ -125,10 +125,12 @@ export const kvGetRaw = (key: string): string | null => {
   return typeof v === 'string' ? v : String(v);
 };
 
-/** 写结构化值（立即更新缓存 + 异步落盘） */
+/** 写结构化值（立即更新缓存 + 异步落盘；落盘失败只记日志，不影响本页展示） */
 export const kvSet = <T>(key: string, value: T): void => {
   cache.set(key, value);
-  void backendSet(key, value);
+  void backendSet(key, value).catch((e: unknown) => {
+    warn(MODULE, `写入失败：${key}`, { err: e instanceof Error ? e.message : String(e) });
+  });
   notifyChange(key, value);
 };
 
@@ -165,6 +167,15 @@ export const saveDoc = (doc: StoredDoc): void => {
 export const adoptExternalDoc = (raw: unknown): StoredDoc | null => {
   cache.set(DOC_KEY, raw);
   return parseStoredDoc(raw, WIDGET_KINDS);
+};
+
+/**
+ * 采纳其它标签页写入的通用键（天气缓存等）：只更新内存缓存并返回解析结果，
+ * 不落盘、不触发变更通知，避免两边互相回写。
+ */
+export const adoptExternalKv = <T>(key: string, raw: unknown): T | null => {
+  cache.set(key, raw);
+  return (raw ?? null) as T | null;
 };
 
 /** 更新前备份的文档（没有备份返回 null） */

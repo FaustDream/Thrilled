@@ -24,7 +24,7 @@ import { clearUsage, recordUsage, usageKeyOfUrl } from './usage'
 import { addDays, daysUntil, getGreetingByHour, hostOf, isoWeekOf, monthCells, normalizeSiteUrl, normNoteItems, normTodoItems, notesInShowOrder, relTimeText, startOfWeek, type NoteEntry, type TodoEntry } from '../core/utils'
 import { DOCK_DUP_TEXT, DOCK_ICON_OPTIONS, dockAppsWith } from '../shared/dock'
 import { nextLunarDate, normCountdownEntries, upcomingRows, type CountdownEntry } from '../core/festivals'
-import { cityKeyOf, searchCities, weatherText, type GeoHit, type WeatherData } from '../core/weather'
+import { cityKeyOf, searchCities, weatherDayKey, weatherText, type GeoHit, type WeatherData } from '../core/weather'
 import { isDayAt, weatherFxOf, type WeatherFx } from '../core/weather-fx'
 import { WeatherGlyph, WeatherScene } from './weather-fx'
 import { dayKey, normScheduleEvents, upcomingEvents, type ScheduleEvent } from '../core/schedule'
@@ -1441,6 +1441,11 @@ interface LogVersion {
 /** 首项为当前版本；条目只留「类型 + 一句摘要」，括号里的实现细节收进展开 */
 const CHANGELOG: readonly LogVersion[] = [
   {
+    v: '5.0.38', d: '2026-10-29', items: [
+      { k: '优化', s: '天气先显示上次数据，再后台刷新', d: '新标签页打开时直接用上次缓存的天气渲染，不再空白等定位；30 分钟内的数据直接复用，过期才在后台更新。定位坐标缓存 6 小时，只有点「允许定位 / 重新定位」才会重新向浏览器要位置；定位或请求失败时继续显示上次天气，不清空。另一个标签页取到新天气时，本页也会立即同步。' },
+    ],
+  },
+  {
     v: '5.0.37', d: '2026-10-27', items: [
       { k: '新增', s: 'Dock 图标可以拖着换位', d: '按住底部快捷栏里的图标往左往右拖，落点会画一条竖线提示插到哪个位置，松手即生效并直接存进配置，重启或换设备都保持这个顺序。拖过最右边的图标（落在分隔线或功能键上）按排到末尾处理；换位松手后不会顺手把站点打开，点一下照旧正常打开。' },
     ],
@@ -2856,6 +2861,9 @@ const WeatherRefreshButton = () => {
 /** 未来 7 天：刷新与「x 分钟前更新」都固定在标题行右侧 */
 const WeatherForecast = ({ d, toF, now }: { d: WeatherData; toF: boolean; now: Date }) => {
   const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
+  const today = weatherDayKey(d, now)
+  /* 缓存可能停在昨天：按日期过滤，昨天的「今天」不再冒充今天 */
+  const days = d.daily.filter((x) => x.date >= today)
   const wdOf = (date: string): string => {
     const t = Date.parse(date)
     return Number.isNaN(t) ? date.slice(5) : `周${'日一二三四五六'[new Date(t).getDay()]}`
@@ -2868,15 +2876,19 @@ const WeatherForecast = ({ d, toF, now }: { d: WeatherData; toF: boolean; now: D
           <WeatherRefreshButton />
         </>
       } />
-      <div className="dt-days week">
-        {d.daily.map((x, i) => (
-          <div className={`dt-day${i === 0 ? ' today' : ''}`} key={x.date}>
-            <span>{i === 0 ? '今天' : wdOf(x.date)}</span>
-            <span>{weatherText(x.code)}</span>
-            <span>{conv(x.min)}° / {conv(x.max)}°</span>
-          </div>
-        ))}
-      </div>
+      {days.length === 0 ? (
+        <div className="dt-empty-line">预报已过期，正在刷新…</div>
+      ) : (
+        <div className="dt-days week">
+          {days.map((x) => (
+            <div className={`dt-day${x.date === today ? ' today' : ''}`} key={x.date}>
+              <span>{x.date === today ? '今天' : wdOf(x.date)}</span>
+              <span>{weatherText(x.code)}</span>
+              <span>{conv(x.min)}° / {conv(x.max)}°</span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   )
 }
@@ -2960,7 +2972,7 @@ const WeatherCities = ({ main }: { main: CityPick | null }) => {
 const WeatherStatus = ({ d, city }: { d: WeatherData | null; city: CityPick | null }) => {
   const every = useApp((s) => s.settings.weatherEvery)
   const setSetting = useApp((s) => s.setSetting)
-  const relocate = (): void => { void useApp.getState().loadWeather(true) }
+  const relocate = (): void => { void useApp.getState().loadWeather(true, false, true) }
   return (
     <div className="dt-stat">
       <span>{d === null ? '未获取天气' : d.source === 'geo' ? '真实定位' : `手选城市 · ${d.place}`}</span>
@@ -2983,7 +2995,7 @@ const WeatherOverview = ({ item, now }: { item: GridItem; now: Date }) => {
       {weather === null ? (
         <div className="dt-empty">
           <span>还没有天气数据</span>
-          <button className="btn sm" onClick={() => { void useApp.getState().loadWeather(true) }}>允许定位</button>
+          <button className="btn sm" onClick={() => { void useApp.getState().loadWeather(true, false, true) }}>允许定位</button>
         </div>
       ) : (
         <>

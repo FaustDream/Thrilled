@@ -4,8 +4,9 @@
  * 判重口径是「内容快照」而不是写入方标记：两边内容一致就直接忽略，
  * 因此本页回读后再落盘的那一次写入不会引发来回反弹。
  */
-import { DOC_KEY } from '../shared/constants'
-import { adoptExternalDoc } from '../core/storage'
+import { DOC_KEY, WEATHER_CACHE_KEY, WEATHER_LOCATION_KEY } from '../shared/constants'
+import { adoptExternalDoc, adoptExternalKv } from '../core/storage'
+import { readWeatherCache } from '../core/weather'
 import { useApp } from './store'
 import { reloadDocIntoStore } from './platform'
 
@@ -26,6 +27,15 @@ export const startCrossTabSync = (): void => {
   if (typeof chrome === 'undefined' || chrome.storage?.onChanged === undefined) return
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return
+    /* 天气：别的标签页刚取到新数据，本页直接采纳，不再各自重复请求 */
+    if (changes[WEATHER_CACHE_KEY]?.newValue !== undefined) {
+      adoptExternalKv(WEATHER_CACHE_KEY, changes[WEATHER_CACHE_KEY]?.newValue)
+      const w = readWeatherCache(useApp.getState().settings.weatherCity)
+      if (w !== null) useApp.setState({ weather: w, geoStatus: 'ok' })
+    }
+    if (changes[WEATHER_LOCATION_KEY]?.newValue !== undefined) {
+      adoptExternalKv(WEATHER_LOCATION_KEY, changes[WEATHER_LOCATION_KEY]?.newValue)
+    }
     const change = changes[DOC_KEY]
     if (change === undefined || change.newValue === undefined) return
     /* 先让本页缓存跟上别人的写入，再回读：直接 loadDoc 会拿到自己这份旧缓存 */

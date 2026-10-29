@@ -18,7 +18,7 @@ import { eventsOn, dayKey, normScheduleEvents } from '../core/schedule'
 import { almanacOf, festivalsOf, solarToLunar } from '../core/lunar'
 import { resolveFavicon } from '../core/favicon'
 import type { WeatherData } from '../core/weather'
-import { weatherText } from '../core/weather'
+import { dailyOf, localDayKey, weatherDayKey, weatherNextDayKey, weatherText } from '../core/weather'
 import { isDayAt, weatherFxOf } from '../core/weather-fx'
 import { WeatherGlyph } from './weather-fx'
 import type { GridItem, WidgetKind } from '../shared/types'
@@ -185,10 +185,14 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
       const toF = str(c['unit'], '摄氏 °C') === '华氏 °F'
       const conv = (v: number): number => (toF ? Math.round(v * 9 / 5 + 32) : Math.round(v))
       const temp = weather !== null ? `${conv(weather.currentTemp)}°${toF ? 'F' : 'C'}` : '--°'
-      const dayRange = (i: number): string => weather !== null
-        ? `${conv(weather.daily[i]?.min ?? 0)}°/${conv(weather.daily[i]?.max ?? 0)}°`
-        : '--/--'
-      const range = dayRange(0)
+      /* 按日期取今天 / 明天：缓存跨天时不会把昨天的那一档当成今天 */
+      const dayRange = (date: string): string => {
+        const day = weather === null ? undefined : dailyOf(weather, date)
+        return day === undefined ? '--/--' : `${conv(day.min)}°/${conv(day.max)}°`
+      }
+      const today = weather === null ? localDayKey(now) : weatherDayKey(weather, now)
+      const tomorrow = weather === null ? '' : weatherNextDayKey(weather, now)
+      const range = dayRange(today)
       const place = weather !== null ? weather.place : ''
       const desc = weather !== null
         ? `${weatherText(weather.currentCode)}${bool(c['showRange']) ? ` ${range}` : ''}`
@@ -207,7 +211,7 @@ export const WidgetView = ({ item, now, weather }: WidgetProps) => {
             </div>
             <div className="wx-desc">{desc}</div>
             {/* 宽卡扩展信息行：装得下时才显示（窄卡由 @container 隐去） */}
-            <div className="wx-next">明日 {dayRange(1)}</div>
+            <div className="wx-next">明日 {dayRange(tomorrow)}</div>
           </div>
           <div className="wx-ico"><WeatherGlyph fx={fx} muted={weather === null} /></div>
         </div>

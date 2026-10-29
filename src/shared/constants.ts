@@ -13,7 +13,7 @@ export const BACKUP_DOC_KEY = 'thrilled:v4:doc:backup' as const;
 /** 已为哪个版本留过更新前备份（同一版本只备份一次，避免每次启动重复覆盖） */
 export const BACKUP_VERSION_KEY = 'thrilled:v4:doc:backup-version' as const;
 /** 当前扩展版本（随文档落盘，用于识别版本升级并自动备份） */
-export const APP_VERSION = '5.0.37' as const;
+export const APP_VERSION = '5.0.38' as const;
 /** v3 → v4 一次性迁移标记键 */
 export const MIGRATED_KEY = 'thrilled:v4:migrated' as const;
 /** 一次性布局修正标记键（v4.1 迁移的多图标页合并，store/hydrate） */
@@ -65,9 +65,13 @@ export const WALLPAPER_ALLOWED_TYPES: readonly string[] = [
 /** ===== 天气 ===== */
 /** 天气缓存键 */
 export const WEATHER_CACHE_KEY = 'tabpage_weather_cache' as const;
-/** 天气缓存 TTL（30min） */
+/** 天气缓存 TTL（30min）：超过只作为兜底展示，不再直接当作最新数据 */
 export const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
-/** 定位超时（ms），超时降级北京坐标 */
+/** 定位坐标缓存键：新标签页先复用上次坐标，不必每次都向浏览器要定位 */
+export const WEATHER_LOCATION_KEY = 'tabpage_weather_location' as const;
+/** 定位坐标缓存 TTL（6h）：同一位置半天内直接复用 */
+export const WEATHER_LOCATION_TTL_MS = 6 * 60 * 60 * 1000;
+/** 定位超时（ms），超时按「定位不可用」处理并沿用上次坐标 */
 export const GEO_TIMEOUT_MS = 5000 as const;
 
 /** ===== 交互阈值 ===== */

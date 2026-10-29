@@ -37,7 +37,7 @@ import { DOCK_ICON_METRICS, dockMoveTo } from '../shared/dock'
 import { computeWallFocus } from '../core/wallpaper-focus'
 import { buildToneGrid, boxUv, toneAt, type ToneGrid } from '../core/walltone'
 import { coverFix, fixForInk, hexLum, pickInk } from '../shared/luma'
-import type { WeatherData } from '../core/weather'
+import { weatherFresh, type WeatherData } from '../core/weather'
 import type { GridItem, OpenMode } from '../shared/types'
 
 const allItems = (pages: GridItem[][]): GridItem[] => pages.flat()
@@ -610,6 +610,17 @@ export const App = () => {
     return () => window.clearInterval(timer)
   }, [settings.weatherEvery])
 
+  /* ---------- 切回本页补一次：缓存过了 30min 或跨天时才在后台刷新（没有数据不自动重试，避免反复要定位） ---------- */
+  useEffect(() => {
+    const onVisible = (): void => {
+      if (document.visibilityState !== 'visible') return
+      const w = useApp.getState().weather
+      if (w !== null && !weatherFresh(w)) void useApp.getState().loadWeather()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
   /* ---------- 主题令牌 → CSS 变量（皮肤 / 透明度 / 玻璃质感 / 壁纸 / 搜索框） ---------- */
   useEffect(() => {
     const rt = document.documentElement.style
@@ -799,7 +810,7 @@ export const App = () => {
         }
         /* 天气卡上的「允许定位」：重新请求定位权限并按真实坐标取天气 */
         case 'weather-locate': {
-          void st.loadWeather(true)
+          void st.loadWeather(true, false, true)
           break
         }
         case 'engine-open': {
